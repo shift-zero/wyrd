@@ -32,11 +32,12 @@ python3 -m src.__main__ generate --seed 42
 - [x] CLI with `--seed`, `--width`, `--height`, `--brief` flags
 - [x] Seed-deterministic: same seed = same world, always
 
-**Phase 2 — Lore Engine** (up next)
-- [ ] Region descriptions and culture names
-- [ ] Named geographical features
-- [ ] History snippets per region
-- [ ] Conflicts and relationships between settlements
+**Phase 2 — Lore Engine** ✅
+- [x] Region descriptions and culture names
+- [x] Named geographical features (mountains, rivers, bays, forests)
+- [x] History snippets per region
+- [x] Conflicts and relationships between settlements
+- [x] `wyrd generate --lore` and `wyrd describe --seed N` commands
 
 ## Design
 

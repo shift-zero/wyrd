@@ -33,7 +33,7 @@ wyrd/
 - ANSI-colored terminal output
 - Seed-based generation (same seed = same world)
 
-**Phase 2 — Lore Engine**
+**Phase 2 — Lore Engine** (done)
 - Region names, culture names, settlement descriptions
 - Named geographical features (The Whispering Strait, etc.)
 - History snippets per region
@@ -63,7 +63,7 @@ wyrd/
 | # | What | Verifiable |
 |---|------|------------|
 | 1 | ASCII map renders terrain, water, forests, mountains, settlements | `wyrd generate --seed 42` outputs a beautiful map |
-| 2 | Lore engine names regions, cultures, and features | Map has labeled regions with lore blurbs |
+| 2 ✅ | Lore engine names regions, cultures, and features | `wyrd describe --seed 42` shows lore |
 | 3 | Interactive explorer with scroll/zoom/inspect | Navigate a generated world in the terminal |
 | 4 | Export to SVG/HTML | Share worlds as web pages |
 | 5 | Narrative engine with character generation | Characters with backstories grounded in the world |
