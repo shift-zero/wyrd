@@ -2,7 +2,10 @@
 
 import random
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .lore import Lore
 
 # ── Terrain Types ──────────────────────────────────────────────────
 
@@ -59,6 +62,7 @@ class World:
     terrain: list[list[str]] = field(default_factory=list)
     rivers: list[tuple[int, int]] = field(default_factory=list)
     regions: list[Region] = field(default_factory=list)
+    lore: Optional['Lore'] = None
 
     @property
     def tiles(self) -> int:
