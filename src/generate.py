@@ -8,6 +8,7 @@ implementation (no external dependencies for Phase 1).
 import random
 import math
 from .world import World, TERRAIN, BIOMES, Region, Settlement
+from .lore import generate_lore, Lore
 
 # ── Seeded 2D Value Noise ──────────────────────────────────────────
 
@@ -297,5 +298,8 @@ def generate_world(seed: int, width: int = 80, height: int = 40) -> World:
             )
 
         world.regions.append(region)
+
+    # ── 5. Generate lore ──────────────────────────────────────────
+    world.lore = generate_lore(world)
 
     return world
