@@ -7,9 +7,9 @@ implementation (no external dependencies for Phase 1).
 
 import random
 import math
-from .world import World, TERRAIN, Region, Settlement
+from .world import World, TERRAIN, BIOMES, Region, Settlement
 
-# ── Simple Value Noise ─────────────────────────────────────────────
+# ── Seeded 2D Value Noise ──────────────────────────────────────────
 
 def _fade(t: float) -> float:
     return t * t * t * (t * (t * 6 - 15) + 10)
@@ -17,18 +17,35 @@ def _fade(t: float) -> float:
 def _lerp(a: float, b: float, t: float) -> float:
     return a + t * (b - a)
 
+def _hash_coord(x: int, y: int, seed: int) -> float:
+    """Deterministic hash of integer coordinates into [0, 1)."""
+    h = seed & 0x7FFFFFFF
+    h = (h ^ (x * 374761393 + y * 668265263)) * 0x27D4EB2D
+    h = (h ^ (h >> 15)) * 0x27D4EB2D
+    h = h ^ (h >> 15)
+    return (h & 0x7FFFFFFF) / 0x7FFFFFFF
+
+
 class Noise:
-    """Simple 2D value noise — seed-deterministic, no deps."""
+    """2D value noise — seed-deterministic, no deps, works everywhere."""
 
     def __init__(self, seed: int):
+        self._seed = seed
+        # Build permutation table for coherent hashing
         rng = random.Random(seed)
-        self._grid = {}
-        for i in range(1024):
-            self._grid[(rng.randint(0, 4095), rng.randint(0, 4095))] = rng.random()
+        self._perm = list(range(512))
+        rng.shuffle(self._perm)
+        # Double for wrap-free lookups
+        self._perm = self._perm + self._perm
 
     def _hash(self, x: int, y: int) -> float:
-        key = (x & 4095, y & 4095)
-        return self._grid.get(key, 0.5)
+        idx = self._perm[(x & 255) + self._perm[y & 255]]
+        # Use the index to seed a deterministic float
+        h = (idx * 374761393) ^ (x * 668265263 + y * 1274126177)
+        h = (h ^ (h >> 13)) * 0x27D4EB2D
+        h = (h ^ (h >> 15)) * 0x27D4EB2D
+        h = h ^ (h >> 15)
+        return (h & 0x7FFFFFFF) / 0x7FFFFFFF
 
     def sample(self, x: float, y: float) -> float:
         x0, y0 = int(math.floor(x)), int(math.floor(y))
@@ -87,6 +104,88 @@ SETTLEMENT_NAMES = [
 ]
 
 
+def _generate_rivers(world: 'World', noise: Noise, rng: random.Random) -> list[tuple[int, int]]:
+    """Generate rivers by flowing from high elevation to the coast."""
+    rivers: list[tuple[int, int]] = []
+    width, height = world.width, world.height
+    elevation = world.elevation
+    visited = set()
+
+    # Find starting points: cells in mountains/hills that border higher terrain
+    candidates = []
+    for y in range(1, height - 1):
+        for x in range(1, width - 1):
+            e = elevation[y][x]
+            if 0.65 < e < 0.9:  # hills to high mountains, not snowy peaks
+                # Check if it's a local high point
+                local_max = True
+                for dy in (-1, 0, 1):
+                    for dx in (-1, 0, 1):
+                        if dx == 0 and dy == 0:
+                            continue
+                        if elevation[y + dy][x + dx] > e + 0.01:
+                            local_max = False
+                            break
+                    if not local_max:
+                        break
+                if local_max:
+                    candidates.append((e, x, y))
+
+    # Sort by elevation (highest first), take top candidates
+    candidates.sort(reverse=True)
+    max_rivers = max(2, width * height // 800)
+    started = 0
+
+    for _, sx, sy in candidates:
+        if started >= max_rivers:
+            break
+
+        # Trace the river downhill
+        cx, cy = sx, sy
+        path = [(cx, cy)]
+        dead_end = False
+        steps = 0
+
+        while not dead_end and steps < max(width, height) * 2:
+            steps += 1
+            best_e = elevation[cy][cx]
+            best_x, best_y = cx, cy
+
+            # Check all 8 neighbors
+            for dy in (-1, 0, 1):
+                for dx in (-1, 0, 1):
+                    if dx == 0 and dy == 0:
+                        continue
+                    nx, ny = cx + dx, cy + dy
+                    if nx < 0 or nx >= width or ny < 0 or ny >= height:
+                        continue
+                    ne = elevation[ny][nx]
+                    if ne < best_e:
+                        best_e = ne
+                        best_x, best_y = nx, ny
+
+            # If no downhill neighbor, we're done
+            if best_x == cx and best_y == cy:
+                dead_end = True
+            else:
+                cx, cy = best_x, best_y
+                path.append((cx, cy))
+                # Stop when we reach water
+                if elevation[cy][cx] < 0.38:
+                    break
+
+        # Check if river is long enough and doesn't overlap too much
+        if len(path) >= 5:
+            overlap = sum(1 for p in path if p in visited)
+            if overlap < len(path) // 2:
+                for p in path:
+                    visited.add(p)
+                    rivers.append(p)
+                started += 1
+
+    return rivers
+
+
 def generate_world(seed: int, width: int = 80, height: int = 40) -> World:
     """Generate a complete world from a seed."""
     world = World(seed=seed, width=width, height=height)
@@ -103,21 +202,37 @@ def generate_world(seed: int, width: int = 80, height: int = 40) -> World:
             row.append(e)
         world.elevation.append(row)
 
-    # ── 2. Generate moisture map ───────────────────────────────────
+    # ── 2. Generate rivers (before moisture, so rivers can affect it) ──
+    world.rivers = _generate_rivers(world, noise, rng)
+
+    # ── 3. Generate moisture map ───────────────────────────────────
     world.moisture = []
+    river_set = set(world.rivers)
     for y in range(height):
         row = []
         for x in range(width):
             nx, ny = x / width, y / height
+            # Rivers increase local moisture
+            river_bonus = 0.0
+            for dy in range(-2, 3):
+                for dx in range(-2, 3):
+                    rx, ry = x + dx, y + dy
+                    if (rx, ry) in river_set:
+                        dist = abs(dx) + abs(dy)
+                        river_bonus += 0.12 * max(0, 1 - dist / 3)
             m = noise.octave(nx * 4 + 100, ny * 4 + 100, octaves=3, persistence=0.5)
-            row.append(m)
+            row.append(min(1.0, m + river_bonus))
         world.moisture.append(row)
 
-    # ── 3. Classify terrain ────────────────────────────────────────
+    # ── 4. Classify terrain ────────────────────────────────────────
     world.terrain = []
     for y in range(height):
         row = []
         for x in range(width):
+            # Rivers take priority
+            if (x, y) in river_set:
+                row.append("river")
+                continue
             e = world.elevation[y][x]
             m = world.moisture[y][x]
 
@@ -149,7 +264,7 @@ def generate_world(seed: int, width: int = 80, height: int = 40) -> World:
         reg_rng = random.Random(region_seed)
 
         # Pick a biome for this region
-        biome = reg_rng.choice(list(TERRAIN.keys()))
+        biome = reg_rng.choice(list(BIOMES.keys()))
 
         # Name the region
         prefix = reg_rng.choice(PREFIXES)
@@ -165,7 +280,9 @@ def generate_world(seed: int, width: int = 80, height: int = 40) -> World:
             sy = reg_rng.randint(2, height - 3)
             # Ensure settlement is on land
             tries = 0
-            while (world.terrain[sy][sx] in ("deep_water", "shallow")
+            river_set_local = river_set
+            while ((world.terrain[sy][sx] in ("deep_water", "shallow", "river")
+                    or (sx, sy) in river_set_local)
                    and tries < 10):
                 sx = reg_rng.randint(2, width - 3)
                 sy = reg_rng.randint(2, height - 3)

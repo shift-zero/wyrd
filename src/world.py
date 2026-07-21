@@ -15,6 +15,7 @@ TERRAIN = {
     "hills":       {"char": "^", "color": 94,  "height": 3,   "desc": "Hills"},
     "mountains":   {"char": "▲", "color": 130, "height": 4,   "desc": "Mountains"},
     "snow":        {"char": "◌", "color": 255, "height": 5,   "desc": "Snowy peaks"},
+    "river":       {"char": "≈", "color": 45,  "height": 0,   "desc": "River"},
 }
 
 # ── Biomes ─────────────────────────────────────────────────────────
@@ -56,6 +57,7 @@ class World:
     elevation: list[list[float]] = field(default_factory=list)
     moisture: list[list[float]] = field(default_factory=list)
     terrain: list[list[str]] = field(default_factory=list)
+    rivers: list[tuple[int, int]] = field(default_factory=list)
     regions: list[Region] = field(default_factory=list)
 
     @property
