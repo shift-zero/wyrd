@@ -1,0 +1,10 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "wyrd"
+version = "0.1.0"
+description = "Generative fantasy sandbox — build worlds in the terminal"
+requires-python = ">=3.11"
+dependencies = []
