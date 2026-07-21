@@ -7,6 +7,8 @@ from .world import World, TERRAIN
 
 ANSI_RESET = "\033[0m"
 ANSI_BOLD = "\033[1m"
+ANSI_DIM = "\033[2m"
+ANSI_ITALIC = "\033[3m"
 
 
 def _color(code: int, bg: bool = False) -> str:
@@ -76,3 +78,93 @@ def render_brief(world: World) -> str:
         f"{len(world.regions)} regions | "
         f"{total_pop:,} souls"
     )
+
+
+def render_lore(world: World) -> str:
+    """Render the lore of a world."""
+    if not world.lore:
+        return "(no lore generated)"
+
+    lines = []
+    lore = world.lore
+
+    lines.append(f"{ANSI_BOLD}═══ Lore of wyrd #{world.seed} ═══{ANSI_RESET}\n")
+
+    for region in world.regions:
+        rname = region.name
+        biome_colors = {
+            "temperate": _color(28),
+            "arid": _color(172),
+            "tundra": _color(250),
+            "tropical": _color(35),
+        }
+        bcolor = biome_colors.get(region.biome, _color(255))
+
+        lines.append(f"{ANSI_BOLD}{rname}{ANSI_RESET}  {bcolor}({region.biome}){ANSI_RESET}")
+
+        # Culture
+        if rname in lore.cultures:
+            lines.append(f"  {ANSI_DIM}Culture:{ANSI_RESET} {ANSI_ITALIC}{lore.cultures[rname]}{ANSI_RESET}")
+        if rname in lore.culture_descriptions:
+            for desc in lore.culture_descriptions[rname]:
+                lines.append(f"    {desc}")
+
+        # Region description
+        if rname in lore.region_descriptions:
+            lines.append(f"  {ANSI_DIM}Land:{ANSI_RESET} {lore.region_descriptions[rname]}")
+
+        # History
+        if rname in lore.histories:
+            lines.append(f"  {ANSI_DIM}History:{ANSI_RESET} {lore.histories[rname]}")
+
+        lines.append("")
+
+    # Geographical features
+    if lore.features:
+        lines.append(f"{ANSI_BOLD}Notable Features:{ANSI_RESET}")
+        for feat in lore.features:
+            fcolor = {
+                "mountain_range": _color(130),
+                "river": _color(45),
+                "bay": _color(33),
+                "forest": _color(22),
+            }.get(feat["type"], _color(255))
+            feat_icon = {
+                "mountain_range": "▲",
+                "river": "≈",
+                "bay": "~",
+                "forest": "*",
+            }.get(feat["type"], "·")
+            lines.append(f"  {fcolor}{ANSI_BOLD}{feat_icon}{ANSI_RESET} {feat['name']}")
+            lines.append(f"    {feat['desc']}")
+        lines.append("")
+
+    # Settlement relationships
+    if lore.relationships:
+        lines.append(f"{ANSI_BOLD}Relationships:{ANSI_RESET}")
+        rel_colors = {
+            "trade": _color(28),
+            "rivalry": _color(196),
+            "alliance": _color(33),
+            "feud": _color(160),
+            "vassalage": _color(130),
+            "marriage_tie": _color(205),
+            "religious": _color(99),
+            "cultural": _color(213),
+        }
+        for rel in lore.relationships:
+            color = rel_colors.get(rel["type"], _color(255))
+            icon = {
+                "trade": "⇄",
+                "rivalry": "⚔",
+                "alliance": "⚝",
+                "feud": "✗",
+                "vassalage": "→",
+                "marriage_tie": "♡",
+                "religious": "†",
+                "cultural": "♫",
+            }.get(rel["type"], "·")
+            lines.append(f"  {color}{icon}{ANSI_RESET} {rel['description']}")
+        lines.append("")
+
+    return "\n".join(lines)
