@@ -9,7 +9,7 @@ import json
 import os
 import gzip
 from typing import Optional
-from .world import World, Region, Settlement, TERRAIN, BIOMES
+from .world import World, Region, Settlement, AdventureZone, TERRAIN, BIOMES
 from .lore import Lore
 from .narrative import Narrative, Character, EventChain, Quest
 from .chronicles import Chronicles, Era
@@ -56,6 +56,57 @@ def world_to_dict(world: World) -> dict:
             ],
         }
         data["regions"].append(region_data)
+
+    # Adventure zones
+    data["adventure_zones"] = [
+        {
+            "name": z.name,
+            "zone_type": z.zone_type,
+            "x": z.x,
+            "y": z.y,
+            "region": z.region,
+            "difficulty": z.difficulty,
+            "inhabitants": z.inhabitants,
+            "description": z.description,
+            "treasure_tier": z.treasure_tier,
+            "is_cleared": z.is_cleared,
+            "quest_hook": z.quest_hook,
+        }
+        for z in world.adventure_zones
+    ]
+
+    # Factions
+    if world.factions:
+        data["factions"] = [
+            {
+                "name": f.name,
+                "faction_type": f.faction_type,
+                "territory": f.territory,
+                "leader_name": f.leader_name,
+                "leader_title": f.leader_title,
+                "influence": f.influence,
+                "wealth": f.wealth,
+                "military": f.military,
+                "stability": f.stability,
+                "reputation": f.reputation,
+                "goals": f.goals,
+                "description": f.description,
+                "color": f.color,
+            }
+            for f in world.factions
+        ]
+
+    # Faction relationships
+    if world.faction_relationships:
+        data["faction_relationships"] = [
+            {
+                "faction_a": r.faction_a,
+                "faction_b": r.faction_b,
+                "rel_type": r.rel_type,
+                "description": r.description,
+            }
+            for r in world.faction_relationships
+        ]
 
     # Lore
     if world.lore:
@@ -243,6 +294,54 @@ def dict_to_world(data: dict) -> World:
             for s in rd.get("settlements", [])
         ]
         world.regions.append(region)
+
+    # Deserialize adventure zones
+    world.adventure_zones = [
+        AdventureZone(
+            name=zd["name"],
+            zone_type=zd["zone_type"],
+            x=zd["x"],
+            y=zd["y"],
+            region=zd["region"],
+            difficulty=zd.get("difficulty", "moderate"),
+            inhabitants=zd.get("inhabitants", ""),
+            description=zd.get("description", ""),
+            treasure_tier=zd.get("treasure_tier", 1),
+            is_cleared=zd.get("is_cleared", False),
+            quest_hook=zd.get("quest_hook", ""),
+        )
+        for zd in data.get("adventure_zones", [])
+    ]
+
+    # Deserialize factions
+    from .faction import Faction, FactionRelationship
+    world.factions = [
+        Faction(
+            name=fd["name"],
+            faction_type=fd["faction_type"],
+            territory=fd.get("territory", []),
+            leader_name=fd.get("leader_name", ""),
+            leader_title=fd.get("leader_title", ""),
+            influence=fd.get("influence", 50),
+            wealth=fd.get("wealth", 50),
+            military=fd.get("military", 50),
+            stability=fd.get("stability", 50),
+            reputation=fd.get("reputation", "neutral"),
+            goals=fd.get("goals", []),
+            description=fd.get("description", ""),
+            color=fd.get("color", 226),
+        )
+        for fd in data.get("factions", [])
+    ]
+    world.faction_relationships = [
+        FactionRelationship(
+            faction_a=rd["faction_a"],
+            faction_b=rd["faction_b"],
+            rel_type=rd["rel_type"],
+            description=rd.get("description", ""),
+        )
+        for rd in data.get("faction_relationships", [])
+    ]
 
     # Deserialize lore
     lore_data = data.get("lore")

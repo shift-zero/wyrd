@@ -12,7 +12,7 @@ Usage:
 
 import curses
 import math
-from .world import World, TERRAIN
+from .world import World, TERRAIN, ADVENTURE_ZONE_TYPES
 
 # ── Color palette (256-color) ─────────────────────────────────────────
 
@@ -58,6 +58,10 @@ def _init_colors():
     curses.init_pair(14, -1, INFO_BG)            # info panel content
     curses.init_pair(15, HEADER_COLOR, -1)       # header
     curses.init_pair(16, HELP_COLOR, -1)         # help text
+    # Adventure zone color pairs (17-24)
+    zone_colors = [160, 250, 124, 179, 34, 196, 99, 172]  # D, C, R, T, G, L, S, M
+    for i, c in enumerate(zone_colors):
+        curses.init_pair(17 + i, c, -1)
 
 
 def _color_pair(terrain_key: str) -> int:
@@ -98,6 +102,12 @@ def _find_tile_info(world: World, x: int, y: int) -> dict:
                 info["settlement"] = s
                 info["region"] = region
                 return info
+
+    # Find adventure zone at this position
+    for z in world.adventure_zones:
+        if z.x == x and z.y == y:
+            info["adventure_zone"] = z
+            break
 
     # Find which region this tile belongs to (rough approximation)
     # Use nearest settlement
@@ -153,6 +163,20 @@ def _draw_map(stdscr, world: World, offset_x: int, offset_y: int,
                 if (wx, wy) in settlement_map:
                     char = settlement_map[(wx, wy)]
                     color_pair = 10
+
+                # Check for adventure zone (if not a settlement)
+                elif world.adventure_zones:
+                    for z in world.adventure_zones:
+                        if z.x == wx and z.y == wy:
+                            char = z.char
+                            # Zone color pairs: 17 + zone type index
+                            zone_types = ["dungeon", "cave", "ruin", "tower", "grove", "lair", "shrine", "mine"]
+                            try:
+                                z_idx = zone_types.index(z.zone_type)
+                                color_pair = 17 + z_idx
+                            except ValueError:
+                                color_pair = 11
+                            break
 
                 # Cursor highlight
                 if show_cursor and wx == cursor_x and wy == cursor_y:
@@ -234,6 +258,18 @@ def _draw_info_panel(stdscr, world: World, cursor_x: int, cursor_y: int,
     else:
         lines.append(" (wilderness)")
 
+    # Line 4: Adventure zone
+    if info.get("adventure_zone"):
+        z = info["adventure_zone"]
+        z_info = ADVENTURE_ZONE_TYPES.get(z.zone_type, {})
+        z_desc = z_info.get("desc", z.zone_type)
+        status = "✦" if not z.is_cleared else "✓"
+        lines.append(f" {z.char} {z.name} — [{z.difficulty}] {status}")
+        if z.inhabitants:
+            lines.append(f" {z.inhabitants}")
+        if z.quest_hook:
+            lines.append(f" Quest: {z.quest_hook[:60]}")
+
     # Draw the panel
     for i, line in enumerate(lines):
         y = info_y + i
@@ -245,10 +281,10 @@ def _draw_info_panel(stdscr, world: World, cursor_x: int, cursor_y: int,
         except curses.error:
             pass
 
-    # Controls line
-    ctrl_y = info_y + 3
+    # Controls line (after info lines + 1 padding)
+    ctrl_y = info_y + len(lines) + 1
     if ctrl_y < max_y:
-        ctrl = " [↑↓←→/WASD] pan  [+/-] zoom  [i] inspect toggle  [r] regions  [l] lore  [q] quit  [h] help"
+        ctrl = " [↑↓←→/WASD] pan  [+/-] zoom  [i] inspect toggle  [r] regions  [l] lore  [z] zones  [f] factions  [q] quit  [h] help"
         try:
             stdscr.addstr(ctrl_y, 0, " " * (max_x - 1), curses.color_pair(16))
             stdscr.addstr(ctrl_y, 0, ctrl[:max_x - 1], curses.color_pair(16))
@@ -271,6 +307,8 @@ def _draw_help(stdscr) -> None:
         "    i         Toggle inspect mode (click on tiles)",
         "    r         Show region overview",
         "    l         Show lore",
+        "    z         Show adventure zones",
+        "    f         Show factions",
         "",
         "  General",
         "    h / ?     Toggle this help screen",
@@ -459,6 +497,162 @@ def _draw_lore_overlay(stdscr, world: World) -> None:
             pass
 
 
+def _draw_zones_overlay(stdscr, world: World) -> None:
+    """Draw the adventure zones overview overlay."""
+    max_y, max_x = stdscr.getmaxyx()
+
+    lines = ["wyrd — Adventure Zones  (press any key to close)", ""]
+    zone_types = ["dungeon", "cave", "ruin", "tower", "grove", "lair", "shrine", "mine"]
+    from .world import ADVENTURE_ZONE_TYPES
+
+    if not world.adventure_zones:
+        lines.append("  (no adventure zones generated)")
+    else:
+        # Group by region
+        by_region: dict[str, list] = {}
+        for z in world.adventure_zones:
+            by_region.setdefault(z.region, []).append(z)
+
+        for region_name in sorted(by_region.keys()):
+            rzones = by_region[region_name]
+            lines.append(f"  {region_name}  ({len(rzones)} zones)")
+            for z in sorted(rzones, key=lambda z: z.name):
+                z_info = ADVENTURE_ZONE_TYPES.get(z.zone_type, {})
+                z_char = z_info.get("char", "?")
+                status = "✦" if not z.is_cleared else "✓"
+                lines.append(
+                    f"    {z_char} {z.name}  [{z.difficulty}] {status}"
+                )
+                lines.append(f"      {z.description}")
+                if z.inhabitants:
+                    lines.append(f"      {z.inhabitants}")
+                if z.quest_hook:
+                    lines.append(f"      ⚑ {z.quest_hook[:55]}")
+            lines.append("")
+
+        # Summary
+        total = len(world.adventure_zones)
+        by_type = {}
+        for z in world.adventure_zones:
+            by_type[z.zone_type] = by_type.get(z.zone_type, 0) + 1
+        type_summary = " · ".join(f"{ADVENTURE_ZONE_TYPES[t]['char']}×{c}" for t, c in sorted(by_type.items()))
+        lines.append(f"  Total: {total} zones — {type_summary}")
+
+    # Box
+    box_h = min(len(lines) + 2, max_y - 1)
+    box_w = min(max(len(l) for l in lines) + 4, max_x - 2)
+    start_y = max(0, (max_y - box_h) // 2)
+    start_x = max(0, (max_x - box_w) // 2)
+
+    for y in range(box_h):
+        for x in range(box_w):
+            try:
+                if y == 0 or y == box_h - 1 or x == 0 or x == box_w - 1:
+                    stdscr.addch(start_y + y, start_x + x, " ",
+                                 curses.color_pair(13))
+                else:
+                    stdscr.addch(start_y + y, start_x + x, " ",
+                                 curses.color_pair(14))
+            except curses.error:
+                pass
+
+    for i, line in enumerate(lines):
+        y = start_y + 1 + i
+        if y >= max_y:
+            break
+        try:
+            if line.startswith("  ") and not line.startswith("    "):
+                stdscr.addstr(y, start_x + 2, line[:max_x - start_x - 2],
+                              curses.color_pair(15) | curses.A_BOLD)
+            elif line.startswith("      "):
+                stdscr.addstr(y, start_x + 2, line[:max_x - start_x - 2],
+                              curses.color_pair(16))
+            elif line.startswith("    "):
+                stdscr.addstr(y, start_x + 2, line[:max_x - start_x - 2],
+                              curses.color_pair(14))
+            else:
+                stdscr.addstr(y, start_x + 2, line[:max_x - start_x - 2],
+                              curses.color_pair(14))
+        except curses.error:
+            pass
+
+
+def _draw_factions_overlay(stdscr, world: World) -> None:
+    """Draw the factions overview overlay."""
+    max_y, max_x = stdscr.getmaxyx()
+
+    from .faction import FACTION_TYPES
+
+    lines = ["wyrd — Factions  (press any key to close)", ""]
+
+    if not world.factions:
+        lines.append("  (no factions generated for this world)")
+    else:
+        sorted_factions = sorted(world.factions, key=lambda f: f.power_score, reverse=True)
+        for f in sorted_factions:
+            type_info = FACTION_TYPES.get(f.faction_type, {"desc": "Unknown", "icon": "?"})
+            icon = type_info.get("icon", "?")
+            leader = f"{f.leader_title} {f.leader_name}" if f.leader_name else "(no leader)"
+            terr_str = ", ".join(f.territory) if f.territory else "(no territory)"
+            lines.append(
+                f"  {icon} {f.name}  [{type_info['desc']}]"
+            )
+            lines.append(f"    Leader: {leader}")
+            lines.append(f"    Territory: {terr_str}")
+            lines.append(f"    Power: {f.power_score}/300  (Inf:{f.influence}  Wlt:{f.wealth}  Mil:{f.military}  Stb:{f.stability})")
+            if f.goals:
+                lines.append(f"    Goal: {f.goals[0]}")
+            lines.append("")
+
+        # Relationships
+        if world.faction_relationships:
+            from .faction import RELATIONSHIP_ICONS
+            lines.append("  Relationships:")
+            for rel in world.faction_relationships[:5]:
+                r_icon = RELATIONSHIP_ICONS.get(rel.rel_type, "·")
+                lines.append(f"    {r_icon} {rel.description[:70]}")
+            if len(world.faction_relationships) > 5:
+                lines.append(f"    ... and {len(world.faction_relationships) - 5} more")
+
+    # Box
+    box_h = min(len(lines) + 2, max_y - 1)
+    box_w = min(max(len(l) for l in lines) + 4, max_x - 2)
+    start_y = max(0, (max_y - box_h) // 2)
+    start_x = max(0, (max_x - box_w) // 2)
+
+    for y in range(box_h):
+        for x in range(box_w):
+            try:
+                if y == 0 or y == box_h - 1 or x == 0 or x == box_w - 1:
+                    stdscr.addch(start_y + y, start_x + x, " ",
+                                 curses.color_pair(13))
+                else:
+                    stdscr.addch(start_y + y, start_x + x, " ",
+                                 curses.color_pair(14))
+            except curses.error:
+                pass
+
+    for i, line in enumerate(lines):
+        y = start_y + 1 + i
+        if y >= max_y:
+            break
+        try:
+            if line.startswith("  ") and not line.startswith("    "):
+                stdscr.addstr(y, start_x + 2, line[:max_x - start_x - 2],
+                              curses.color_pair(15) | curses.A_BOLD)
+            elif line.startswith("      "):
+                stdscr.addstr(y, start_x + 2, line[:max_x - start_x - 2],
+                              curses.color_pair(16))
+            elif line.startswith("    "):
+                stdscr.addstr(y, start_x + 2, line[:max_x - start_x - 2],
+                              curses.color_pair(14))
+            else:
+                stdscr.addstr(y, start_x + 2, line[:max_x - start_x - 2],
+                              curses.color_pair(14))
+        except curses.error:
+            pass
+
+
 # ── Main Explorer ─────────────────────────────────────────────────────
 
 def _explore_curses(stdscr, world: World) -> None:
@@ -480,6 +674,8 @@ def _explore_curses(stdscr, world: World) -> None:
     show_help = False
     show_regions = False
     show_lore = False
+    show_zones = False
+    show_factions = False
     running = True
 
     while running:
@@ -491,7 +687,7 @@ def _explore_curses(stdscr, world: World) -> None:
                      cursor_x, cursor_y)
         _draw_map(stdscr, world, offset_x, offset_y,
                   cursor_x, cursor_y, inspect_mode, zoom_level,
-                  show_cursor=(inspect_mode or show_help or show_regions or show_lore))
+                  show_cursor=(inspect_mode or show_help or show_regions or show_lore or show_zones or show_factions))
         _draw_info_panel(stdscr, world, cursor_x, cursor_y, inspect_mode)
 
         # ── Overlays ────────────────────────────────────────────────
@@ -501,17 +697,23 @@ def _explore_curses(stdscr, world: World) -> None:
             _draw_regions_overlay(stdscr, world)
         elif show_lore:
             _draw_lore_overlay(stdscr, world)
+        elif show_zones:
+            _draw_zones_overlay(stdscr, world)
+        elif show_factions:
+            _draw_factions_overlay(stdscr, world)
 
         curses.doupdate()
 
         # ── Handle input ────────────────────────────────────────────
         key = stdscr.getch()
 
-        if show_help or show_regions or show_lore:
+        if show_help or show_regions or show_lore or show_zones or show_factions:
             # Any key dismisses overlay
             show_help = False
             show_regions = False
             show_lore = False
+            show_zones = False
+            show_factions = False
             continue
 
         if key == ord("q") or key == 27:  # q or ESC
@@ -525,6 +727,12 @@ def _explore_curses(stdscr, world: World) -> None:
 
         elif key == ord("l"):
             show_lore = True
+
+        elif key == ord("z"):
+            show_zones = True
+
+        elif key == ord("f"):
+            show_factions = True
 
         elif key == ord("i"):
             inspect_mode = not inspect_mode

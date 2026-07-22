@@ -4,13 +4,14 @@ import argparse
 import os
 import sys
 from .generate import generate_world
-from .render import render_map, render_brief, render_lore, render_characters, render_events, render_quests, render_narrative, render_chronicles, render_magic, ANSI_RESET, ANSI_BOLD, ANSI_DIM, _color
+from .render import render_map, render_brief, render_lore, render_characters, render_events, render_quests, render_narrative, render_chronicles, render_magic, render_factions, ANSI_RESET, ANSI_BOLD, ANSI_DIM, _color
 from .serialize import save_world, load_world
 from .export_html import export_world_html
 from .export_svg import export_world_svg
 from .export_ttrpg import export_world_ttrpg
 from .religion import generate_pantheon
 from .adventure import generate_adventure_zones, render_zones, render_zone_detail
+from .faction import generate_factions
 
 
 def _get_world(args) -> 'World':
@@ -210,6 +211,13 @@ def main():
                            help="Show full descriptions for each zone")
     zones_cmd.add_argument("--id", type=int, default=None,
                            help="Show detail for a specific zone by index")
+
+    # ── factions ───────────────────────────────────────────────────
+    factions_cmd = sub.add_parser("factions",
+                                  help="List factions in a world")
+    _add_load_arg(factions_cmd)
+    factions_cmd.add_argument("--id", type=int, default=None,
+                              help="Show detail for a specific faction by index")
 
     # ── chronicles ─────────────────────────────────────────────────
     chron_cmd = sub.add_parser("chronicles",
@@ -428,6 +436,21 @@ def main():
             print(render_map(world, show_settlements=True))
             print()
             print(render_zones(world, detail=args.detail))
+
+    # ── factions ───────────────────────────────────────────────────
+    elif args.command == "factions":
+        world = _get_world(args)
+        if not world.factions:
+            world.factions = generate_factions(world)
+        if args.id is not None:
+            idx = args.id
+            if 0 <= idx < len(world.factions):
+                from .render import render_faction_detail
+                print(render_faction_detail(world.factions[idx]))
+            else:
+                print(f"Faction #{idx} not found. There are {len(world.factions)} factions (0-{len(world.factions)-1}).")
+        else:
+            print(render_factions(world))
 
     # ── chronicles ─────────────────────────────────────────────────
     elif args.command == "chronicles":

@@ -517,6 +517,164 @@ def render_magic(world) -> str:
     return "\n".join(lines)
 
 
+# ── Faction Rendering ─────────────────────────────────────────────
+
+_REPUTATION_COLORS = {
+    "benevolent": _color(28),
+    "respected": _color(33),
+    "neutral": _color(255),
+    "feared": _color(196),
+    "hated": _color(160),
+}
+
+_REPUTATION_ICONS = {
+    "benevolent": "✦",
+    "respected": "★",
+    "neutral": "·",
+    "feared": "⚠",
+    "hated": "✗",
+}
+
+
+def render_factions(world) -> str:
+    """Render the factions of a world."""
+    factions = getattr(world, 'factions', None)
+    if not factions:
+        return f"{ANSI_DIM}(no factions generated){ANSI_RESET}"
+
+    lines = []
+    lines.append(f"{ANSI_BOLD}═══ The Factions of wyrd #{world.seed} ═══{ANSI_RESET}\n")
+
+    # Sort by power score descending
+    sorted_factions = sorted(factions, key=lambda f: f.power_score, reverse=True)
+
+    for f in sorted_factions:
+        type_info = f.type_info
+        icon = type_info.get("icon", "?")
+        color = _color(f.color)
+
+        reputation_color = _REPUTATION_COLORS.get(f.reputation, _color(255))
+        reputation_icon = _REPUTATION_ICONS.get(f.reputation, "·")
+
+        # Power bar (visual indicator)
+        power = f.power_score
+        bar_len = 20
+        filled = max(1, int(power / 300 * bar_len))
+        bar = "█" * filled + "░" * (bar_len - filled)
+
+        lines.append(
+            f"  {color}{icon}{ANSI_RESET}  "
+            f"{ANSI_BOLD}{f.name}{ANSI_RESET}"
+            f"  {_color(240)}({type_info['desc']}){ANSI_RESET}"
+            f"  {reputation_color}{reputation_icon} {f.reputation}{ANSI_RESET}"
+        )
+
+        # Leadership
+        if f.leader_name:
+            lines.append(
+                f"    {_color(240)}Leader:{ANSI_RESET} "
+                f"{f.leader_title} {ANSI_BOLD}{f.leader_name}{ANSI_RESET}"
+            )
+
+        # Territory
+        if f.territory:
+            terr_str = ", ".join(f.territory)
+            lines.append(f"    {_color(240)}Territory:{ANSI_RESET} {terr_str}")
+
+        # Power stats with visual bar
+        lines.append(
+            f"    {_color(240)}Power:{ANSI_RESET} "
+            f"{ANSI_ITALIC}{bar}{ANSI_RESET} "
+            f"{_color(240)}({power}/300){ANSI_RESET}"
+        )
+
+        # Influence / Wealth / Military
+        stats = []
+        influence_color = _color(99)
+        wealth_color = _color(226)
+        military_color = _color(196)
+        stats.append(f"{influence_color}◈{ANSI_RESET} Influence {f.influence}")
+        stats.append(f"{wealth_color}♦{ANSI_RESET} Wealth {f.wealth}")
+        stats.append(f"{military_color}⚔{ANSI_RESET} Military {f.military}")
+        stats.append(f"{_color(130)}○{ANSI_RESET} Stability {f.stability}")
+        lines.append(f"    {'  '.join(stats)}")
+
+        # Description
+        if f.description:
+            lines.append(f"    {ANSI_ITALIC}{f.description}{ANSI_RESET}")
+
+        # Goals
+        if f.goals:
+            lines.append(f"    {ANSI_BOLD}Goals:{ANSI_RESET}")
+            for goal in f.goals:
+                lines.append(f"      {_color(94)}→{ANSI_RESET} {goal}")
+
+        lines.append("")
+
+    # ── Relationships ────────────────────────────────────────────────
+    relationships = getattr(world, 'faction_relationships', [])
+    if relationships:
+        lines.append(f"{ANSI_BOLD}Inter-Faction Relationships:{ANSI_RESET}")
+        from .faction import RELATIONSHIP_ICONS, RELATIONSHIP_COLORS
+        for rel in relationships:
+            r_icon = RELATIONSHIP_ICONS.get(rel.rel_type, "·")
+            r_color = _color(RELATIONSHIP_COLORS.get(rel.rel_type, 250))
+            lines.append(f"  {r_color}{r_icon}{ANSI_RESET} {rel.description}")
+        lines.append("")
+
+    # Summary
+    lines.append(
+        f"{ANSI_DIM}── {len(factions)} factions "
+        f"· total power: {sum(f.power_score for f in sorted_factions):,}/{len(factions)*300} "
+        f"· {len(relationships)} relationships ──{ANSI_RESET}"
+    )
+
+    return "\n".join(lines)
+
+
+def render_faction_detail(faction) -> str:
+    """Render detailed information about a single faction."""
+    from .faction import RELATIONSHIP_ICONS, RELATIONSHIP_COLORS
+    color = _color(faction.color)
+    type_info = faction.type_info
+    icon = type_info.get("icon", "?")
+
+    lines = []
+    lines.append(f"{color}{ANSI_BOLD}{icon}{ANSI_RESET}  {ANSI_BOLD}{faction.name}{ANSI_RESET}")
+    lines.append(f"  {ANSI_DIM}Type:{ANSI_RESET} {type_info['desc']}")
+    lines.append(f"  {ANSI_DIM}Power Score:{ANSI_RESET} {faction.power_score}/300")
+
+    reputation_color = _REPUTATION_COLORS.get(faction.reputation, _color(255))
+    lines.append(f"  {ANSI_DIM}Reputation:{ANSI_RESET} {reputation_color}{faction.reputation}{ANSI_RESET}")
+    lines.append(f"  {ANSI_DIM}Influence:{ANSI_RESET} {'█' * (faction.influence // 10)}{'░' * (10 - faction.influence // 10)} {faction.influence}/100")
+    lines.append(f"  {ANSI_DIM}Wealth:{ANSI_RESET}     {'█' * (faction.wealth // 10)}{'░' * (10 - faction.wealth // 10)} {faction.wealth}/100")
+    lines.append(f"  {ANSI_DIM}Military:{ANSI_RESET}   {'█' * (faction.military // 10)}{'░' * (10 - faction.military // 10)} {faction.military}/100")
+    lines.append(f"  {ANSI_DIM}Stability:{ANSI_RESET}  {'█' * (faction.stability // 10)}{'░' * (10 - faction.stability // 10)} {faction.stability}/100")
+
+    if faction.leader_name:
+        lines.append("")
+        lines.append(f"  {ANSI_BOLD}Leadership{ANSI_RESET}")
+        lines.append(f"    {faction.leader_title} {faction.leader_name}")
+
+    if faction.territory:
+        lines.append("")
+        lines.append(f"  {ANSI_BOLD}Territory{ANSI_RESET}")
+        for t in faction.territory:
+            lines.append(f"    {_color(130)}◊{ANSI_RESET} {t}")
+
+    if faction.description:
+        lines.append("")
+        lines.append(f"  {ANSI_ITALIC}{faction.description}{ANSI_RESET}")
+
+    if faction.goals:
+        lines.append("")
+        lines.append(f"  {ANSI_BOLD}Goals{ANSI_RESET}")
+        for g in faction.goals:
+            lines.append(f"    {_color(94)}→{ANSI_RESET} {g}")
+
+    return "\n".join(lines)
+
+
 # ── Pantheon Rendering ───────────────────────────────────────────────────
 
 _PANTHEON_ALIGNMENT_COLORS = {

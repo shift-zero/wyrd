@@ -4,8 +4,8 @@ wyrd — HTML Export (Phase 3: Explorer Mode).
 Generate a self-contained HTML page showing a generated world.
 """
 
-from .world import World, TERRAIN
-from .render import render_lore, render_brief
+from .world import World, TERRAIN, ADVENTURE_ZONE_TYPES
+from .render import render_lore, render_factions, render_brief
 
 
 HTML_TEMPLATE = """<!DOCTYPE html>
@@ -123,6 +123,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 {regions_html}
 </div>
 
+{factions_html}
+
 <div class="lore">{lore_html}</div>
 
 <div class="footer">
@@ -213,6 +215,34 @@ def export_world_html(
                 row_chars.append(
                     f'<span style="color:#ffd700;font-weight:bold">{settlement_char}</span>'
                 )
+                continue
+
+            # Check for adventure zone
+            zone_at = None
+            for z in world.adventure_zones:
+                if z.x == x and z.y == y:
+                    zone_at = z
+                    break
+            if zone_at:
+                z_info = ADVENTURE_ZONE_TYPES.get(zone_at.zone_type, {})
+                # Map zone color codes to hex
+                zone_hex_colors = {
+                    "dungeon": "#d70000", "cave": "#bcbcbc",
+                    "ruin": "#870000", "tower": "#d7af5f",
+                    "grove": "#00af00", "lair": "#d70000",
+                    "shrine": "#875fff", "mine": "#d78700",
+                }
+                z_hex = zone_hex_colors.get(zone_at.zone_type, "#ffd700")
+                row_chars.append(
+                    f'<span style="color:{z_hex};font-weight:bold" '
+                    f'title="[{zone_at.char}] {zone_at.name} — {z_info.get("desc", "")}'
+                    f' | Difficulty: {zone_at.difficulty}'
+                    f' | Inhabitants: {zone_at.inhabitants}'
+                    f'{" | Quest: " + zone_at.quest_hook[:60] if zone_at.quest_hook else ""}'
+                    f' | Treasure Tier: {zone_at.treasure_tier}'
+                    f'">'
+                    f'{zone_at.char}</span>'
+                )
             else:
                 row_chars.append(
                     f'<span style="color:{hex_color}">{char}</span>'
@@ -237,6 +267,21 @@ def export_world_html(
         f'<span>Settlement</span>'
         f'</div>'
     )
+    # Adventure zone legend
+    zone_hex_colors = {
+        "dungeon": "#d70000", "cave": "#bcbcbc",
+        "ruin": "#870000", "tower": "#d7af5f",
+        "grove": "#00af00", "lair": "#d70000",
+        "shrine": "#875fff", "mine": "#d78700",
+    }
+    for key, info in ADVENTURE_ZONE_TYPES.items():
+        z_hex = zone_hex_colors.get(key, "#ffd700")
+        legend_items.append(
+            f'<div class="legend-item">'
+            f'<span class="legend-char" style="color:{z_hex};font-weight:bold">{info["char"]}</span>'
+            f'<span>{info["desc"]}</span>'
+            f'</div>'
+        )
     legend_html = "\n".join(legend_items)
 
     # ── Regions ─────────────────────────────────────────────────────
@@ -252,6 +297,55 @@ def export_world_html(
             f'</div>'
         )
     regions_html = "\n".join(region_parts)
+
+    # ── Factions ────────────────────────────────────────────────────
+    factions_html = ""
+    if world.factions:
+        from .faction import FACTION_TYPES, RELATIONSHIP_ICONS, RELATIONSHIP_COLORS
+        faction_lines = []
+        for f in sorted(world.factions, key=lambda x: x.power_score, reverse=True):
+            ft = FACTION_TYPES.get(f.faction_type, {})
+            leader = f"{f.leader_title} {f.leader_name}" if f.leader_name else "(no leader)"
+            terr = ", ".join(f.territory) if f.territory else "(none)"
+            faction_lines.append(
+                f'<details style="margin-bottom:0.5rem;background:var(--surface);'
+                f'padding:0.5rem;border-radius:4px;">'
+                f'<summary style="cursor:pointer;font-weight:bold;">'
+                f'{ft.get("icon", "?")} {f.name}'
+                f'<span style="color:#888;font-weight:normal;margin-left:0.5rem;">'
+                f'[{ft.get("desc", "Unknown")}] — Power {f.power_score}/300'
+                f'</span>'
+                f'</summary>'
+                f'<div style="margin-top:0.3rem;font-size:0.8rem;color:#ccc;">'
+                f'<div>Leader: {leader}</div>'
+                f'<div>Territory: {terr}</div>'
+                f'<div>Influence: {f.influence} | Wealth: {f.wealth} | Military: {f.military} | Stability: {f.stability}</div>'
+                f'<div>Reputation: {f.reputation}</div>'
+                f'<div style="margin-top:0.2rem;font-style:italic;">{f.description}</div>'
+            )
+            if f.goals:
+                faction_lines.append(f'<div style="margin-top:0.2rem;">Goals:</div>')
+                for g in f.goals:
+                    faction_lines.append(f'<div style="margin-left:1rem;color:#aaa;">→ {g}</div>')
+            faction_lines.append('</div></details>')
+
+        factions_html = (
+            '<div class="regions" style="margin-top:1rem;">'
+            '<h2>Factions</h2>'
+            + "\n".join(faction_lines) +
+            '</div>'
+        )
+
+        # Relationships
+        if world.faction_relationships:
+            rel_lines = ['<div style="margin-top:0.5rem;margin-bottom:1rem;font-size:0.85rem;">']
+            rel_lines.append('<strong>Inter-Faction Relationships:</strong>')
+            for rel in world.faction_relationships:
+                r_icon = RELATIONSHIP_ICONS.get(rel.rel_type, "·")
+                r_color = f"#{RELATIONSHIP_COLORS.get(rel.rel_type, 250):02x}{250:02x}{250:02x}"  # fallback
+                rel_lines.append(f'<div style="margin-left:1rem;color:#aaa;">{r_icon} {rel.description}</div>')
+            rel_lines.append('</div>')
+            factions_html += "\n".join(rel_lines)
 
     # ── Lore ────────────────────────────────────────────────────────
     lore_text = render_lore(world) if world.lore else "(no lore generated)"
@@ -326,6 +420,7 @@ def export_world_html(
         map_html=map_html,
         legend_html=legend_html,
         regions_html=regions_html,
+        factions_html=factions_html,
         lore_html=lore_html,
         font_size=font_size,
         date=today,

@@ -11,6 +11,9 @@ if TYPE_CHECKING:
     from .magic import MagicSystem
     from .religion import PantheonSystem
 
+# Runtime imports for dataclass fields (used by World)
+from .faction import Faction, FactionRelationship
+
 # ── Adventure Zone Types ─────────────────────────────────────────────
 
 ADVENTURE_ZONE_TYPES = {
@@ -145,6 +148,8 @@ class World:
     rivers: list[tuple[int, int]] = field(default_factory=list)
     regions: list[Region] = field(default_factory=list)
     adventure_zones: list[AdventureZone] = field(default_factory=list)
+    factions: list[Faction] = field(default_factory=list)
+    faction_relationships: list[FactionRelationship] = field(default_factory=list)
     lore: Optional['Lore'] = None
     narrative: Optional['Narrative'] = None
     chronicles: Optional['Chronicles'] = None
