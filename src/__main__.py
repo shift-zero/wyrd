@@ -216,7 +216,6 @@ def main():
                 raise OSError("not a TTY")
         except (ImportError, OSError, Exception):
             # Fallback: pager-based explore
-            from .render import render_map, render_lore
             lines = []
             lines.append(render_map(world))
             lines.append("")
