@@ -19,6 +19,40 @@ def _get_world(args) -> 'World':
     return generate_world(seed, width=args.width, height=args.height)
 
 
+def _apply_snapshot_if_needed(world: 'World', args) -> 'World':
+    """If the command supports --snapshot-year and it's set, apply sim state."""
+    snapshot_year = getattr(args, 'snapshot_year', None)
+    if snapshot_year is None:
+        return world
+
+    from .sim import apply_sim_state_to_world, SimState, SettlementSnapshot, SimEvent
+    from .serialize import load_sim_state
+
+    sim_file = f"wyrd-{world.seed}-sim.json"
+    sim_data = load_sim_state(sim_file)
+    if sim_data is None:
+        print(f"⚠ No simulation data found for wyrd #{world.seed} (expected {sim_file})")
+        return world
+
+    # Check for snapshot at the requested year
+    raw = sim_data.get("snapshots", {}).get(str(snapshot_year), None)
+    if raw is None:
+        print(f"⚠ No snapshot at year {snapshot_year}. Available years: "
+              f"{sorted(int(k) for k in sim_data.get('snapshots', {}).keys())}")
+        return world
+
+    # Reconstruct SimState from the snapshot dict
+    state = SimState(year=raw["year"])
+    for name, sd in raw.get("settlements", {}).items():
+        state.settlements[name] = SettlementSnapshot(**sd)
+    state.world_modifiers = raw.get("world_modifiers", [])
+    for pr in raw.get("population_record", []):
+        state.population_record.append(pr)
+
+    print(f"📂 Loaded wyrd #{world.seed} at year {snapshot_year} from simulation")
+    return apply_sim_state_to_world(world, state)
+
+
 def _add_common_gen_args(parser):
     """Add common world generation arguments to a subparser."""
     parser.add_argument("--seed", type=int, default=None,
@@ -64,6 +98,8 @@ def main():
     _add_common_gen_args(save_cmd)
     save_cmd.add_argument("--output", "-o", type=str, default=None,
                           help="Output file path (default: wyrd-{seed}.json)")
+    save_cmd.add_argument("--snapshot-year", type=int, default=None,
+                          help="Apply sim state at a specific year before saving")
 
     # ── load ───────────────────────────────────────────────────────
     load_cmd = sub.add_parser("load", help="Load and display a saved world")
@@ -85,10 +121,14 @@ def main():
                             help="Export format (default: html)")
     export_cmd.add_argument("--open", action="store_true",
                             help="Open the HTML file in browser after export")
+    export_cmd.add_argument("--snapshot-year", type=int, default=None,
+                            help="Load sim state at a specific year (from saved sim file)")
 
     # ── explore ────────────────────────────────────────────────────
     explore = sub.add_parser("explore", help="Explore a world interactively (pager)")
     _add_load_arg(explore)
+    explore.add_argument("--snapshot-year", type=int, default=None,
+                         help="Load sim state at a specific year (from saved sim file)")
 
     # ── query ──────────────────────────────────────────────────────
     query_cmd = sub.add_parser("query", help="Query a world with natural language")
@@ -97,6 +137,8 @@ def main():
                            help='Query text, e.g. "tell me about the northlands"')
     query_cmd.add_argument("--no-color", action="store_true",
                            help="Disable ANSI color in output")
+    query_cmd.add_argument("--snapshot-year", type=int, default=None,
+                           help="Load sim state at a specific year (from saved sim file)")
 
     # ── characters ─────────────────────────────────────────────────
     chars_cmd = sub.add_parser("characters", help="List characters in a world")
@@ -217,8 +259,16 @@ def main():
 
         if args.snapshot_year is not None and os.path.exists(sim_file):
             sim_data = load_sim_state(sim_file)
-            if sim_data and args.snapshot_year in sim_data["snapshots"]:
-                sim_state = sim_data["snapshots"][args.snapshot_year]
+            snap_key = str(args.snapshot_year)
+            if sim_data and snap_key in sim_data.get("snapshots", {}):
+                snap_raw = sim_data["snapshots"][snap_key]
+                # Reconstruct SimState from dict
+                sim_state = SimState(year=snap_raw["year"])
+                for name, sd in snap_raw.get("settlements", {}).items():
+                    sim_state.settlements[name] = SettlementSnapshot(**sd)
+                sim_state.world_modifiers = snap_raw.get("world_modifiers", [])
+                for pr in snap_raw.get("population_record", []):
+                    sim_state.population_record.append(pr)
                 print(f"📂 Loaded sim state at year {args.snapshot_year}")
 
         if sim_state is None:
@@ -264,6 +314,7 @@ def main():
         import random
         seed = args.seed if args.seed is not None else random.randint(0, 999999)
         world = generate_world(seed, width=args.width, height=args.height)
+        world = _apply_snapshot_if_needed(world, args)
         output = args.output or f"wyrd-{seed}.json"
         save_world(world, output)
         print(f"💾 wyrd #{seed} saved to {output}")
@@ -271,6 +322,7 @@ def main():
     # ── export ─────────────────────────────────────────────────────
     elif args.command == "export":
         world = _get_world(args)
+        world = _apply_snapshot_if_needed(world, args)
         fmt = args.format
 
         if fmt == "svg":
@@ -298,6 +350,7 @@ def main():
     # ── explore ────────────────────────────────────────────────────
     elif args.command == "explore":
         world = _get_world(args)
+        world = _apply_snapshot_if_needed(world, args)
         # Try the interactive curses explorer first
         from .explore import explore_world
         try:
@@ -328,6 +381,7 @@ def main():
     # ── query ──────────────────────────────────────────────────────
     elif args.command == "query":
         world = _get_world(args)
+        world = _apply_snapshot_if_needed(world, args)
         query_text = " ".join(args.query_text) if args.query_text else "overview"
         from .query import query_world
         result = query_world(world, query_text)
