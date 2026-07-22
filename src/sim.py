@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from .world import World, Region, Settlement, TERRAIN
+from .faction_sim import initialize_faction_state, _simulate_political_tick
 
 
 # ── Terrain Resource Values ───────────────────────────────────────────
@@ -122,6 +123,19 @@ SIM_EVENT_TEMPLATES = {
         "challenging the authority of the {religion_name} clergy. "
         "{effect}"
     ),
+    # Political Events (Phase 12)
+    "faction_war": (
+        "{description}"
+    ),
+    "faction_alliance": (
+        "{description}"
+    ),
+    "faction_power_shift": (
+        "{description}"
+    ),
+    "faction_collapse": (
+        "{description}"
+    ),
 }
 
 
@@ -176,6 +190,9 @@ class SimState:
     # Name of the current chronicle era. Updated by era transition checks.
     era_history: list[dict] = field(default_factory=list)
     # Records of era transitions that occurred during sim.
+    faction_state: dict = field(default_factory=dict)
+    # Maps faction name -> FactionSnapshot from faction_sim module.
+    # Tracks faction power, wars, alliances through simulation.
     
     @property
     def total_population(self) -> int:
@@ -666,6 +683,15 @@ def _simulate_tick(world: World, state: SimState, rng: random.Random,
     # Check for era transitions (every 50+ years and on major population shifts)
     _check_era_transition(state, year, rng, chaos_factor)
     
+    # Political tick — faction power drift, wars, alliances
+    try:
+        political_events = _simulate_political_tick(
+            world, state, rng, year, chaos_factor
+        )
+        events.extend(political_events)
+    except Exception:
+        pass  # Political events are non-critical; don't crash sim
+    
     return events
 
 
@@ -1153,6 +1179,9 @@ def initialize_sim_state(world: World) -> SimState:
         "num_abandoned": 0,
     })
     
+    # Initialize faction simulation state
+    state.faction_state = initialize_faction_state(world)
+    
     return state
 
 
@@ -1385,6 +1414,8 @@ def render_sim_detailed(result: SimResult, world) -> str:
             "trade_boom": "💰",
             "religious_tension": "✝", "divine_blessing": "✨",
             "holy_pilgrimage": "🕊", "heresy": "⚠",
+            "faction_war": "⚔", "faction_alliance": "⚝",
+            "faction_power_shift": "⇈", "faction_collapse": "💀",
         }
         event_colors = {
             "plague": _color(196), "famine": _color(130), "war": _color(160),
@@ -1393,6 +1424,8 @@ def render_sim_detailed(result: SimResult, world) -> str:
             "trade_boom": _color(220),
             "religious_tension": _color(99), "divine_blessing": _color(226),
             "holy_pilgrimage": _color(45), "heresy": _color(196),
+            "faction_war": _color(160), "faction_alliance": _color(33),
+            "faction_power_shift": _color(99), "faction_collapse": _color(196),
         }
         
         for ev in result.events[-50:]:  # Show last 50 events max
@@ -1434,6 +1467,40 @@ def render_sim_detailed(result: SimResult, world) -> str:
         lines.append(f"  {_color(240)}Abandoned Settlements:{ANSI_RESET}")
         for s in abandoned:
             lines.append(f"    {_color(240)}✗ {s.name} (abandoned){ANSI_RESET}")
+    
+    # ── Faction Power at End of Simulation ──────────────────────
+    if result.final_state.faction_state and len(result.final_state.faction_state) > 0:
+        lines.append("")
+        lines.append(f"{ANSI_BOLD}Faction Power at Year {result.num_years}:{ANSI_RESET}")
+        sorted_factions = sorted(
+            result.final_state.faction_state.values(),
+            key=lambda fs: fs.power_score,
+            reverse=True,
+        )
+        for fs in sorted_factions:
+            status = ""
+            if not fs.is_active:
+                status = f" {_color(196)}[COLLAPSED]{ANSI_RESET}"
+            elif fs.at_war_with:
+                status = f" {_color(160)}[WAR]{ANSI_RESET}"
+            
+            # Power bar
+            ps = fs.power_score
+            bar_full = min(40, ps // 8)
+            bar_empty = 40 - bar_full
+            bar = f"{_color(226)}{'█' * bar_full}{ANSI_RESET}{ANSI_DIM}{'░' * bar_empty}{ANSI_RESET}"
+            
+            lines.append(
+                f"  {_color(226)}•{ANSI_RESET} {ANSI_BOLD}{fs.name}{ANSI_RESET}"
+                f"{status}  {bar}  {_color(240)}{ps}{ANSI_RESET}"
+            )
+            if fs.at_war_with:
+                enemies = ", ".join(fs.at_war_with[:3])
+                lines.append(f"        {_color(160)}⚔ at war with:{ANSI_RESET} {enemies}")
+            lines.append(
+                f"        {_color(240)}I:{fs.influence} W:{fs.wealth} "
+                f"M:{fs.military} S:{fs.stability}{ANSI_RESET}"
+            )
     
     # Summary footer
     summary = result.summary
