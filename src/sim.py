@@ -136,6 +136,9 @@ SIM_EVENT_TEMPLATES = {
     "faction_collapse": (
         "{description}"
     ),
+    "faction_peace_treaty": (
+        "{description}"
+    ),
 }
 
 
@@ -1416,6 +1419,7 @@ def render_sim_detailed(result: SimResult, world) -> str:
             "holy_pilgrimage": "🕊", "heresy": "⚠",
             "faction_war": "⚔", "faction_alliance": "⚝",
             "faction_power_shift": "⇈", "faction_collapse": "💀",
+            "faction_peace_treaty": "☮",
         }
         event_colors = {
             "plague": _color(196), "famine": _color(130), "war": _color(160),
@@ -1426,6 +1430,7 @@ def render_sim_detailed(result: SimResult, world) -> str:
             "holy_pilgrimage": _color(45), "heresy": _color(196),
             "faction_war": _color(160), "faction_alliance": _color(33),
             "faction_power_shift": _color(99), "faction_collapse": _color(196),
+            "faction_peace_treaty": _color(45),
         }
         
         for ev in result.events[-50:]:  # Show last 50 events max
