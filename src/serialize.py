@@ -9,7 +9,7 @@ import json
 import os
 import gzip
 from typing import Optional
-from .world import World, Region, Settlement, AdventureZone, TERRAIN, BIOMES
+from .world import World, Region, Settlement, AdventureZone, Landmark, TERRAIN, BIOMES
 from .lore import Lore
 from .narrative import Narrative, Character, EventChain, Quest
 from .chronicles import Chronicles, Era
@@ -287,8 +287,24 @@ def world_to_dict(world: World) -> dict:
                 }
                 for r in p.religions
             ],
-            "region_religion": p.region_religion,
+            'region_religion': p.region_religion,
         }
+
+    # Landmarks (from cataclysms)
+    if world.landmarks:
+        data['landmarks'] = [
+            {
+                'name': lm.name,
+                'landmark_type': lm.landmark_type,
+                'x': lm.x,
+                'y': lm.y,
+                'region': lm.region,
+                'description': lm.description,
+                'cataclysm_year': lm.cataclysm_year,
+                'cataclysm_type': lm.cataclysm_type,
+            }
+            for lm in world.landmarks
+        ]
 
     return data
 
@@ -545,10 +561,25 @@ def dict_to_world(data: dict) -> World:
                 holy_sites=holy_sites,
             ))
         world.pantheon = PantheonSystem(
-            seed=pantheon_data["seed"],
+            seed=pantheon_data['seed'],
             religions=religions,
-            region_religion=pantheon_data.get("region_religion", {}),
+            region_religion=pantheon_data.get('region_religion', {}),
         )
+
+    # Deserialize landmarks (from cataclysms)
+    world.landmarks = [
+        Landmark(
+            name=lmd['name'],
+            landmark_type=lmd['landmark_type'],
+            x=lmd['x'],
+            y=lmd['y'],
+            region=lmd.get('region'),
+            description=lmd.get('description', ''),
+            cataclysm_year=lmd.get('cataclysm_year', 0),
+            cataclysm_type=lmd.get('cataclysm_type', 'unknown'),
+        )
+        for lmd in data.get('landmarks', [])
+    ]
 
     return world
 
