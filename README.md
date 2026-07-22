@@ -31,6 +31,7 @@ python3 -m src generate --seed 42
 | `wyrd save --seed N` | Save world to JSON |
 | `wyrd load file.json` | Load and display a saved world |
 | `wyrd export --seed N` | Export world to self-contained HTML |
+| `wyrd export --seed N --format svg` | Export world to SVG vector map |
 | `wyrd explore --seed N` | Full map + lore in a pager |
 | `wyrd query --seed N "tell me about..."` | Query worlds in natural language |
 
