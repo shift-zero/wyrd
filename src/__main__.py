@@ -84,6 +84,14 @@ def main():
     explore = sub.add_parser("explore", help="Explore a world interactively (pager)")
     _add_load_arg(explore)
 
+    # ── query ──────────────────────────────────────────────────────
+    query_cmd = sub.add_parser("query", help="Query a world with natural language")
+    _add_load_arg(query_cmd)
+    query_cmd.add_argument("query_text", type=str, nargs="*",
+                           help='Query text, e.g. "tell me about the northlands"')
+    query_cmd.add_argument("--no-color", action="store_true",
+                           help="Disable ANSI color in output")
+
     args = parser.parse_args()
 
     # ── generate ───────────────────────────────────────────────────
@@ -178,6 +186,18 @@ def main():
                 proc.communicate(input=full_text.encode())
             except FileNotFoundError:
                 print(full_text)
+
+    # ── query ──────────────────────────────────────────────────────
+    elif args.command == "query":
+        world = _get_world(args)
+        query_text = " ".join(args.query_text) if args.query_text else "overview"
+        from .query import query_world
+        result = query_world(world, query_text)
+        use_color = not args.no_color
+        if result.found:
+            print(result.render(color=use_color))
+        else:
+            print(result.render(color=use_color))
 
 
 if __name__ == "__main__":
