@@ -419,6 +419,12 @@ def _simulate_tick(world: World, state: SimState, rng: random.Random,
                 if c2 and rng.random() < 0.25:
                     state.character_status[c2.full_name] = "dead"
                 
+                def _war_status(character) -> str:
+                    if character and hasattr(character, "full_name"):
+                        status = state.character_status.get(character.full_name)
+                        return "dead" if status == "dead" else "alive"
+                    return "unknown"
+                
                 events.append(SimEvent(
                     year=year,
                     event_type="war",
@@ -430,10 +436,10 @@ def _simulate_tick(world: World, state: SimState, rng: random.Random,
                                 f"{actual_s1_loss + actual_s2_loss} total casualties."
                             ),
                             c1,
-                            "{char} leads the assault." if state.character_status.get(c1.full_name) != "dead" else "{char} falls in battle.",
+                            "{char} leads the assault." if _war_status(c1) != "dead" else "{char} falls in battle.",
                         ),
                         c2,
-                        "{char} marshals the defenders." if state.character_status.get(c2.full_name) != "dead" else "{char} dies defending.",
+                        "{char} marshals the defenders." if _war_status(c2) != "dead" else "{char} dies defending.",
                     ),
                     affected_settlements=[s1.name, s2.name],
                     affected_regions=list(set([s1.region, s2.region])),

@@ -33,6 +33,20 @@ _EVENT_ICON = {
     "plague": "☠", "famine": "🌾", "war": "⚔", "discovery": "✦",
     "prosperity": "↑", "disaster": "🌋", "exodus": "→",
     "founding": "▲", "abandonment": "✗", "trade_boom": "💰",
+    # Religious events
+    "religious_tension": "✞", "divine_blessing": "✧",
+    "holy_pilgrimage": "🚶", "heresy": "🔥",
+    # Faction events
+    "faction_war": "🏴", "faction_alliance": "🤝",
+    "faction_power_shift": "⬇", "faction_collapse": "💀",
+    "faction_peace_treaty": "☮", "faction_leadership_change": "👑",
+    "faction_trade_pact": "📦", "faction_vassal_revolt": "⚡",
+    "faction_coup": "🗡",
+    # Cataclysm events
+    "earthquake": "〰", "volcanic_eruption": "🌋",
+    "great_plague": "💀", "tsunami": "🌊",
+    "meteor_strike": "☄", "great_fire": "🔥",
+    "magical_cataclysm": "🌀",
 }
 
 _EVENT_COLOR = {
@@ -40,6 +54,20 @@ _EVENT_COLOR = {
     "disaster": "war", "abandonment": "dim", "exodus": "dim",
     "founding": "good", "discovery": "good", "prosperity": "good",
     "trade_boom": "good",
+    # Religious events
+    "religious_tension": "famine", "divine_blessing": "good",
+    "holy_pilgrimage": "good", "heresy": "famine",
+    # Faction events
+    "faction_war": "war", "faction_alliance": "good",
+    "faction_power_shift": "famine", "faction_collapse": "war",
+    "faction_peace_treaty": "good", "faction_leadership_change": "good",
+    "faction_trade_pact": "good", "faction_vassal_revolt": "war",
+    "faction_coup": "war",
+    # Cataclysm events
+    "earthquake": "war", "volcanic_eruption": "war",
+    "great_plague": "plague", "tsunami": "war",
+    "meteor_strike": "war", "great_fire": "war",
+    "magical_cataclysm": "plague",
 }
 
 

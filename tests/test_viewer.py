@@ -53,6 +53,19 @@ class TestViewerModule:
         event_types = {
             "plague", "famine", "war", "discovery", "prosperity",
             "disaster", "exodus", "founding", "abandonment", "trade_boom",
+            # Religious
+            "religious_tension", "divine_blessing",
+            "holy_pilgrimage", "heresy",
+            # Faction
+            "faction_war", "faction_alliance",
+            "faction_power_shift", "faction_collapse",
+            "faction_peace_treaty", "faction_leadership_change",
+            "faction_trade_pact", "faction_vassal_revolt",
+            "faction_coup",
+            # Cataclysm
+            "earthquake", "volcanic_eruption", "great_plague",
+            "tsunami", "meteor_strike", "great_fire",
+            "magical_cataclysm",
         }
         for et in event_types:
             assert et in _EVENT_ICON, f"Missing icon for {et}"
