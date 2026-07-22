@@ -420,3 +420,80 @@ def render_chronicles(world) -> str:
     lines.append(f"{ANSI_DIM}── {chronicles.num_eras} eras spanning {chronicles.world_age} years ──{ANSI_RESET}")
 
     return "\n".join(lines)
+
+
+# ── Magic System Rendering ──────────────────────────────────────────────
+
+_MAGIC_SOURCE_ICONS = {
+    "arcane": "✦",
+    "divine": "†",
+    "natural": "♣",
+    "elemental": "◆",
+    "shadow": "◈",
+    "blood": "♦",
+    "celestial": "☆",
+}
+
+_MAGIC_SOURCE_COLORS = {
+    "arcane": _color(99),
+    "divine": _color(226),
+    "natural": _color(28),
+    "elemental": _color(196),
+    "shadow": _color(240),
+    "blood": _color(160),
+    "celestial": _color(33),
+}
+
+
+def render_magic(world) -> str:
+    """Render the magic system of a world."""
+    magic = getattr(world, 'magic', None)
+    if not magic:
+        return f"{ANSI_DIM}(no magic system generated){ANSI_RESET}"
+
+    lines = []
+    icon = _MAGIC_SOURCE_ICONS.get(magic.source, "·")
+    color = _MAGIC_SOURCE_COLORS.get(magic.source, _color(255))
+
+    # Header
+    lines.append(f"{ANSI_BOLD}═══ The Magic of wyrd #{world.seed} ═══{ANSI_RESET}\n")
+    lines.append(f"  {color}{icon}{ANSI_RESET}  {ANSI_BOLD}{magic.name}{ANSI_RESET}")
+    lines.append(f"    {ANSI_DIM}Source: {magic.source.title()}{ANSI_RESET}")
+    lines.append(f"    {ANSI_DIM}Practitioners: {magic.practitioners}{ANSI_RESET}")
+    lines.append("")
+    lines.append(f"  {magic.description}")
+    lines.append("")
+
+    # Schools
+    if magic.schools:
+        lines.append(f"  {ANSI_BOLD}Schools of Magic{ANSI_RESET}")
+        for s in magic.schools:
+            align_color = {
+                "good": _color(28),
+                "evil": _color(160),
+                "lawful": _color(33),
+                "chaotic": _color(213),
+                "neutral": _color(255),
+            }.get(s.alignment, _color(255))
+            lines.append(
+                f"    {color}◈{ANSI_RESET} "
+                f"{ANSI_BOLD}{s.name}{ANSI_RESET} "
+                f"({align_color}{s.alignment}{ANSI_RESET})"
+            )
+            lines.append(f"      {s.description}")
+            if s.spell_examples:
+                spells = f"{ANSI_DIM}Spells: {', '.join(s.spell_examples[:3])}{'…' if len(s.spell_examples) > 3 else ''}{ANSI_RESET}"
+                lines.append(f"      {spells}")
+        lines.append("")
+
+    # Traditions
+    if magic.traditions:
+        lines.append(f"  {ANSI_BOLD}Magical Traditions{ANSI_RESET}")
+        for t in magic.traditions:
+            lines.append(f"    {_color(94)}⌾{ANSI_RESET} {ANSI_BOLD}{t.name}{ANSI_RESET}")
+            lines.append(f"      {t.description}")
+            if t.origin:
+                lines.append(f"      {ANSI_DIM}Origin: {t.origin} · Region: {t.region}{ANSI_RESET}")
+        lines.append("")
+
+    return "\n".join(lines)

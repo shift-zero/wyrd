@@ -4,7 +4,7 @@ import argparse
 import os
 import sys
 from .generate import generate_world
-from .render import render_map, render_brief, render_lore, render_characters, render_events, render_quests, render_narrative, render_chronicles
+from .render import render_map, render_brief, render_lore, render_characters, render_events, render_quests, render_narrative, render_chronicles, render_magic, ANSI_RESET, ANSI_BOLD, ANSI_DIM, _color
 from .serialize import save_world, load_world
 from .export_html import export_world_html
 from .export_svg import export_world_svg
@@ -210,6 +210,21 @@ def main():
     chron_cmd.add_argument("--output", "-o", type=str, default=None,
                             help="Output file path (HTML only)")
 
+    # ── magic ───────────────────────────────────────────────────────
+    magic_cmd = sub.add_parser("magic",
+                                help="Show the magic system for a world")
+    _add_load_arg(magic_cmd)
+    magic_cmd.add_argument("--save", type=str, default=None,
+                            help="Save world with magic system to JSON file")
+
+    # ── worlds ──────────────────────────────────────────────────────
+    worlds_cmd = sub.add_parser("worlds",
+                                 help="List all generated worlds")
+    worlds_cmd.add_argument("--dir", type=str, default=None,
+                             help="Directory to scan (default: current directory)")
+    worlds_cmd.add_argument("--json", action="store_true",
+                             help="Output as JSON for scripting")
+
     args = parser.parse_args()
 
     # ── generate ───────────────────────────────────────────────────
@@ -374,6 +389,110 @@ def main():
             print(f"📖 wyrd #{world.seed} chronicles exported to {output}")
         else:
             print(render_chronicles(world))
+
+    # ── magic ───────────────────────────────────────────────────────
+    elif args.command == "magic":
+        world = _get_world(args)
+        if not world.magic:
+            from .magic import generate_magic_system
+            world.magic = generate_magic_system(world)
+        if args.save:
+            save_world(world, args.save)
+            print(f"💾 Saved to {args.save}")
+        print(render_magic(world))
+
+    # ── worlds ──────────────────────────────────────────────────────
+    elif args.command == "worlds":
+        import glob
+        import json as jlib
+        import os
+        import re
+
+        scan_dir = args.dir or "."
+        # Only match actual world files, not sim (-sim) or ttrpg (.ttrpg) files
+        pattern = os.path.join(scan_dir, "wyrd-*.json")
+        world_files = sorted(glob.glob(pattern))
+        world_files = [
+            wf for wf in world_files
+            if not re.search(r'-sim\.json', wf)
+            and not re.search(r'\.ttrpg\.json', wf)
+        ]
+
+        # Also check for sim files
+        sim_files = set()
+        sim_pattern = os.path.join(scan_dir, "wyrd-*-sim.json*")
+        for sf in sorted(glob.glob(sim_pattern)):
+            base = os.path.basename(sf)
+            if base.endswith(".gz"):
+                base = base[:-3]
+            try:
+                with open(sf) as f:
+                    sim_data = jlib.load(f)
+                seed = sim_data.get("seed", 0)
+                sim_files.add(seed)
+            except (jlib.JSONDecodeError, OSError):
+                pass
+
+        worlds_list = []
+        for wf in world_files:
+            try:
+                with open(wf) as f:
+                    data = jlib.load(f)
+            except (jlib.JSONDecodeError, OSError):
+                continue
+
+            seed = data.get("seed", 0)
+            width = data.get("width", 0)
+            height = data.get("height", 0)
+            regions = len(data.get("regions", []))
+            total_pop = sum(
+                s.get("population", 0)
+                for r in data.get("regions", [])
+                for s in r.get("settlements", [])
+            )
+            has_lore = "lore" in data and data["lore"] is not None
+            has_narrative = "narrative" in data and data["narrative"] is not None
+            has_chronicles = "chronicles" in data and data["chronicles"] is not None
+            has_magic = "magic" in data and data["magic"] is not None
+            has_sim = seed in sim_files
+
+            worlds_list.append({
+                "seed": seed,
+                "dimensions": f"{width}x{height}",
+                "regions": regions,
+                "population": total_pop,
+                "has_lore": has_lore,
+                "has_narrative": has_narrative,
+                "has_chronicles": has_chronicles,
+                "has_magic": has_magic,
+                "has_sim": has_sim,
+                "file": os.path.basename(wf),
+            })
+
+        if args.json:
+            print(jlib.dumps(worlds_list, indent=2))
+        else:
+            if not worlds_list:
+                print(f"{ANSI_DIM}No worlds found. Generate one with `wyrd generate --seed 42`{ANSI_RESET}")
+            else:
+                print(f"{ANSI_BOLD}▒ wyrd worlds — {len(worlds_list)} found{ANSI_RESET}\n")
+                for w in worlds_list:
+                    seed_str = f"{ANSI_BOLD}#{w['seed']}{ANSI_RESET}"
+                    size_str = f"{ANSI_DIM}{w['dimensions']}{ANSI_RESET}"
+                    pop_str = f"{w['population']:,} souls"
+                    region_str = f"{w['regions']} regions"
+
+                    badges = []
+                    if w["has_lore"]:  badges.append(f"{_color(28)}L{ANSI_RESET}")
+                    if w["has_narrative"]:  badges.append(f"{_color(33)}N{ANSI_RESET}")
+                    if w["has_chronicles"]:  badges.append(f"{_color(226)}C{ANSI_RESET}")
+                    if w["has_magic"]:  badges.append(f"{_color(99)}M{ANSI_RESET}")
+                    if w["has_sim"]:  badges.append(f"{_color(196)}S{ANSI_RESET}")
+                    badge_str = " ".join(badges) if badges else f"{ANSI_DIM}(no extras){ANSI_RESET}"
+
+                    print(f"  {seed_str}  {size_str}  {pop_str} · {region_str}")
+                    print(f"       {badge_str}  {ANSI_DIM}{w['file']}{ANSI_RESET}")
+                print()
 
     # ── save ───────────────────────────────────────────────────────
     elif args.command == "save":

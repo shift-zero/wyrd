@@ -13,6 +13,7 @@ from .world import World, Region, Settlement, TERRAIN, BIOMES
 from .lore import Lore
 from .narrative import Narrative, Character, EventChain, Quest
 from .chronicles import Chronicles, Era
+from .magic import MagicSystem, MagicSchool, MagicTradition
 
 
 class WyrdEncoder(json.JSONEncoder):
@@ -139,6 +140,35 @@ def world_to_dict(world: World) -> dict:
             ],
         }
 
+    # Magic System
+    if world.magic:
+        magic = world.magic
+        data["magic"] = {
+            "name": magic.name,
+            "source": magic.source,
+            "description": magic.description,
+            "practitioners": magic.practitioners,
+            "schools": [
+                {
+                    "name": s.name,
+                    "description": s.description,
+                    "spell_examples": s.spell_examples,
+                    "alignment": s.alignment,
+                }
+                for s in magic.schools
+            ],
+            "traditions": [
+                {
+                    "name": t.name,
+                    "description": t.description,
+                    "origin": t.origin,
+                    "region": t.region,
+                    "practitioners": t.practitioners,
+                }
+                for t in magic.traditions
+            ],
+        }
+
     return data
 
 
@@ -249,6 +279,36 @@ def dict_to_world(data: dict) -> World:
             )
             chronicles.eras.append(era)
         world.chronicles = chronicles
+
+    # Deserialize magic system
+    magic_data = data.get("magic")
+    if magic_data:
+        magic = MagicSystem(
+            name=magic_data["name"],
+            source=magic_data.get("source", "arcane"),
+            description=magic_data.get("description", ""),
+            practitioners=magic_data.get("practitioners", ""),
+            schools=[
+                MagicSchool(
+                    name=sd["name"],
+                    description=sd.get("description", ""),
+                    spell_examples=sd.get("spell_examples", []),
+                    alignment=sd.get("alignment", "neutral"),
+                )
+                for sd in magic_data.get("schools", [])
+            ],
+            traditions=[
+                MagicTradition(
+                    name=td["name"],
+                    description=td.get("description", ""),
+                    origin=td.get("origin", "ancient"),
+                    region=td.get("region", ""),
+                    practitioners=td.get("practitioners", ""),
+                )
+                for td in magic_data.get("traditions", [])
+            ],
+        )
+        world.magic = magic
 
     return world
 
