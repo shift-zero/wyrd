@@ -147,7 +147,7 @@ Bring wyrd out of the terminal and onto the web. Interactive map viewers, persis
 | 4 ✅ | Multi-world management | `wyrd worlds` lists all generated worlds; `wyrd worlds --json` outputs structured metadata |
 | 5 ✅ | Magic system generation | `wyrd magic --seed 42` renders color-coded schools and traditions tied to world biomes and cultures |
 
-## Phase 9 — The Pantheon (current)
+## Phase 9 — The Pantheon (complete ✅)
 Generative religion system. Every world gets a pantheon of named deities, organized into 1–2 religions, with holy sites grounded in actual settlements. TTRPG-ready deity stats, encounter levels for holy sites, and seed-deterministic generation.
 
 | # | What | Verifiable |
@@ -161,4 +161,20 @@ Generative religion system. Every world gets a pantheon of named deities, organi
 | 7 ✅ | Religious conflict events in simulation | Deities and religious tensions influence sim events and era transitions |
 | 8 ✅ | Religious NPCs and quest hooks | Clergy characters with quests tied to holy sites and religious goals |
 | 9 ✅ | Religion-aware chronicle eras | Chronicle era types can be influenced by religious dominance shifts |
+
+## Phase 10 — Adventure Zones (current)
+Points of interest scatter across the world map — dungeons, caves, ruins, towers, groves, lairs, shrines, and mines — each with descriptions, inhabitants, difficulty ratings, treasure tiers, and quest hooks. Visible on the map with distinct markers. Integrated into TTRPG export.
+
+| # | What | Verifiable |
+|---|------|------------|
+| 1 ✅ | Dungeon zones placed on suitable terrain | `wyrd generate --seed 42` includes 8+ adventure zones on terrain-appropriate hexes |
+| 2 ✅ | Map rendering shows zone markers (D, C, R, T, G, L, S, M) | `wyrd zones --seed 42` shows zones on the map with coloured markers and legend |
+| 3 ✅ | Zone detail: descriptions, inhabitants, difficulty | `wyrd zones --seed 42 --id 0` shows full details for a single zone |
+| 4 ✅ | Quest hooks attached to every zone | Each zone has a unique quest hook its listing |
+| 5 ✅ | Treasure tiers scaled by difficulty | Harder zones contain more valuable treasure |
+| 6 ✅ | Seed-deterministic placement | Same seed → same zones in the same locations |
+| 7 🔲 | Zone rendering in HTML export | Adventure zones show on HTML map with tooltips |
+| 8 🔲 | Interactive zone inspection in explorer | `wyrd explore` can hover/click zones for details |
+| 9 🔲 | Zone serialization round-trip | Zones survive save/load (basic test exists, full serialization in serialize.py pending) |
+
 

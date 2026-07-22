@@ -11,6 +11,7 @@ from .world import World, TERRAIN, BIOMES, Region, Settlement
 from .lore import generate_lore, Lore
 from .narrative import generate_narrative, Narrative
 from .chronicles import generate_chronicles, Chronicles
+from .adventure import generate_adventure_zones
 
 # ── Seeded 2D Value Noise ──────────────────────────────────────────
 
@@ -324,5 +325,8 @@ def generate_world(seed: int, width: int = 80, height: int = 40) -> World:
 
     # ── 7. Generate chronicles ────────────────────────────────────
     world.chronicles = generate_chronicles(world, world.narrative)
+
+    # ── 8. Generate adventure zones ───────────────────────────────
+    world.adventure_zones = generate_adventure_zones(world)
 
     return world

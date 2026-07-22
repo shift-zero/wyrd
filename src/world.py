@@ -11,6 +11,61 @@ if TYPE_CHECKING:
     from .magic import MagicSystem
     from .religion import PantheonSystem
 
+# ── Adventure Zone Types ─────────────────────────────────────────────
+
+ADVENTURE_ZONE_TYPES = {
+    "dungeon": {
+        "char": "D",
+        "color": 160,
+        "desc": "Dungeon — underground complex",
+        "preferred_terrain": ["hills", "mountains"],
+    },
+    "cave": {
+        "char": "C",
+        "color": 250,
+        "desc": "Cave — natural cavern system",
+        "preferred_terrain": ["hills", "mountains"],
+    },
+    "ruin": {
+        "char": "R",
+        "color": 124,
+        "desc": "Ruins — abandoned structures",
+        "preferred_terrain": ["grass", "forest", "hills"],
+    },
+    "tower": {
+        "char": "T",
+        "color": 179,
+        "desc": "Tower — isolated arcane or watch tower",
+        "preferred_terrain": ["hills", "grass"],
+    },
+    "grove": {
+        "char": "G",
+        "color": 34,
+        "desc": "Grove — sacred natural area",
+        "preferred_terrain": ["forest"],
+    },
+    "lair": {
+        "char": "L",
+        "color": 196,
+        "desc": "Lair — monster den or creature nesting ground",
+        "preferred_terrain": ["hills", "mountains", "forest"],
+    },
+    "shrine": {
+        "char": "S",
+        "color": 99,
+        "desc": "Shrine — small religious or mystical site",
+        "preferred_terrain": ["grass", "hills", "forest"],
+    },
+    "mine": {
+        "char": "M",
+        "color": 172,
+        "desc": "Mine — old excavation or mineral works",
+        "preferred_terrain": ["hills", "mountains"],
+    },
+}
+
+ADVENTURE_DIFFICULTIES = ["trivial", "easy", "moderate", "hard", "deadly"]
+
 # ── Terrain Types ──────────────────────────────────────────────────
 
 TERRAIN = {
@@ -35,6 +90,29 @@ BIOMES = {
 }
 
 # ── World Structure ────────────────────────────────────────────────
+
+@dataclass
+class AdventureZone:
+    """A point of interest — dungeon, lair, grove, etc. for player exploration."""
+    name: str
+    zone_type: str  # one of ADVENTURE_ZONE_TYPES keys
+    x: int
+    y: int
+    region: str
+    difficulty: str = "moderate"
+    inhabitants: str = ""
+    description: str = ""
+    treasure_tier: int = 1  # 1-5
+    is_cleared: bool = False
+    quest_hook: str = ""
+
+    @property
+    def char(self) -> str:
+        return ADVENTURE_ZONE_TYPES.get(self.zone_type, {}).get("char", "?")
+
+    @property
+    def color(self) -> int:
+        return ADVENTURE_ZONE_TYPES.get(self.zone_type, {}).get("color", 250)
 
 @dataclass
 class Settlement:
@@ -66,6 +144,7 @@ class World:
     terrain: list[list[str]] = field(default_factory=list)
     rivers: list[tuple[int, int]] = field(default_factory=list)
     regions: list[Region] = field(default_factory=list)
+    adventure_zones: list[AdventureZone] = field(default_factory=list)
     lore: Optional['Lore'] = None
     narrative: Optional['Narrative'] = None
     chronicles: Optional['Chronicles'] = None

@@ -10,6 +10,7 @@ from .export_html import export_world_html
 from .export_svg import export_world_svg
 from .export_ttrpg import export_world_ttrpg
 from .religion import generate_pantheon
+from .adventure import generate_adventure_zones, render_zones, render_zone_detail
 
 
 def _get_world(args) -> 'World':
@@ -200,6 +201,15 @@ def main():
                             help="Chaos factor 0.0-1.0 (default: 0.3)")
     branch_cmd.add_argument("--offsets", type=int, nargs="+", default=[0, 1],
                             help="Seed offsets to compare (default: 0 1)")
+
+    # ── zones ───────────────────────────────────────────────────────
+    zones_cmd = sub.add_parser("zones",
+                               help="List adventure zones in a world")
+    _add_load_arg(zones_cmd)
+    zones_cmd.add_argument("--detail", action="store_true",
+                           help="Show full descriptions for each zone")
+    zones_cmd.add_argument("--id", type=int, default=None,
+                           help="Show detail for a specific zone by index")
 
     # ── chronicles ─────────────────────────────────────────────────
     chron_cmd = sub.add_parser("chronicles",
@@ -401,6 +411,23 @@ def main():
             offsets=args.offsets,
         )
         print(render_branch_comparison(world, results))
+
+    # ── zones ───────────────────────────────────────────────────────
+    elif args.command == "zones":
+        world = _get_world(args)
+        if not world.adventure_zones:
+            world.adventure_zones = generate_adventure_zones(world)
+        if args.id is not None:
+            idx = args.id
+            if 0 <= idx < len(world.adventure_zones):
+                print(render_zone_detail(world.adventure_zones[idx]))
+            else:
+                print(f"Zone #{idx} not found. There are {len(world.adventure_zones)} zones (0-{len(world.adventure_zones)-1}).")
+        else:
+            from .render import render_map
+            print(render_map(world, show_settlements=True))
+            print()
+            print(render_zones(world, detail=args.detail))
 
     # ── chronicles ─────────────────────────────────────────────────
     elif args.command == "chronicles":

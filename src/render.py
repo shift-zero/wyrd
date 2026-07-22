@@ -45,7 +45,18 @@ def render_map(world: World, show_settlements: bool = True) -> str:
             if settlement_char:
                 row_chars.append(f"{_color(226)}{ANSI_BOLD}{settlement_char}{ANSI_RESET}")
             else:
-                row_chars.append(f"{_color(info['color'])}{info['char']}{ANSI_RESET}")
+                # Check for adventure zone at this position
+                zone_char = None
+                zone_color = None
+                for z in world.adventure_zones:
+                    if z.x == x and z.y == y:
+                        zone_char = z.char
+                        zone_color = z.color
+                        break
+                if zone_char and show_settlements:
+                    row_chars.append(f"{_color(zone_color)}{ANSI_BOLD}{zone_char}{ANSI_RESET}")
+                else:
+                    row_chars.append(f"{_color(info['color'])}{info['char']}{ANSI_RESET}")
         lines.append("".join(row_chars))
 
     # Legend
@@ -54,6 +65,13 @@ def render_map(world: World, show_settlements: bool = True) -> str:
         lines.append(f"  {_color(info['color'])}{info['char']}{ANSI_RESET}  {info['desc']}")
 
     lines.append(f"\n  {_color(226)}{ANSI_BOLD}●{ANSI_RESET}  Settlement (size: · hamlet ∘ village ● town ◉ city)")
+
+    # Adventure zone legend
+    from .world import ADVENTURE_ZONE_TYPES
+    for key, info in ADVENTURE_ZONE_TYPES.items():
+        lines.append(
+            f"  {_color(info['color'])}{ANSI_BOLD}{info['char']}{ANSI_RESET}  {info['desc']}"
+        )
 
     # Region list
     lines.append(f"\n{ANSI_BOLD}Regions:{ANSI_RESET}")

@@ -14,8 +14,25 @@ import math
 from datetime import date
 from typing import Optional
 
-from .world import World, Region, Settlement, TERRAIN, BIOMES
+from .world import World, Region, Settlement, TERRAIN, BIOMES, ADVENTURE_ZONE_TYPES
 from .religion import Deity
+
+# Adventure zone treasure tiers (mirrors adventure.py for TTRPG export)
+TREASURE_TIERS = [
+    {"tier": 1, "desc": "Modest", "value_range": "10-50 gp", "items": "Coins, simple tools, basic supplies"},
+    {"tier": 2, "desc": "Notable", "value_range": "50-200 gp", "items": "Gemstones, fine weapons, art objects"},
+    {"tier": 3, "desc": "Valuable", "value_range": "200-800 gp", "items": "Magic items, rare tomes, jewellery"},
+    {"tier": 4, "desc": "Priceless", "value_range": "800-3000 gp", "items": "Enchanted weapons, ancient relics"},
+    {"tier": 5, "desc": "Legendary", "value_range": "3000+ gp", "items": "Artifacts, crown jewels, dragon hoard"},
+]
+
+DIFFICULTY_DESCRIPTIONS = {
+    "trivial": "Safe for a party of 1st-level adventurers",
+    "easy": "Suitable for 2nd-3rd level parties",
+    "moderate": "Challenging for 3rd-5th level parties",
+    "hard": "Dangerous — recommended for 5th-8th level parties",
+    "deadly": "Extreme threat — only for experienced adventurers (8th+)",
+}
 
 
 def _terrain_percentages(world: World) -> dict[str, float]:
@@ -728,9 +745,37 @@ def export_world_ttrpg(
 
         # Pantheon & Religion
         "pantheon": _build_pantheon_section(world),
+
+        # Adventure Zones
+        "adventure_zones": _build_adventure_zones(world),
     }
 
     return json.dumps(document, indent=2, ensure_ascii=False)
+
+
+def _build_adventure_zones(world: World) -> list[dict]:
+    """Build adventure zones section for TTRPG export."""
+    if not world.adventure_zones:
+        return []
+    zones = []
+    for z in world.adventure_zones:
+        info = ADVENTURE_ZONE_TYPES.get(z.zone_type, {})
+        tier = TREASURE_TIERS[z.treasure_tier - 1] if 1 <= z.treasure_tier <= 5 else TREASURE_TIERS[0]
+        difficulty_desc = DIFFICULTY_DESCRIPTIONS.get(z.difficulty, "")
+        zones.append({
+            "name": z.name,
+            "type": z.zone_type,
+            "type_description": info.get("desc", ""),
+            "location": {"region": z.region, "x": z.x, "y": z.y},
+            "difficulty": z.difficulty,
+            "difficulty_description": difficulty_desc,
+            "inhabitants": z.inhabitants,
+            "description": z.description,
+            "treasure_tier": tier,
+            "is_cleared": z.is_cleared,
+            "quest_hook": z.quest_hook,
+        })
+    return zones
 
 
 def _build_pantheon_section(world: World) -> dict:
