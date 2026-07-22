@@ -1,47 +1,40 @@
-# Session: 2026-07-22
+# Session: 2026-07-23
 
 ## What was built
-- **Phase 6 complete** — All 7 items done. 215 tests pass.
-- **Phase 7.1: Interactive sim viewer** (`src/viewer.py`)
-  - `wyrd view --seed 42 --years 300` launches curses viewer
-  - Map shows evolving settlements (active yellow, new green, abandoned dim)
-  - Pause/resume (Space), speed (+/-), step forward (→)
-  - Population chart overlay (p)
-  - Event log with color-coded entries
-  - 7 tests in `tests/test_viewer.py`
-- Pushed 3 commits to master
+- **Phase 8 Item 3: Conversational world agent** (`src/ask.py`)
+  - `wyrd ask --seed 42 "What's the most powerful city?"` — natural-language Q&A
+  - **LLM Mode** (default): Uses OpenAI-compatible API via `WYRD_LLM_API_KEY` env var. Rich, fluent answers grounded in full world context (stats, regions, lore, narrative, chronicles, magic)
+  - **Deterministic Mode** (`--no-llm`): Builds on query.py's pattern matching. Always works, zero dependencies
+  - Automatic fallback: if no API key or LLM call fails, gracefully degrades to deterministic + explanatory note
+  - Context gathering: structured world data collected into LLM-optimized JSON prompt
+  - 21 tests across context gathering, LLM config, prompt construction, API mocking, deterministic mode, and integration
+  - `--snapshot-year` support for sim-state-aware questions
+  - 304 total tests, all passing
 
-## Next: Phase 7.2 — Named Character Integration 🎭
-The sim events (war, founding, discovery, plague) currently reference only settlement names. They should reference **actual narrative characters** — leaders, heroes, generals, founders.
+## Current Phase: Phase 8 — The Web Awakens (5/5 complete ✅)
+Phase 8 is **complete**! All five items done:
+- ✅ Item 1: Web dashboard server (`wyrd serve`)
+- ✅ Item 2: Sim-state-aware HTML map
+- ✅ Item 3: Conversational world agent (`wyrd ask`)
+- ✅ Item 4: Multi-world management (`wyrd worlds`)
+- ✅ Item 5: Magic system generation
 
-### Implementation plan:
-1. **`sim.py`**: Import `Narrative` characters into the tick loop. When generating events:
-   - `founding`: Pick a character from the source settlement as founder. Add "under {name}'s leadership" to description
-   - `war`: Pick commanders from each warring settlement. Add "led by {name} against {name2}"
-   - `discovery`: Assign to a named explorer/scholar character
-   - `plague/famine`: Reference a known healer or leader who tried/failed to help
+## Phase 9 — World of Depth & Polish (next)
+wyrd has all the core systems. Now it's time to deepen everything:
 
-2. **`narrative.py`**: Add a helper `pick_character(settlement_name, narrative, role_filter=None)` that finds a character from a settlement by occupation/role
+### Proposed Items:
+1. **🔲 Terrain variety** — Add more terrain types (swamp, tundra, wasteland, canyon, reef) with generation rules
+2. **🔲 Dynamic weather & seasons** — Seasonal tile colors in renderer, weather patterns affecting sim (hurricanes, droughts, blizzards)
+3. **🔲 Pantheon & religion** — Generate pantheons of gods, religious conflicts, sacred sites on the map
+4. **🔲 Bestiary** — Procedural creature generation grounded in terrain/biome (e.g. "sand wyrm of the Ash Wastes")
+5. **🔲 Trade routes** — Dynamic trade between settlements based on resources and distance
+6. **🔲 Deeper sim** — Add technology tiers, resource extraction, migration waves
+7. **🔲 LLM depth** — The ask module can be extended to do proactive storytelling (generate new narrative content via LLM API)
 
-3. **Character data model**: Add a `home_settlement` field if not already present on Character (check first — it exists from Phase 4)
-
-4. **Tests**: Update `test_sim.py` to verify character references in events when narrative exists
-
-### Files to modify:
-- `src/sim.py` — `_simulate_tick()` signature may need `narrative` param
-- `src/narrative.py` — add `pick_character()` helper (or just put it in sim)
-- `tests/test_sim.py` — character reference tests
-- `src/run.py` — pass narrative through
-
-## Phase 7.3 (after 7.2):
-Character-driven founding events — new settlements are founded *by* named characters who then become their leaders.
-
-## Scratch file cleanup
-The repo has lingering `_test_polish.py`, `_test_polish_full.py`, `_test_ttrpg.py` in root. These are harmless but should be removed and gitignored. The .gitignore now has `_test_*.py` and `_test_*.json.gz` patterns.
-
-## Architecture notes
-- `viewer.py` imports `_simulate_tick` from `sim.py` (same-package, works fine)
-- Map layout in viewer: header(0) → stats(1) → map(2+) → events → footer(last)
-- `apply_sim_state_to_world()` creates a deepcopy with evolved settlements
-- `initialize_sim_state()` converts World settlements → SettlementSnapshots
-- 215 total tests: `python -m pytest tests/ -q`
+### Architecture notes
+- `src/ask.py` — `ask_about_world(world, question, use_llm=True)` → answer string
+- `_gather_context(world)` → structured dict for LLM or fallback
+- `_deterministic_answer(world, question)` → uses `query.py`'s `query_world()` then `_handle_keyword()` then generic fallback
+- LLM API: OpenAI-compatible, configured via env vars (WYRD_LLM_API_KEY, WYRD_LLM_ENDPOINT, WYRD_LLM_MODEL)
+- Deterministic fallback auto-triggers when no API key is set or API call fails
+- Temperature: 0.7, max_tokens: 1024

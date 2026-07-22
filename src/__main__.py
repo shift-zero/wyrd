@@ -227,6 +227,17 @@ def main():
     serve_cmd.add_argument("--no-browser", action="store_true",
                             help="Don't open browser automatically")
 
+    # ── ask ────────────────────────────────────────────────────────
+    ask_cmd = sub.add_parser("ask",
+                              help="Ask a natural-language question about a world")
+    _add_load_arg(ask_cmd)
+    ask_cmd.add_argument("question", type=str, nargs="*",
+                         help='Natural-language question, e.g. "What is the most powerful city?"')
+    ask_cmd.add_argument("--no-llm", action="store_true",
+                         help="Force deterministic mode (no API call)")
+    ask_cmd.add_argument("--snapshot-year", type=int, default=None,
+                         help="Load sim state at a specific year (from saved sim file)")
+
     # ── worlds ──────────────────────────────────────────────────────
     worlds_cmd = sub.add_parser("worlds",
                                  help="List all generated worlds")
@@ -410,6 +421,15 @@ def main():
             save_world(world, args.save)
             print(f"💾 Saved to {args.save}")
         print(render_magic(world))
+
+    # ── ask ────────────────────────────────────────────────────────
+    elif args.command == "ask":
+        world = _get_world(args)
+        world = _apply_snapshot_if_needed(world, args)
+        question = " ".join(args.question) if args.question else ""
+        from .ask import ask_about_world
+        answer = ask_about_world(world, question, use_llm=not args.no_llm)
+        print(answer)
 
     # ── worlds ──────────────────────────────────────────────────────
     elif args.command == "worlds":

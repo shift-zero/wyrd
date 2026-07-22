@@ -141,6 +141,6 @@ Bring wyrd out of the terminal and onto the web. Interactive map viewers, persis
 |---|------|------------|
 | 1 ✅ | Web overview dashboard: serve world stats, map HTML, sim state in browser | `wyrd serve --seed 42` starts a web server; browser shows interactive world dashboard with stats, map, regions, and JSON API |
 | 2 ✅ | Sim-state-aware HTML map | `wyrd export --seed 42 --year 150` produces HTML showing evolved map with new settlements, ruins (⁂), population timeline, and event counts |
-| 3 | Conversational world agent | `wyrd ask "What's the most powerful city?"` uses LLM to answer from world data |
+| 3 ✅ | Conversational world agent | `wyrd ask "What's the most powerful city?"` uses LLM to answer from world data; deterministic fallback when no API key |
 | 4 ✅ | Multi-world management | `wyrd worlds` lists all generated worlds; `wyrd worlds --json` outputs structured metadata |
 | 5 ✅ | Magic system generation | `wyrd magic --seed 42` renders color-coded schools and traditions tied to world biomes and cultures |
