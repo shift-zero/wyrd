@@ -24,4 +24,5 @@ _check_*
 _test_*.py
 _test_*.json.gz
 /uv.lock
-.hermes/
+# Auto-generated session notes
+.hermes/last_session.md
