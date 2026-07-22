@@ -166,4 +166,56 @@ class TestExportHtml:
                 break
 
 
+class TestSnapshotAwareHtml:
+    """HTML export with snapshot data must include sim-aware features."""
+
+    def test_snapshot_banner_included(self):
+        """When snapshot_year is set, banner should appear in HTML."""
+        world = generate_world(42)
+        html = export_world_html(world, snapshot_year=150)
+        assert "Simulation Snapshot" in html
+        assert "Year 150" in html
+
+    def test_population_timeline_included(self):
+        """When population_record is provided, timeline chart should appear."""
+        world = generate_world(42)
+        record = [
+            {"year": 0, "total_population": 10000},
+            {"year": 50, "total_population": 15000},
+            {"year": 100, "total_population": 22000},
+            {"year": 150, "total_population": 30000},
+        ]
+        html = export_world_html(world, snapshot_year=150, population_record=record)
+        assert "Population Timeline" in html
+        assert "Y0" in html
+        assert "Y150" in html
+
+    def test_ruins_displayed_on_map(self):
+        """Abandoned settlements should appear as ruins on the HTML map."""
+        world = generate_world(42)
+        abandoned = [
+            {"name": "Oldtown", "x": 10, "y": 15},
+            {"name": "Ashford", "x": 40, "y": 20},
+        ]
+        html = export_world_html(world, snapshot_year=300, abandoned_settlements=abandoned)
+        # Should have ruin markers
+        assert "ruins" in html.lower()
+        assert "Oldtown" in html
+
+    def test_backward_compatible_no_args(self):
+        """Export without snapshot args should produce normal HTML."""
+        world = generate_world(42)
+        html = export_world_html(world)
+        assert "Simulation Snapshot" not in html
+        assert "Population Timeline" not in html
+        assert "<!DOCTYPE html>" in html
+        assert str(world.seed) in html
+
+    def test_events_count_displayed(self):
+        """When sim_events_count > 0, it should appear in the banner."""
+        world = generate_world(42)
+        html = export_world_html(world, snapshot_year=200, sim_events_count=42)
+        assert "42 events recorded" in html
+
+
 from src.world import TERRAIN
