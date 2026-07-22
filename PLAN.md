@@ -203,7 +203,8 @@ Generative religion system. Every world gets a pantheon of named deities, organi
 || 6 ✅ | Political events in render output | War/alliance/power shift icons + Faction Power section at end |
 || 7 ✅ | Seed-deterministic political simulation | Same seed → identical wars and power scores |
 || 8 ✅ | 28 tests for deterministic state, events, drift | All pass, zero regressions |
-|| 9 🔲 | Peace treaties ending wars | Wars end stochastically (15% chance), but formal treaty events not yet distinct |
-|| 10 🔲 | War exhaustion modifier affecting sim | War-weary settlements get maluses to food production |
+|| 9 ✅ | Peace treaties ending wars with formal treaty events | ☮ icon, formal treaty language with terms and effects; distinct from alliances |
+|| 10 ✅ | War exhaustion modifier affecting sim | FactionSnapshot.war_exhaustion tracks cumulative war duration; settlements in war-exhausted territory lose food stores and prosperity |
+|| 11 🔲 | Catastrophic events (earthquakes, volcanos, plagues of legend) that reshape the map | Next phase |
 |
 
