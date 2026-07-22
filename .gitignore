@@ -1,7 +1,24 @@
+# wyrd — gitignore
+# Generated worlds and exports (gitignored — these are outputs, not source)
+output/
+*.html
+*.svg
+*sim.json*
+*.ttrpg.json
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
 .venv/
-output/
 *.egg-info/
-*.json
-*.html
+dist/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp
+_check_*
+/uv.lock
