@@ -24,3 +24,4 @@ _check_*
 _test_*.py
 _test_*.json.gz
 /uv.lock
+.hermes/
