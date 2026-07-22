@@ -90,6 +90,8 @@ def _build_encounter_tables(world: World) -> dict:
                 "Stranded sea turtle",
                 "Salt-flat causeway to a small island",
                 "Driftwood shrine to a sea god",
+                "Sea foam bubbles with an unnatural phosphorescence",
+                "Half-buried anchor — a shipwreck offshore",
             ],
         },
         "grass": {

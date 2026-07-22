@@ -114,4 +114,16 @@ Year-by-year simulation in the Dwarf Fortress tradition. The world is no longer 
 | 4 ✅ | Export to HTML and SVG | `wyrd export --seed 42` produces HTML; `wyrd export --seed 42 --format svg` produces SVG |
 | 5 ✅ | Narrative engine with character generation | Characters with backstories grounded in the world |
 | 6 ✅ | Chronicles engine — era-based world history | `wyrd chronicles --seed 42` shows a causally linked timeline |
-| 7 🏗️ | Simulation engine — year-by-year world evolution (6/6 complete) | `wyrd run --seed 42 --years 500` evolves settlements, generates events, founding/abandonment/war |
+| 7 ✅ | Simulation engine — year-by-year world evolution (6/6 complete, Phase 7 planned) | `wyrd run --seed 42 --years 500` evolves settlements, generates events, founding/abandonment/war |
+
+## Phase 7 — The Living World (planned)
+Interactive simulation viewing and character-driven world evolution. The world doesn't just tick silently — you watch it grow, and the stories write themselves.
+
+| # | What | Verifiable |
+|---|------|------------|
+| 1 | Interactive curses sim viewer: watch the map evolve year by year | `wyrd view --seed 42 --years 300` shows real-time map evolution with pause/speed controls |
+| 2 | Named character integration in sim events | Sim events reference actual Narrative characters as leaders, generals, heroes |
+| 3 | Character-driven founding events | New settlements are founded by named characters; migration events tied to character backstories |
+| 4 | Era transitions in simulation | Simulation can trigger chronicle-era transitions mid-sim; world modifiers change dynamically |
+| 5 | Sim event consequences on narrative | NPCs die, quests become impossible, new quests emerge from sim events |
+| 6 | Branching timeline visualization | `wyrd branch --seed 42 --from-year 150` shows alternative sim paths |

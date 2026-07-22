@@ -11,7 +11,8 @@
 | 3 | Explorer mode (save/load, HTML, curses UI, queries) | ✅ |
 | 4 | Narrative engine (characters, events, quests) | ✅ |
 | 5 | Chronicles (era-based world history) | ✅ |
-| 6 | Simulation (year-by-year world evolution) | ✅ (needs polish) |
+| 6 | Simulation (year-by-year world evolution) | ✅ (all 6 items, plus TTRPG export & compact saves) |
+| 7 | The Living World (interactive sim viewer, character integration) | 🔲 planned |
 
 ## Philosophy
 
