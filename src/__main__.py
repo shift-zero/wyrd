@@ -119,6 +119,11 @@ def main():
     chron_cmd = sub.add_parser("chronicles",
                                 help="Show era-based world history (chronicles)")
     _add_load_arg(chron_cmd)
+    chron_cmd.add_argument("--format", "-f", type=str, default="text",
+                            choices=["text", "html"],
+                            help="Output format (default: text)")
+    chron_cmd.add_argument("--output", "-o", type=str, default=None,
+                            help="Output file path (HTML only)")
 
     args = parser.parse_args()
 
@@ -190,7 +195,16 @@ def main():
         if not world.chronicles:
             from .chronicles import generate_chronicles
             world.chronicles = generate_chronicles(world, world.narrative)
-        print(render_chronicles(world))
+
+        if args.format == "html":
+            from .export_chronicles_html import export_chronicles_html
+            html = export_chronicles_html(world)
+            output = args.output or f"wyrd-{world.seed}-chronicles.html"
+            with open(output, "w") as f:
+                f.write(html)
+            print(f"📖 wyrd #{world.seed} chronicles exported to {output}")
+        else:
+            print(render_chronicles(world))
 
     # ── save ───────────────────────────────────────────────────────
     elif args.command == "save":
