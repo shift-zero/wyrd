@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 # Runtime imports for dataclass fields (used by World)
 from .faction import Faction, FactionRelationship
+from .bestiary import Creature
 
 # ── Adventure Zone Types ─────────────────────────────────────────────
 
@@ -150,6 +151,7 @@ class World:
     adventure_zones: list[AdventureZone] = field(default_factory=list)
     factions: list[Faction] = field(default_factory=list)
     faction_relationships: list[FactionRelationship] = field(default_factory=list)
+    bestiary: list[Creature] = field(default_factory=list)
     lore: Optional['Lore'] = None
     narrative: Optional['Narrative'] = None
     chronicles: Optional['Chronicles'] = None

@@ -775,9 +775,8 @@ def render_pantheon(world) -> str:
                 lines.append(f"        {ANSI_DIM}...and {len(religion.holy_sites) - 5} more sites{ANSI_RESET}")
             lines.append("")
 
-        # Separator between religions
         if i < len(pantheon.religions) - 1:
-            lines.append(f"  {ANSI_DIM}──{ANSI_RESET}\n")
+            lines.append(f"  {ANSI_DIM}──{ANSI_RESET}\\n")
 
     # Summary
     total_sites = pantheon.total_holy_sites
@@ -786,5 +785,175 @@ def render_pantheon(world) -> str:
         f"{ANSI_DIM}── {total_deities} deities across {len(pantheon.religions)} religion{'s' if len(pantheon.religions) != 1 else ''}"
         f" · {total_sites} holy sites ──{ANSI_RESET}"
     )
+
+    return "\n".join(lines)
+
+
+# ── Bestiary Rendering ───────────────────────────────────────────────────
+
+
+_SPECIAL_ABILITY_COLOR = _color(196)
+_BEHAVIOR_COLORS = {
+    "aggressive": _color(196), "territorial": _color(172), "ambush": _color(240),
+    "pack_hunter": _color(160), "solitary": _color(250), "defensive": _color(28),
+    "migratory": _color(33), "nocturnal": _color(99), "docile": _color(34),
+    "curious": _color(213), "cunning": _color(130), "patient": _color(94),
+}
+
+
+def render_bestiary(world) -> str:
+    """Render the entire bestiary of a world."""
+    bestiary = getattr(world, 'bestiary', None)
+    if not bestiary:
+        return f"{ANSI_DIM}(no bestiary generated){ANSI_RESET}"
+
+    lines = []
+    lines.append(f"{ANSI_BOLD}═══ Bestiary of wyrd #{world.seed} ═══{ANSI_RESET}\\n")
+
+    # Group by habitat
+    by_habitat: dict[str, list] = {}
+    for c in bestiary:
+        by_habitat.setdefault(c.habitat, []).append(c)
+
+    for habitat, creatures in sorted(by_habitat.items()):
+        creatures.sort(key=lambda c: c.tier, reverse=True)
+
+        habitat_color = {
+            "temperate": _color(28), "arid": _color(172),
+            "tundra": _color(250), "tropical": _color(35),
+            "various": _color(99),
+        }.get(habitat, _color(250))
+        habitat_label = {
+            "temperate": "Temperate Forests", "arid": "Arid Wastes",
+            "tundra": "Tundra & Snow", "tropical": "Tropical Jungles",
+            "various": "Various / Faction-Tied",
+        }.get(habitat, habitat)
+
+        lines.append(f"{habitat_color}{ANSI_BOLD}⏺ {habitat_label}{ANSI_RESET}  "
+                     f"{ANSI_DIM}({len(creatures)} species){ANSI_RESET}")
+
+        for c in creatures:
+            type_color = {
+                "beast": _color(130), "monstrosity": _color(196),
+                "undead": _color(240), "dragon": _color(196),
+                "fey": _color(213), "elemental": _color(33),
+                "aberration": _color(99), "construct": _color(250),
+                "giant": _color(130), "humanoid_bandit": _color(160),
+            }.get(c.creature_type, _color(250))
+
+            tier_icons = {1: "✦", 2: "✦✦", 3: "✦✦✦", 4: "✦✦✦✦", 5: "✦✦✦✦✦"}
+            tier_display = tier_icons.get(c.tier, "✦")
+
+            unique_mark = f" {ANSI_BOLD}{_color(226)}★{ANSI_RESET}" if c.is_unique else ""
+
+            affiliation = ""
+            if c.faction_affiliation:
+                affiliation = f"  {ANSI_DIM}⚑ {c.faction_affiliation}{ANSI_RESET}"
+
+            lines.append(
+                f"  {type_color}{c.size[0].upper()}{ANSI_RESET} "
+                f"{ANSI_BOLD}{c.name}{ANSI_RESET}{unique_mark}"
+                f"  {_color(240)}({c.creature_type.replace('_', ' ')}, CR {c.challenge_rating}){ANSI_RESET}"
+                f"  {type_color}{tier_display}{ANSI_RESET}"
+                f"{affiliation}"
+            )
+
+            if c.variant:
+                lines.append(f"    {ANSI_DIM}Variant:{ANSI_RESET} {_color(226)}{c.variant}{ANSI_RESET}")
+
+            b_color = _BEHAVIOR_COLORS.get(c.behavior, _color(250))
+            lines.append(f"    {ANSI_DIM}Behavior:{ANSI_RESET} {b_color}{c.behavior.replace('_', ' ')}{ANSI_RESET}")
+
+            if c.suggested_level_range:
+                lines.append(f"    {ANSI_DIM}Level:{ANSI_RESET} {c.suggested_level_range}  "
+                             f"{ANSI_DIM}Encounter:{ANSI_RESET} {c.encounters}")
+
+            desc = c.description[:120]
+            if len(c.description) > 120:
+                desc += "..."
+            lines.append(f"    {ANSI_ITALIC}{desc}{ANSI_RESET}")
+
+            if c.special_abilities:
+                for ab in c.special_abilities[:2]:
+                    lines.append(f"      {_SPECIAL_ABILITY_COLOR}⚡{ANSI_RESET} {_SPECIAL_ABILITY_COLOR}{ab}{ANSI_RESET}")
+
+            lines.append("")
+
+        lines.append("")
+
+    total = len(bestiary)
+    by_type: dict[str, int] = {}
+    for c in bestiary:
+        by_type[c.creature_type] = by_type.get(c.creature_type, 0) + 1
+    type_summary = " · ".join(
+        f"{t.replace('_', ' ')} ×{c}" for t, c in sorted(by_type.items(), key=lambda x: -x[1])[:5]
+    )
+    lines.append(
+        f"{ANSI_DIM}── {total} creatures across {len(by_habitat)} habitats — "
+        f"{type_summary}{' …' if len(by_type) > 5 else ''} ──{ANSI_RESET}"
+    )
+
+    return "\n".join(lines)
+
+
+def render_creature_detail(creature) -> str:
+    """Render detailed information about a single creature."""
+    type_color = {
+        "beast": _color(130), "monstrosity": _color(196),
+        "undead": _color(240), "dragon": _color(196),
+        "fey": _color(213), "elemental": _color(33),
+        "aberration": _color(99), "construct": _color(250),
+        "giant": _color(130), "humanoid_bandit": _color(160),
+    }.get(creature.creature_type, _color(250))
+
+    lines = []
+    unique_mark = f" {_color(226)}{ANSI_BOLD}★{ANSI_RESET}" if creature.is_unique else ""
+    lines.append(
+        f"{type_color}{ANSI_BOLD}{creature.size[0].upper()}{ANSI_RESET}  "
+        f"{ANSI_BOLD}{creature.name}{ANSI_RESET}{unique_mark}"
+    )
+    lines.append(f"  {ANSI_DIM}Type:{ANSI_RESET}       {creature.creature_type.replace('_', ' ')}")
+    lines.append(f"  {ANSI_DIM}Tier:{ANSI_RESET}       {creature.tier_label} ({creature.tier}/5)")
+    lines.append(f"  {ANSI_DIM}CR:{ANSI_RESET}         {creature.cr_label}")
+    lines.append(f"  {ANSI_DIM}Size:{ANSI_RESET}       {creature.size}")
+    lines.append(f"  {ANSI_DIM}Habitat:{ANSI_RESET}    {creature.habitat}")
+    lines.append(f"  {ANSI_DIM}Behavior:{ANSI_RESET}   {creature.behavior.replace('_', ' ')}")
+    lines.append(f"  {ANSI_DIM}Body Plan:{ANSI_RESET}  {creature.body_plan}")
+
+    if creature.variant:
+        lines.append(f"  {ANSI_DIM}Variant:{ANSI_RESET}   {_color(226)}{creature.variant}{ANSI_RESET}")
+
+    if creature.faction_affiliation:
+        lines.append(f"  {ANSI_DIM}Faction:{ANSI_RESET}   {creature.faction_affiliation}")
+
+    if creature.suggested_level_range:
+        lines.append(f"  {ANSI_DIM}Suggested Level:{ANSI_RESET} {creature.suggested_level_range}")
+        lines.append(f"  {ANSI_DIM}Encounter:{ANSI_RESET}     {creature.encounters}")
+
+    lines.append("")
+    lines.append(f"  {creature.description}")
+    lines.append("")
+
+    sb = creature.stat_block
+    lines.append(f"  {ANSI_BOLD}Stat Block{ANSI_RESET}")
+    lines.append(f"    {ANSI_DIM}AC:{ANSI_RESET} {sb['armor_class']}  "
+                 f"{ANSI_DIM}HP:{ANSI_RESET} {sb['hit_points']}  "
+                 f"{ANSI_DIM}Damage:{ANSI_RESET} {sb['damage_per_round']}")
+
+    if creature.special_abilities:
+        lines.append("")
+        lines.append(f"  {ANSI_BOLD}Special Abilities{ANSI_RESET}")
+        for ab in creature.special_abilities:
+            lines.append(f"    {_SPECIAL_ABILITY_COLOR}⚡{ANSI_RESET} {ab}")
+
+    lines.append("")
+    lines.append(f"  {ANSI_BOLD}Combat Tactics{ANSI_RESET}")
+    lines.append(f"    {ANSI_ITALIC}{creature.combat_tactics}{ANSI_RESET}")
+
+    if creature.loot:
+        lines.append("")
+        lines.append(f"  {ANSI_BOLD}Loot{ANSI_RESET}")
+        for loot in creature.loot:
+            lines.append(f"    {_color(226)}♦{ANSI_RESET} {loot}")
 
     return "\n".join(lines)

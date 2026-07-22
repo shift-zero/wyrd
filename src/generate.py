@@ -13,6 +13,7 @@ from .narrative import generate_narrative, Narrative
 from .chronicles import generate_chronicles, Chronicles
 from .adventure import generate_adventure_zones
 from .faction import generate_factions
+from .bestiary import generate_bestiary
 
 # ── Seeded 2D Value Noise ──────────────────────────────────────────
 
@@ -332,5 +333,8 @@ def generate_world(seed: int, width: int = 80, height: int = 40) -> World:
 
     # ── 9. Generate factions ─────────────────────────────────────
     world.factions = generate_factions(world)
+
+    # ── 10. Generate bestiary ─────────────────────────────────────
+    world.bestiary = generate_bestiary(world)
 
     return world

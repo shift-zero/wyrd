@@ -108,6 +108,31 @@ def world_to_dict(world: World) -> dict:
             for r in world.faction_relationships
         ]
 
+    # Bestiary
+    if world.bestiary:
+        data["bestiary"] = [
+            {
+                "name": c.name,
+                "tier": c.tier,
+                "creature_type": c.creature_type,
+                "habitat": c.habitat,
+                "description": c.description,
+                "behavior": c.behavior,
+                "faction_affiliation": c.faction_affiliation,
+                "body_plan": c.body_plan,
+                "challenge_rating": c.challenge_rating,
+                "special_abilities": c.special_abilities,
+                "loot": c.loot,
+                "is_unique": c.is_unique,
+                "combat_tactics": c.combat_tactics,
+                "variant": c.variant,
+                "size": c.size,
+                "suggested_level_range": c.suggested_level_range,
+                "encounters": c.encounters,
+            }
+            for c in world.bestiary
+        ]
+
     # Lore
     if world.lore:
         lore = world.lore
@@ -341,6 +366,31 @@ def dict_to_world(data: dict) -> World:
             description=rd.get("description", ""),
         )
         for rd in data.get("faction_relationships", [])
+    ]
+
+    # Deserialize bestiary
+    from .bestiary import Creature
+    world.bestiary = [
+        Creature(
+            name=cd["name"],
+            tier=cd.get("tier", 1),
+            creature_type=cd.get("creature_type", "beast"),
+            habitat=cd.get("habitat", "temperate"),
+            description=cd.get("description", ""),
+            behavior=cd.get("behavior", "docile"),
+            faction_affiliation=cd.get("faction_affiliation", ""),
+            body_plan=cd.get("body_plan", "Quadrupedal"),
+            challenge_rating=cd.get("challenge_rating", 1.0),
+            special_abilities=cd.get("special_abilities", []),
+            loot=cd.get("loot", []),
+            is_unique=cd.get("is_unique", False),
+            combat_tactics=cd.get("combat_tactics", "Engages directly"),
+            variant=cd.get("variant", ""),
+            size=cd.get("size", "medium"),
+            suggested_level_range=cd.get("suggested_level_range", ""),
+            encounters=cd.get("encounters", "1d4"),
+        )
+        for cd in data.get("bestiary", [])
     ]
 
     # Deserialize lore
