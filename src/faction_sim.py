@@ -33,6 +33,7 @@ class FactionSnapshot:
     is_active: bool = True
     at_war_with: list[str] = field(default_factory=list)
     years_of_peace: int = 0
+    war_exhaustion: int = 0  # ticks up during war, decays in peace; affects settlement food
     territory_regions: list[str] = field(default_factory=list)
 
     @property
@@ -92,6 +93,10 @@ POLITICAL_EVENT_TEMPLATES = {
         "A coup rocks {faction}! {detail} "
         "{effect}"
     ),
+    "faction_peace_treaty": (
+        "{faction_a} and {faction_b} sign a formal peace treaty. "
+        "{terms} {effect}"
+    ),
 }
 
 # ── Political Event Causes ───────────────────────────────────────────
@@ -149,6 +154,16 @@ PEACE_EFFECTS = [
     "The borderlands grow prosperous and peaceful.",
     "A golden age of cooperation begins.",
     "Farmers return to fields once scarred by war.",
+]
+
+PEACE_TREATY_TERMS = [
+    "Both sides agree to a demilitarised border zone.",
+    "War reparations are paid in gold and grain over five years.",
+    "The treaty cedes disputed border territories to the victor.",
+    "A mutual non-aggression pact is signed for a generation.",
+    "Prisoners are exchanged and trade routes reopen.",
+    "The treaty is sealed with a marriage between noble houses.",
+    "Both sides pledge to submit future disputes to neutral arbitration.",
 ]
 
 WAR_EFFECTS = [
@@ -267,12 +282,14 @@ def _simulate_political_tick(world: 'World', state: 'SimState',
         if fs.at_war_with:
             fs.stability -= int(rng.uniform(1, 4) * chaos_factor)
             fs.years_of_peace = 0
+            fs.war_exhaustion += 1
         else:
             fs.stability += int(rng.uniform(0, 2))
             fs.years_of_peace += 1
+            fs.war_exhaustion = max(0, fs.war_exhaustion - 1)
         fs.stability = max(5, min(100, fs.stability))
         
-        # Wars may end after enough years
+        # Wars may end after enough years — formal peace treaties
         if fs.at_war_with and rng.random() < 0.15 * chaos_factor:
             for enemy in list(fs.at_war_with):
                 if enemy in fs_dict:
@@ -280,13 +297,18 @@ def _simulate_political_tick(world: 'World', state: 'SimState',
                     if rng.random() < 0.4:  # Peace
                         fs.at_war_with.remove(enemy)
                         enemy_fs.at_war_with.remove(fs.name)
+                        terms = rng.choice(PEACE_TREATY_TERMS)
                         effect = rng.choice(PEACE_EFFECTS)
                         events.append(SimEvent(
                             year=year,
-                            event_type="faction_alliance",
-                            description=(
-                                f"After years of conflict, {fs.name} and "
-                                f"{enemy} agree to peace. {effect}"
+                            event_type="faction_peace_treaty",
+                            description=POLITICAL_EVENT_TEMPLATES[
+                                "faction_peace_treaty"
+                            ].format(
+                                faction_a=fs.name,
+                                faction_b=enemy,
+                                terms=terms,
+                                effect=effect,
                             ),
                             affected_regions=list(set(
                                 fs.territory_regions + enemy_fs.territory_regions
@@ -295,6 +317,9 @@ def _simulate_political_tick(world: 'World', state: 'SimState',
                         # War weariness -> stability recovery
                         fs.stability = min(100, fs.stability + 10)
                         enemy_fs.stability = min(100, enemy_fs.stability + 10)
+                        # Reset exhaustion — peace allows recovery
+                        fs.war_exhaustion = max(0, fs.war_exhaustion - 3)
+                        enemy_fs.war_exhaustion = max(0, enemy_fs.war_exhaustion - 3)
     
     # ── 2. Faction Wars ────────────────────────────────────────────
     for f_name in faction_names:
@@ -475,5 +500,19 @@ def _simulate_political_tick(world: 'World', state: 'SimState',
                     s = state.settlements[s_name]
                     if s.is_active:
                         s.prosperity = max(0.0, min(1.0, s.prosperity + bonus))
+        
+        # War exhaustion: prolonged war degrades settlement food and prosperity
+        if fs.war_exhaustion > 0 and settlements_in_territory:
+            # Exhaustion penalty scales with war_exhaustion (capped at 25)
+            exhaustion_malus = min(fs.war_exhaustion * 0.01, 0.25)
+            for s_name in settlements_in_territory:
+                if s_name in state.settlements:
+                    s = state.settlements[s_name]
+                    if s.is_active:
+                        # Reduce food stores (war consumes resources)
+                        food_loss = int(s.food_stores * exhaustion_malus * 0.3)
+                        s.food_stores = max(0, s.food_stores - food_loss)
+                        # Reduce prosperity (war weariness)
+                        s.prosperity = max(0.0, s.prosperity - exhaustion_malus * 0.5)
     
     return events
