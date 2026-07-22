@@ -152,6 +152,10 @@ class SimState:
     # Maps "Character Fullname" -> "alive" | "dead" | "missing"
     # Tracks named characters from the narrative engine through sim years.
     # Populated by _init_character_status and mutated by sim events.
+    current_era: str = "The Founding Age"
+    # Name of the current chronicle era. Updated by era transition checks.
+    era_history: list[dict] = field(default_factory=list)
+    # Records of era transitions that occurred during sim.
     
     @property
     def total_population(self) -> int:
@@ -299,10 +303,18 @@ def _simulate_tick(world: World, state: SimState, rng: random.Random,
             s.health = rng.uniform(0.3, 0.6)
             if death_toll > 0:
                 char_name = _select_named_character(rng, characters, s.name, region_name, "plague")
-                desc = _describe_with_character(
-                    f"Plague ravages {s.name} in {region_name}, killing {death_toll}.",
-                    char_name, "{char} struggles to contain the outbreak."
-                )
+                # Character might die in the plague
+                if char_name and rng.random() < 0.4:
+                    state.character_status[char_name.full_name] = "dead"
+                    desc = _describe_with_character(
+                        f"Plague ravages {s.name} in {region_name}, killing {death_toll}.",
+                        char_name, "{char} succumbs to the outbreak and dies."
+                    )
+                else:
+                    desc = _describe_with_character(
+                        f"Plague ravages {s.name} in {region_name}, killing {death_toll}.",
+                        char_name, "{char} struggles to contain the outbreak."
+                    )
                 events.append(SimEvent(
                     year=year,
                     event_type="plague",
@@ -357,6 +369,15 @@ def _simulate_tick(world: World, state: SimState, rng: random.Random,
                     s1.population = 1
                 if s2.population < 1:
                     s2.population = 1
+                
+                # Characters involved in war may die
+                c1 = _select_named_character(rng, characters, s1.name, s1.region, "war")
+                c2 = _select_named_character(rng, characters, s2.name, s2.region, "war")
+                if c1 and rng.random() < 0.25:
+                    state.character_status[c1.full_name] = "dead"
+                if c2 and rng.random() < 0.25:
+                    state.character_status[c2.full_name] = "dead"
+                
                 events.append(SimEvent(
                     year=year,
                     event_type="war",
@@ -367,11 +388,11 @@ def _simulate_tick(world: World, state: SimState, rng: random.Random,
                                 f"{s2.name} ({s2.region}). "
                                 f"{actual_s1_loss + actual_s2_loss} total casualties."
                             ),
-                            _select_named_character(rng, characters, s1.name, s1.region, "war"),
-                            "{char} leads the assault.",
+                            c1,
+                            "{char} leads the assault." if state.character_status.get(c1.full_name) != "dead" else "{char} falls in battle.",
                         ),
-                        _select_named_character(rng, characters, s2.name, s2.region, "war"),
-                        "{char} marshals the defenders.",
+                        c2,
+                        "{char} marshals the defenders." if state.character_status.get(c2.full_name) != "dead" else "{char} dies defending.",
                     ),
                     affected_settlements=[s1.name, s2.name],
                     affected_regions=list(set([s1.region, s2.region])),
@@ -416,15 +437,51 @@ def _simulate_tick(world: World, state: SimState, rng: random.Random,
             state.settlements[new_name] = new_s
             
             char_name = _select_named_character(rng, characters, s.name, s.region, "founding")
+            # Build a rich founding description using the character's story
+            if char_name and hasattr(char_name, "occupation") and hasattr(char_name, "backstory"):
+                # Use the character's backstory to inform the founding narrative
+                backstory_snippet = char_name.backstory.split(".")[0] if char_name.backstory else ""
+                founding_desc = (
+                    f"A new settlement, {new_name}, is founded by emigrants "
+                    f"from {s.name}. {char_name.full_name}, a {char_name.occupation} "
+                    f"from {s.name}, leads the expedition. {backstory_snippet}."
+                    f" Initial population: {emigrants}."
+                )
+            else:
+                founding_desc = (
+                    f"A new settlement, {new_name}, is founded by emigrants "
+                    f"from {s.name}. Initial population: {emigrants}."
+                )
             events.append(SimEvent(
                 year=year,
                 event_type="founding",
-                description=_describe_with_character(
-                    f"A new settlement, {new_name}, is founded by emigrants "
-                    f"from {s.name}. Initial population: {emigrants}.",
-                    char_name, "{char} leads the expedition."
-                ),
+                description=founding_desc,
                 affected_settlements=[s.name, new_name],
+                affected_regions=[s.region],
+            ))
+        
+        # Migration event: mild overpopulation leads to character-driven migration
+        # (separate from full founding — this is a smaller movement event)
+        elif s.population > carrying_cap * 0.5 and rng.random() < 0.008 * chaos_factor:
+            char_name = _select_named_character(rng, characters, s.name, s.region, "exodus")
+            emigrants = max(1, int(s.population * rng.uniform(0.02, 0.06)))
+            s.population -= emigrants
+            if char_name and hasattr(char_name, "full_name"):
+                migration_desc = (
+                    f"{char_name.full_name}, a {char_name.occupation} from {s.name}, "
+                    f"leads {emigrants} settlers {'beyond ' + s.region + ' ' if s.region else ''}"
+                    f"in search of new opportunities as {s.name} grows crowded."
+                )
+            else:
+                migration_desc = (
+                    f"A group of {emigrants} settlers departs {s.name} "
+                    f"seeking new opportunities in the surrounding region."
+                )
+            events.append(SimEvent(
+                year=year,
+                event_type="exodus",
+                description=migration_desc,
+                affected_settlements=[s.name],
                 affected_regions=[s.region],
             ))
     
@@ -479,6 +536,9 @@ def _simulate_tick(world: World, state: SimState, rng: random.Random,
     
     # Update world modifiers based on total trends
     _update_modifiers(state)
+    
+    # Check for era transitions (every 50+ years and on major population shifts)
+    _check_era_transition(state, year, rng, chaos_factor)
     
     return events
 
@@ -537,6 +597,85 @@ def _update_modifiers(state: SimState) -> None:
         state.world_modifiers.append("Population in decline — the world grows quiet")
 
 
+def _check_era_transition(state: SimState, year: int, rng: random.Random,
+                          chaos_factor: float = 0.1) -> None:
+    """
+    Check if conditions warrant an era transition and apply it.
+
+    Triggers at milestone years or when world conditions shift significantly.
+    Records the transition in state.era_history for audit.
+    """
+    # No transitions before year 50 — let the world settle
+    if year < 50:
+        return
+    
+    # Eras are named after 50-year milestones
+    era_interval = 50
+    
+    # Check for new era at milestone years
+    if year % era_interval != 0:
+        return
+    
+    # Check we haven't already recorded this milestone
+    milestone_key = f"Year {year}"
+    for record in state.era_history:
+        if record.get("milestone") == milestone_key:
+            return  # Already recorded this one
+    
+    total_pop = state.total_population
+    num_active = state.num_settlements
+    num_abandoned = state.num_abandoned
+    
+    # Determine era name based on world conditions
+    era_adjs = ["Rising", "Golden", "Iron", "Crimson", "Ashen", "Silent",
+                "Burning", "Fading", "Dawning", "Shattered", "Weeping",
+                "Kindled", "Hollow"]
+    era_nouns = ["Tide", "Age", "Century", "Turning", "Cycle", "Season",
+                 "Reign", "Crown", "Bloom", "Frost", "Flame", "Eclipse"]
+    
+    # Conditions-based era naming
+    if total_pop > state.population_record[0]["total_population"] * 3 and num_abandoned <= 2:
+        adj = rng.choice(["Golden", "Rising", "Dawning", "Kindled", "Prosperous"])
+        noun = rng.choice(["Age", "Century", "Reign", "Bloom"])
+        era_type = "prosperity"
+    elif num_abandoned > max(3, num_active // 4):
+        adj = rng.choice(["Ashen", "Fading", "Hollow", "Shattered", "Weeping"])
+        noun = rng.choice(["Decline", "Frost", "Eclipse", "Silence"])
+        era_type = "decline"
+    elif num_active > state.population_record[0].get("num_settlements", len(state.settlements)) * 2:
+        adj = rng.choice(["Rising", "Burning", "Iron", "Expanding"])
+        noun = rng.choice(["Age", "Century", "Flame", "Tide"])
+        era_type = "expansion"
+    elif total_pop < state.population_record[0]["total_population"] * 0.5 and num_abandoned > 1:
+        adj = rng.choice(["Crimson", "Shattered", "Weeping", "Fallen"])
+        noun = rng.choice(["War", "Blood", "Ash", "Bones"])
+        era_type = "conflict"
+    else:
+        # Random flavor pick
+        adj = rng.choice(era_adjs)
+        noun = rng.choice(era_nouns)
+        era_type = "transition"
+    
+    era_name = f"The {adj} {noun}"
+    
+    # Build era description
+    era_desc = (
+        f"The world enters the {adj} {noun}. "
+        f"Population: {total_pop:,} across {num_active} settlements"
+        + (f" with {num_abandoned} lying in ruins." if num_abandoned > 0 else ".")
+    )
+    
+    # Record the transition
+    state.current_era = era_name
+    state.era_history.append({
+        "milestone": milestone_key,
+        "year": year,
+        "era_name": era_name,
+        "era_type": era_type,
+        "description": era_desc,
+    })
+
+
 # ── Character Integration ───────────────────────────────────────────
 
 
@@ -545,6 +684,95 @@ def _init_character_status(characters: list | None) -> dict[str, str]:
     if not characters:
         return {}
     return {c.full_name: "alive" for c in characters}
+
+
+def _apply_narrative_consequences(world, state: SimState, events: list[SimEvent]) -> None:
+    """
+    Apply sim event consequences back to the world's narrative data.
+
+    - Marks characters as dead based on sim character_status
+    - Deactivates quests whose giver died
+    - Generates new quests from major sim events
+
+    Args:
+        world: The World object (mutated in-place for narrative changes)
+        state: Final simulation state
+        events: All sim events that occurred
+    """
+    if not world.narrative:
+        return
+
+    # 1. Update character statuses in the narrative
+    dead_names = {
+        name for name, status in state.character_status.items()
+        if status == "dead"
+    }
+    for c in world.narrative.characters:
+        if c.full_name in dead_names and c.status == "alive":
+            c.status = "dead"
+
+    # 2. Deactivate quests whose giver is dead
+    for q in world.narrative.quests:
+        if q.giver_character and q.giver_character in dead_names:
+            q.is_active = False
+
+    # 3. Generate new quests from major sim events
+    # Pick the most impactful events (wars, plagues, foundings) to spawn quests
+    import random as _random
+    rng = _random.Random(world.seed + 9000000 + state.year)
+
+    quest_templates = [
+        ("exploration", "Scout {target} after the {event_type}. Locals report {detail}."),
+        ("combat", "{event_type} aftermath: {detail}. {giver} seeks aid."),
+        ("diplomacy", "The aftermath of {event_type} requires {detail}."),
+        ("gathering", "{event_type} has left {detail}. Collect supplies."),
+    ]
+
+    spawnable_types = {"war", "plague", "famine", "disaster", "founding", "abandonment"}
+    new_quests = []
+    for ev in events[-20:]:  # Only from recent events
+        if ev.event_type in spawnable_types and rng.random() < 0.15:
+            qtype, qtext_tpl = rng.choice(quest_templates)
+            # Find a giver from an unaffected settlement
+            giver = None
+            for c in world.narrative.characters:
+                if c.status == "alive" and c.home_settlement not in ev.affected_settlements:
+                    giver = c
+                    break
+            giver_name = giver.full_name if giver else "The Council"
+
+            affected = ", ".join(ev.affected_settlements[:2]) or "the region"
+            detail_options = {
+                "war": "wandering mercenaries and displaced refugees",
+                "plague": "a need for rare medicinal herbs",
+                "famine": "crop blight spreading to neighbouring farms",
+                "founding": "a need to establish trade routes to the new settlement",
+                "abandonment": "rumours of valuable goods left behind in the ruins",
+                "disaster": "urgent repair supplies needed from afar",
+            }
+            detail = detail_options.get(ev.event_type, "unusual activity")
+
+            quest_desc = qtext_tpl.format(
+                event_type=ev.event_type,
+                target=affected,
+                detail=detail,
+                giver=giver_name.capitalize(),
+            )
+
+            new_quest = type('Quest', (), {
+                'name': f"The {ev.event_type.capitalize()} Aftermath",
+                'quest_type': qtype,
+                'difficulty': "moderate",
+                'description': quest_desc,
+                'giver_character': giver_name,
+                'giver_settlement': giver.home_settlement if giver else affected,
+                'target_region': ev.affected_regions[0] if ev.affected_regions else "",
+                'rewards': ["coin", "gratitude of the settlement"],
+                'is_active': True,
+            })
+            new_quests.append(new_quest)
+
+    world.narrative.quests.extend(new_quests)
 
 
 _CHARACTER_ROLE_MAP: dict[str, list[str]] = {
@@ -589,11 +817,11 @@ def _select_named_character(
     settlement_name: str,
     region_name: str | None,
     event_type: str,
-) -> str | None:
+):
     """
     Pick a named (alive) character connected to the affected settlement or region.
 
-    Returns the character's full name, or None if no suitable character found.
+    Returns the Character object, or None if no suitable character found.
     """
     if not characters:
         return None
@@ -633,22 +861,23 @@ def _select_named_character(
     if not candidates:
         return None
 
-    return rng.choice(candidates).full_name
+    return rng.choice(candidates)
 
 
 def _describe_with_character(
     base: str,
-    char_name: str | None,
+    character,
     occupation_prompt: str | None = None,
 ) -> str:
     """
     Append a character reference to an event description.
 
-    If char_name is provided, appends a brief occupation-flavoured note.
+    If character is provided, appends a brief occupation-flavoured note.
     If not, returns the base description unchanged.
     """
-    if not char_name:
+    if not character:
         return base
+    char_name = character.full_name if hasattr(character, "full_name") else str(character)
     if occupation_prompt:
         return f"{base} — {occupation_prompt.format(char=char_name)}"
     return f"{base} — {char_name}"
@@ -809,6 +1038,9 @@ def run_simulation(world: World, num_years: int = 100,
     # Take final snapshot (only if not already captured by interval)
     if snapshot_interval > 0 and (num_years == 0 or num_years % snapshot_interval != 0):
         snapshots.append(copy.deepcopy(state))
+    
+    # Apply narrative consequences: character deaths, quest updates, new quests
+    _apply_narrative_consequences(world, state, events)
     
     return SimResult(
         seed=world.seed + 4000000 + seed_offset,

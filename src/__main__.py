@@ -189,6 +189,17 @@ def main():
     view_cmd.add_argument("--seed-offset", type=int, default=0,
                           help="Seed offset for branching (default: 0)")
 
+    # ── branch ─────────────────────────────────────────────────────
+    branch_cmd = sub.add_parser("branch",
+                                help="Compare branching simulation timelines")
+    _add_load_arg(branch_cmd)
+    branch_cmd.add_argument("--years", type=int, default=200,
+                            help="Number of years to simulate (default: 200)")
+    branch_cmd.add_argument("--chaos", type=float, default=0.3,
+                            help="Chaos factor 0.0-1.0 (default: 0.3)")
+    branch_cmd.add_argument("--offsets", type=int, nargs="+", default=[0, 1],
+                            help="Seed offsets to compare (default: 0 1)")
+
     # ── chronicles ─────────────────────────────────────────────────
     chron_cmd = sub.add_parser("chronicles",
                                 help="Show era-based world history (chronicles)")
@@ -324,6 +335,28 @@ def main():
             chaos_factor=args.chaos,
             seed_offset=args.seed_offset,
         )
+
+    # ── branch ────────────────────────────────────────────────────────
+    elif args.command == "branch":
+        world = _get_world(args)
+        if not world.narrative:
+            from .narrative import generate_narrative
+            world.narrative = generate_narrative(world)
+        if not world.chronicles:
+            from .chronicles import generate_chronicles
+            world.chronicles = generate_chronicles(world, world.narrative)
+
+        from .branch import run_branch_comparison, render_branch_comparison
+        # Ensure narrative exists with characters
+        sim_characters = world.narrative.characters if world.narrative else None
+
+        results = run_branch_comparison(
+            world,
+            num_years=args.years,
+            chaos_factor=args.chaos,
+            offsets=args.offsets,
+        )
+        print(render_branch_comparison(world, results))
 
     # ── chronicles ─────────────────────────────────────────────────
     elif args.command == "chronicles":

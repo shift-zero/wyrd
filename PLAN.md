@@ -116,14 +116,25 @@ Year-by-year simulation in the Dwarf Fortress tradition. The world is no longer 
 | 6 ✅ | Chronicles engine — era-based world history | `wyrd chronicles --seed 42` shows a causally linked timeline |
 | 7 ✅ | Simulation engine — year-by-year world evolution (6/6 + Polish complete) | `wyrd run --seed 42 --years 500` evolves settlements, generates events, founding/abandonment/war |
 
-## Phase 7 — The Living World (in progress)
+## Phase 7 — The Living World (complete ✅)
 Interactive simulation viewing and character-driven world evolution. The world doesn't just tick silently — you watch it grow, and the stories write themselves.
 
 | # | What | Verifiable |
 |---|------|------------|
 | 1 ✅ | Interactive curses sim viewer: watch the map evolve year by year | `wyrd view --seed 42 --years 300` shows real-time map evolution with pause/speed controls |
 | 2 ✅ | Named character integration in sim events | Sim events reference actual Narrative characters as leaders, generals, heroes when available; character selection is seed-deterministic and prefers occupation-relevant NPCs |
-| 3 | Character-driven founding events | New settlements are founded by named characters; migration events tied to character backstories |
-| 4 | Era transitions in simulation | Simulation can trigger chronicle-era transitions mid-sim; world modifiers change dynamically |
-| 5 | Sim event consequences on narrative | NPCs die, quests become impossible, new quests emerge from sim events |
-| 6 | Branching timeline visualization | `wyrd branch --seed 42 --from-year 150` shows alternative sim paths |
+| 3 ✅ | Character-driven founding events | New settlements are founded by named characters with backstory context; migration events tied to character backstories |
+| 4 ✅ | Era transitions in simulation | Simulation triggers era transitions every 50 years based on world conditions (population, abandonment, expansion); dynamic world modifiers | |
+| 5 ✅ | Sim event consequences on narrative | NPCs die in plagues/wars and are reflected in narrative; quests from dead characters become inactive; new quests emerge from sim events |
+| 6 ✅ | Branching timeline visualization | `wyrd branch --seed 42 --years 300` shows alternative sim paths side-by-side with event/era comparisons |
+
+## Phase 8 — The Web Awakens (current)
+Bring wyrd out of the terminal and onto the web. Interactive map viewers, persistent world management, and LLM-powered storytelling.
+
+| # | What | Verifiable |
+|---|------|------------|
+| 1 | Web overview dashboard: serve world stats, map HTML, sim state in browser | `wyrd serve --seed 42` starts a web server; browser shows interactive world |
+| 2 | Sim-state-aware HTML map | `wyrd export --seed 42 --year 150` produces HTML showing evolved map with new settlements, ruins, and pop changes |
+| 3 | Conversational world agent | `wyrd ask "What's the most powerful city?"` uses LLM to answer from world data |
+| 4 | Multi-world management | `wyrd worlds` lists all generated worlds; `wyrd load <name>` selects by metadata |
+| 5 | Magic system generation | Procedurally generate magic systems, schools of magic, and magical traditions tied to world biomes and cultures |

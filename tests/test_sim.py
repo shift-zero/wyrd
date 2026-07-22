@@ -433,8 +433,9 @@ class TestSimCharacterIntegration:
             Character("Mira", "Deepwell", 45, "female", "farmer", ["patient"], "North", "Ironhaven", ""),
         ]
         # War in Ironhaven — should prefer Aldric (warlord)
-        name = _select_named_character(rng, chars, "Ironhaven", "North", "war")
-        assert name == "Aldric Stonehand"
+        char = _select_named_character(rng, chars, "Ironhaven", "North", "war")
+        assert char is not None
+        assert char.full_name == "Aldric Stonehand"
 
     def test_select_named_character_falls_back_to_any(self):
         """Should fall back to any character from the settlement if no occupation match."""
@@ -446,8 +447,9 @@ class TestSimCharacterIntegration:
             Character("Mira", "Deepwell", 45, "female", "farmer", ["patient"], "North", "Ironhaven", ""),
         ]
         # War in Ironhaven — no warlord, fall back to Mira
-        name = _select_named_character(rng, chars, "Ironhaven", "North", "war")
-        assert name == "Mira Deepwell"
+        char = _select_named_character(rng, chars, "Ironhaven", "North", "war")
+        assert char is not None
+        assert char.full_name == "Mira Deepwell"
 
     def test_select_named_character_returns_none_when_no_match(self):
         """Should return None when no characters match."""
