@@ -1,0 +1,6 @@
+Metadata-Version: 2.4
+Name: wyrd
+Version: 0.1.0
+Summary: Generative fantasy sandbox — build worlds in the terminal
+Requires-Python: >=3.11
+Dynamic: requires-python

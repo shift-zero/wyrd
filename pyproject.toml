@@ -8,3 +8,6 @@ version = "0.1.0"
 description = "Generative fantasy sandbox — build worlds in the terminal"
 requires-python = ">=3.11"
 dependencies = []
+
+[project.scripts]
+wyrd = "src.__main__:main"
