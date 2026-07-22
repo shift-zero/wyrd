@@ -16,6 +16,7 @@ from typing import Optional
 
 from .world import World, Region, Settlement, TERRAIN
 from .faction_sim import initialize_faction_state, _simulate_political_tick
+from .cataclysm import _simulate_cataclysm_tick, cataclysm_to_sim_event
 
 
 # ── Terrain Resource Values ───────────────────────────────────────────
@@ -694,6 +695,45 @@ def _simulate_tick(world: World, state: SimState, rng: random.Random,
         events.extend(political_events)
     except Exception:
         pass  # Political events are non-critical; don't crash sim
+
+    # Cataclysm tick — rare catastrophic events that reshape terrain
+    try:
+        cataclysms = _simulate_cataclysm_tick(world, state, rng, year, chaos_factor)
+        for cataclysm in cataclysms:
+            events.append(cataclysm_to_sim_event(cataclysm))
+            # Create refugee/exodus events for settlements that survived but lost population
+            for s_name in cataclysm.affected_settlements:
+                if s_name not in cataclysm.settlements_destroyed:
+                    s = state.settlements.get(s_name)
+                    if s and s.is_active:
+                        # Survivors flee the devastation
+                        emigrants = max(1, int(s.population * rng.uniform(0.1, 0.3)))
+                        s.population -= emigrants
+                        if emigrants > 0:
+                            char_name = _select_named_character(rng, characters, s_name, s.region, "exodus")
+                            events.append(SimEvent(
+                                year=year,
+                                event_type="exodus",
+                                description=_describe_with_character(
+                                    f"Survivors of the {cataclysm.cataclysm_type} flee {s_name}, "
+                                    f"seeking refuge beyond {s.region or 'the devastated lands'}. "
+                                    f"{emigrants} souls wander as refugees.",
+                                    char_name, "{char} leads the desperate column."
+                                ),
+                                affected_settlements=[s_name],
+                                affected_regions=[s.region] if s.region else [],
+                            ))
+            # Create settlement destruction events
+            for s_destroyed in cataclysm.settlements_destroyed:
+                events.append(SimEvent(
+                    year=year,
+                    event_type="abandonment",
+                    description=f"{s_destroyed} is utterly destroyed by the {cataclysm.cataclysm_type}. Nothing remains but rubble and ash.",
+                    affected_settlements=[s_destroyed],
+                    affected_regions=cataclysm.affected_regions,
+                ))
+    except Exception:
+        pass  # Cataclysm events are non-critical; don't crash sim
     
     return events
 
@@ -970,7 +1010,9 @@ def _apply_narrative_consequences(world, state: SimState, events: list[SimEvent]
     ]
 
     spawnable_types = {"war", "plague", "famine", "disaster", "founding", "abandonment",
-                       "religious_tension", "divine_blessing", "holy_pilgrimage", "heresy"}
+                       "religious_tension", "divine_blessing", "holy_pilgrimage", "heresy",
+                       "earthquake", "volcanic_eruption", "great_plague", "tsunami",
+                       "meteor_strike", "great_fire", "magical_cataclysm"}
     new_quests = []
     for ev in events[-20:]:  # Only from recent events
         if ev.event_type in spawnable_types and rng.random() < 0.15:
@@ -995,6 +1037,13 @@ def _apply_narrative_consequences(world, state: SimState, events: list[SimEvent]
                 "divine_blessing": "a pilgrimage route that needs protection",
                 "holy_pilgrimage": "sacred relics that require safe passage",
                 "heresy": "schismatic teachings threatening the established order",
+                "earthquake": "landslides and unstable ground near the broken landscape",
+                "volcanic_eruption": "ash-choked skies and lava-blocked passes",
+                "great_plague": "quarantine zones and the search for a cure",
+                "tsunami": "drowned coasts and refugees stranded on high ground",
+                "meteor_strike": "strange celestial fragments scattered across the impact site",
+                "great_fire": "scorched earth and the need for rebuilding supplies",
+                "magical_cataclysm": "reality-bending anomalies that must be contained or studied",
             }
             detail = detail_options.get(ev.event_type, "unusual activity")
 
@@ -1420,6 +1469,11 @@ def render_sim_detailed(result: SimResult, world) -> str:
             "faction_war": "⚔", "faction_alliance": "⚝",
             "faction_power_shift": "⇈", "faction_collapse": "💀",
             "faction_peace_treaty": "☮",
+            # Cataclysm events (Phase 13)
+            "earthquake": "💢", "volcanic_eruption": "🌋",
+            "great_plague": "☠", "tsunami": "🌊",
+            "meteor_strike": "☄", "great_fire": "🔥",
+            "magical_cataclysm": "⚡",
         }
         event_colors = {
             "plague": _color(196), "famine": _color(130), "war": _color(160),
@@ -1431,6 +1485,11 @@ def render_sim_detailed(result: SimResult, world) -> str:
             "faction_war": _color(160), "faction_alliance": _color(33),
             "faction_power_shift": _color(99), "faction_collapse": _color(196),
             "faction_peace_treaty": _color(45),
+            # Cataclysm events (Phase 13)
+            "earthquake": _color(130), "volcanic_eruption": _color(202),
+            "great_plague": _color(90), "tsunami": _color(33),
+            "meteor_strike": _color(160), "great_fire": _color(196),
+            "magical_cataclysm": _color(99),
         }
         
         for ev in result.events[-50:]:  # Show last 50 events max
