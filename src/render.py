@@ -321,3 +321,102 @@ def render_lore(world: World) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
+# ── Chronicles Rendering ─────────────────────────────────────────────
+
+
+_CHRONICLE_TYPE_ICONS = {
+    "founding": "🏛",
+    "golden_age": "✦",
+    "cataclysm": "🌋",
+    "dark_age": "☽",
+    "age_of": "◇",
+    "decline": "▽",
+    "rebirth": "↑",
+    "schism": "⚔",
+}
+
+_CHRONICLE_TYPE_COLORS = {
+    "founding": _color(28),
+    "golden_age": _color(226),
+    "cataclysm": _color(196),
+    "dark_age": _color(240),
+    "age_of": _color(33),
+    "decline": _color(130),
+    "rebirth": _color(213),
+    "schism": _color(99),
+}
+
+
+def render_chronicles(world) -> str:
+    """Render the chronicles (era-based history) of a world."""
+    try:
+        from .chronicles import Chronicles
+    except ImportError:
+        return f"{ANSI_DIM}(chronicles engine not available){ANSI_RESET}"
+
+    chronicles = getattr(world, 'chronicles', None)
+    if not chronicles or not chronicles.eras:
+        return f"{ANSI_DIM}(no chronicles generated){ANSI_RESET}"
+
+    lines = []
+    lines.append(f"{ANSI_BOLD}═══ The Chronicles of wyrd #{world.seed} ═══{ANSI_RESET}\n")
+
+    for i, era in enumerate(chronicles.eras):
+        icon = _CHRONICLE_TYPE_ICONS.get(era.era_type, "·")
+        color = _CHRONICLE_TYPE_COLORS.get(era.era_type, _color(255))
+        era_num = i + 1
+
+        # Era header
+        lines.append(
+            f"  {color}{icon}{ANSI_RESET} "
+            f"{ANSI_BOLD}Era {era_num}: {era.name}{ANSI_RESET}"
+            f"  {_color(240)}[{era.era_type.replace('_', ' ')}]{ANSI_RESET}"
+        )
+
+        # Date range
+        year_str = f"Year {era.start_year} — Year {era.end_year}"
+        if era.is_present:
+            year_str += f"  {ANSI_BOLD}(Present Age){ANSI_RESET}"
+        lines.append(f"  {ANSI_DIM}{year_str}{ANSI_RESET}")
+
+        # Description
+        lines.append(f"  {era.description}")
+        lines.append("")
+
+        # World modifiers
+        if era.world_modifiers:
+            for mod in era.world_modifiers:
+                lines.append(f"    {_color(94)}◊{ANSI_RESET} {_color(94)}{mod}{ANSI_RESET}")
+            lines.append("")
+
+        # Events
+        if era.events:
+            lines.append(f"    {ANSI_DIM}── Events ──{ANSI_RESET}")
+            for ev in era.events:
+                ev_year = f"{_color(240)}[{ev['year']}]{ANSI_RESET}"
+                ev_icon = ""
+                if ev.get("type") == "battle":
+                    ev_icon = f"{_color(196)}⚔{ANSI_RESET} "
+                elif ev.get("type") == "discovery":
+                    ev_icon = f"{_color(33)}✦{ANSI_RESET} "
+                elif ev.get("type") == "founding":
+                    ev_icon = f"{_color(28)}▲{ANSI_RESET} "
+                elif ev.get("type") == "natural":
+                    ev_icon = f"{_color(130)}≈{ANSI_RESET} "
+                elif ev.get("type") == "pact":
+                    ev_icon = f"{_color(99)}⚝{ANSI_RESET} "
+
+                lines.append(f"    {ev_year} {ev_icon}{ANSI_BOLD}{ev['name']}{ANSI_RESET}")
+                lines.append(f"      {ev['description']}")
+
+                if ev.get("characters"):
+                    chars_str = ", ".join(ev["characters"])
+                    lines.append(f"      {_color(240)}Legendary participants: {chars_str}{ANSI_RESET}")
+            lines.append("")
+
+    # Summary
+    lines.append(f"{ANSI_DIM}── {chronicles.num_eras} eras spanning {chronicles.world_age} years ──{ANSI_RESET}")
+
+    return "\n".join(lines)
