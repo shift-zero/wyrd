@@ -37,7 +37,7 @@ wyrd/
 
 ### Phase Strategy
 
-**Phase 1 — World Generator** (now)
+**Phase 1 — World Generator** (done)
 - Procedural ASCII map with terrain, biomes, elevation
 - Named settlements with population tiers
 - Rivers, coastlines, mountain ranges
@@ -79,8 +79,8 @@ wyrd/
 
 | # | What | Verifiable |
 |---|------|------------|
-| 1 | ASCII map renders terrain, water, forests, mountains, settlements | `wyrd generate --seed 42` outputs a beautiful map |
+| 1 ✅ | ASCII map renders terrain, water, forests, mountains, settlements | `wyrd generate --seed 42` outputs a beautiful map |
 | 2 ✅ | Lore engine names regions, cultures, and features | `wyrd describe --seed 42` shows lore |
 | 3 ✅ | Interactive terminal UI (scroll, zoom, inspect) | Navigate a generated world in the terminal |
-| 4 | Export to SVG/HTML | Share worlds as web pages |
+| 4 ✅ | Export to HTML and SVG | `wyrd export --seed 42` produces HTML; `wyrd export --seed 42 --format svg` produces SVG |
 | 5 ✅ | Narrative engine with character generation | Characters with backstories grounded in the world |
