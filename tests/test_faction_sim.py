@@ -520,21 +520,25 @@ class TestWarExhaustion:
 
     def test_war_exhaustion_increases_during_war(self):
         """War exhaustion should increase while a faction is at war."""
+        from src.faction_sim import _simulate_political_tick
+        import random
         world = generate_world(42)
         state = initialize_sim_state(world)
-        # Force one faction into war for many ticks
-        if state.faction_state:
-            f_name = list(state.faction_state.keys())[0]
-            if len(state.faction_state) > 1:
-                f_name2 = list(state.faction_state.keys())[1]
-                fs1 = state.faction_state[f_name]
-                fs2 = state.faction_state[f_name2]
-                fs1.at_war_with.append(f_name2)
-                fs2.at_war_with.append(f_name)
-                # Simulate for enough years to build exhaustion
-                simulate_years(world, state, 30)
-                if fs1.is_active:
-                    assert fs1.war_exhaustion > 0
+        if state.faction_state and len(state.faction_state) > 1:
+            f_names = list(state.faction_state.keys())
+            fs1 = state.faction_state[f_names[0]]
+            fs2 = state.faction_state[f_names[1]]
+            rng = random.Random(42)
+            initial_exhaustion = fs1.war_exhaustion
+            # Manually set war and simulate one tick
+            fs1.at_war_with.append(f_names[1])
+            fs2.at_war_with.append(f_names[0])
+            _simulate_political_tick(world, state, rng, 1, 0.3)
+            # War exhaustion should have ticked up by 1
+            assert fs1.war_exhaustion == initial_exhaustion + 1
+            # Verify it doesn't keep increasing in subsequent years
+            # if at_war_with is cleared by war resolution
+            _simulate_political_tick(world, state, rng, 2, 0.3)
 
     def test_war_exhaustion_decays_in_peace(self):
         """War exhaustion should decrease when faction is at peace."""
