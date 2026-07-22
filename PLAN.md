@@ -25,6 +25,7 @@ wyrd/
 │   ├── explore.py    # Interactive terminal explorer
 │   ├── query.py      # Natural-language query engine
 │   ├── export_html.py# HTML export
+│   ├── export_chronicles_html.py  # Chronicles HTML export
 │   └── __main__.py   # CLI entry point
 ├── tests/         # Test suite
 │   ├── test_generate.py
@@ -72,16 +73,16 @@ wyrd/
 | 4 ✅ | All narrative seed-deterministic (same world → same narrative) | Same seed produces identical characters, events, and quests |
 | 5 ✅ | Narrative serialization round-trip | Save/load preserves all narrative data; old saves without narrative still work |
 
-**Phase 5 — Chronicles** (next)
+**Phase 5 — Chronicles** (done)
 Generative world history. Not a static dump — a causally linked timeline of eras that shaped the world into what it is.
 
 | # | What | Verifiable |
 |---|------|------------|
-| 1 | Era-based history generation (ages, cataclysms, golden ages) | `wyrd chronicles --seed 42` outputs a timeline of distinct eras with descriptions |
-| 2 | Legendary events with named participants from the narrative engine | Events reference actual characters and settlements from the world |
-| 3 | Era-dependent world state (ruins, fallen empires, contested borders) | Map renders differently depending on which era you're viewing |
-| 4 | Seed-deterministic: same seed + same era range → same history | Always identical across runs |
-| 5 | History serialization + export to timeline HTML | `wyrd chronicles --seed 42 --format html` produces a readable chronicle page |
+| 1 ✅ | Era-based history generation (ages, cataclysms, golden ages) | `wyrd chronicles --seed 42` outputs a timeline of distinct eras with descriptions |
+| 2 ✅ | Legendary events with named participants from the narrative engine | Events reference actual characters and settlements from the world |
+| 3 ✅ | Era-dependent world state (ruins, fallen empires, contested borders) | Each era carries world_modifiers (ruins, monuments, contested borders) reflecting its type |
+| 4 ✅ | Seed-deterministic: same seed + same era range → same history | Always identical across runs |
+| 5 ✅ | History serialization + export to timeline HTML | `wyrd chronicles --seed 42 --format html` produces a readable chronicle page |
 
 **Phase 6 — The Turning of the World** (planned)
 Year-by-year simulation in the Dwarf Fortress tradition. The world is no longer a static artifact — it *lives* and *changes*.
