@@ -9,6 +9,7 @@ from .serialize import save_world, load_world
 from .export_html import export_world_html
 from .export_svg import export_world_svg
 from .export_ttrpg import export_world_ttrpg
+from .religion import generate_pantheon
 
 
 def _get_world(args) -> 'World':
@@ -217,6 +218,13 @@ def main():
     magic_cmd.add_argument("--save", type=str, default=None,
                             help="Save world with magic system to JSON file")
 
+    # ── pantheon ────────────────────────────────────────────────────
+    pantheon_cmd = sub.add_parser("pantheon",
+                                   help="Show the pantheon and religions of a world")
+    _add_load_arg(pantheon_cmd)
+    pantheon_cmd.add_argument("--save", type=str, default=None,
+                               help="Save world with pantheon to JSON file")
+
     # ── serve ───────────────────────────────────────────────────────
     serve_cmd = sub.add_parser("serve",
                                 help="Start web dashboard server")
@@ -421,6 +429,17 @@ def main():
             save_world(world, args.save)
             print(f"💾 Saved to {args.save}")
         print(render_magic(world))
+
+    # ── pantheon ────────────────────────────────────────────────────
+    elif args.command == "pantheon":
+        world = _get_world(args)
+        if not world.pantheon:
+            world.pantheon = generate_pantheon(world)
+        if args.save:
+            save_world(world, args.save)
+            print(f"💾 Saved to {args.save}")
+        from .render import render_pantheon
+        print(render_pantheon(world))
 
     # ── ask ────────────────────────────────────────────────────────
     elif args.command == "ask":

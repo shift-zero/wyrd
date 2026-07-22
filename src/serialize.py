@@ -14,6 +14,7 @@ from .lore import Lore
 from .narrative import Narrative, Character, EventChain, Quest
 from .chronicles import Chronicles, Era
 from .magic import MagicSystem, MagicSchool, MagicTradition
+from .religion import PantheonSystem, Religion, Deity, HolySite
 
 
 class WyrdEncoder(json.JSONEncoder):
@@ -169,6 +170,50 @@ def world_to_dict(world: World) -> dict:
             ],
         }
 
+    # Pantheon / Religion
+    if world.pantheon:
+        p = world.pantheon
+        data["pantheon"] = {
+            "seed": p.seed,
+            "religions": [
+                {
+                    "name": r.name,
+                    "description": r.description,
+                    "pantheon": [
+                        {
+                            "name": d.name,
+                            "surname": d.surname,
+                            "domains": d.domains,
+                            "alignment": d.alignment,
+                            "symbol": d.symbol,
+                            "holy_animal": d.holy_animal,
+                            "description": d.description,
+                            "clergy_title": d.clergy_title,
+                            "is_primary": d.is_primary,
+                        }
+                        for d in r.pantheon
+                    ],
+                    "clergy_titles": r.clergy_titles,
+                    "holy_days": r.holy_days,
+                    "tenets": r.tenets,
+                    "primary_deity": r.primary_deity,
+                    "holy_sites": [
+                        {
+                            "name": s.name,
+                            "deity_name": s.deity_name,
+                            "settlement": s.settlement,
+                            "region": s.region,
+                            "site_type": s.site_type,
+                            "description": s.description,
+                        }
+                        for s in r.holy_sites
+                    ],
+                }
+                for r in p.religions
+            ],
+            "region_religion": p.region_religion,
+        }
+
     return data
 
 
@@ -309,6 +354,52 @@ def dict_to_world(data: dict) -> World:
             ],
         )
         world.magic = magic
+
+    # Deserialize pantheon
+    pantheon_data = data.get("pantheon")
+    if pantheon_data:
+        religions = []
+        for rd in pantheon_data.get("religions", []):
+            deities = [
+                Deity(
+                    name=dd["name"],
+                    surname=dd.get("surname", ""),
+                    domains=dd.get("domains", []),
+                    alignment=dd.get("alignment", "neutral"),
+                    symbol=dd.get("symbol", ""),
+                    holy_animal=dd.get("holy_animal", ""),
+                    description=dd.get("description", ""),
+                    clergy_title=dd.get("clergy_title", "Priest"),
+                    is_primary=dd.get("is_primary", False),
+                )
+                for dd in rd.get("pantheon", [])
+            ]
+            holy_sites = [
+                HolySite(
+                    name=sd["name"],
+                    deity_name=sd["deity_name"],
+                    settlement=sd["settlement"],
+                    region=sd["region"],
+                    site_type=sd["site_type"],
+                    description=sd["description"],
+                )
+                for sd in rd.get("holy_sites", [])
+            ]
+            religions.append(Religion(
+                name=rd["name"],
+                description=rd.get("description", ""),
+                pantheon=deities,
+                clergy_titles=rd.get("clergy_titles", []),
+                holy_days=rd.get("holy_days", []),
+                tenets=rd.get("tenets", []),
+                primary_deity=rd.get("primary_deity"),
+                holy_sites=holy_sites,
+            ))
+        world.pantheon = PantheonSystem(
+            seed=pantheon_data["seed"],
+            religions=religions,
+            region_religion=pantheon_data.get("region_religion", {}),
+        )
 
     return world
 

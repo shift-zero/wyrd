@@ -1,6 +1,6 @@
 # Overview
 
-**wyrd** is a terminal-native generative fantasy sandbox by [shift-zero](https://github.com/shift-zero/wyrd). It builds complete fantasy worlds from a single integer seed — terrain, cultures, history, characters, and centuries of simulated evolution.
+**wyrd** is a terminal-native generative fantasy sandbox by [shift-zero](https://github.com/shift-zero/wyrd). It builds complete fantasy worlds from a single integer seed — terrain, cultures, history, characters, centuries of simulated evolution, and living pantheons of gods.
 
 ## Phases
 
@@ -11,8 +11,10 @@
 | 3 | Explorer mode (save/load, HTML, curses UI, queries) | ✅ |
 | 4 | Narrative engine (characters, events, quests) | ✅ |
 | 5 | Chronicles (era-based world history) | ✅ |
-| 6 | Simulation (year-by-year world evolution) | ✅ (all 6 items, plus TTRPG export & compact saves) |
-| 7 | The Living World (interactive sim viewer, character integration) | 🔲 planned |
+| 6 | Simulation (year-by-year world evolution) | ✅ |
+| 7 | The Living World (interactive sim viewer, character integration) | ✅ |
+| 8 | The Web Awakens (web dashboard, magic system, world management) | ✅ |
+| 9 | The Pantheon (religion system, deity generation, holy sites) | 🔲 current |
 
 ## Philosophy
 

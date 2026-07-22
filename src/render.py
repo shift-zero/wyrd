@@ -497,3 +497,118 @@ def render_magic(world) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
+# ── Pantheon Rendering ───────────────────────────────────────────────────
+
+_PANTHEON_ALIGNMENT_COLORS = {
+    "good": _color(28),
+    "evil": _color(160),
+    "lawful": _color(33),
+    "chaotic": _color(213),
+    "neutral": _color(255),
+}
+
+
+def render_pantheon(world) -> str:
+    """Render the pantheon and religions of a world."""
+    pantheon = getattr(world, 'pantheon', None)
+    if not pantheon or not pantheon.religions:
+        return f"{ANSI_DIM}(no pantheon generated){ANSI_RESET}"
+
+    lines = []
+    lines.append(f"{ANSI_BOLD}═══ The Pantheon of wyrd #{world.seed} ═══{ANSI_RESET}\n")
+
+    for i, religion in enumerate(pantheon.religions):
+        # Religion header
+        icon = "†" if i == 0 else "‡"
+        adherent_count = sum(
+            1 for rn in pantheon.region_religion.values()
+            if rn == religion.name
+        )
+        lines.append(
+            f"  {_color(226)}{ANSI_BOLD}{icon}{ANSI_RESET}  "
+            f"{ANSI_BOLD}{religion.name}{ANSI_RESET}"
+            f"  {_color(240)}[{adherent_count} region{'s' if adherent_count != 1 else ''}]{ANSI_RESET}"
+        )
+        lines.append(f"    {religion.description}")
+        lines.append("")
+
+        # Primary deity
+        if religion.primary_deity:
+            prim = next((d for d in religion.pantheon if d.name == religion.primary_deity), None)
+            if prim:
+                ac = _PANTHEON_ALIGNMENT_COLORS.get(prim.alignment, _color(255))
+                lines.append(
+                    f"    {ac}★{ANSI_RESET} {ANSI_BOLD}{prim.name} {prim.surname}{ANSI_RESET}"
+                    f"  {ac}[{prim.alignment}]{ANSI_RESET}"
+                    f"  {_color(240)}Primary Deity{ANSI_RESET}"
+                )
+                lines.append(f"      {prim.description}")
+                lines.append("")
+
+        # Pantheon
+        other_deities = [d for d in religion.pantheon if d.name != religion.primary_deity]
+        if other_deities:
+            lines.append(f"    {ANSI_BOLD}Deities{ANSI_RESET}")
+            for deity in other_deities:
+                ac = _PANTHEON_ALIGNMENT_COLORS.get(deity.alignment, _color(255))
+                domains_str = ", ".join(deity.domains)
+                lines.append(
+                    f"      {ac}◇{ANSI_RESET} "
+                    f"{ANSI_BOLD}{deity.name} {deity.surname}{ANSI_RESET}"
+                    f"  {ac}({domains_str}){ANSI_RESET}"
+                )
+                lines.append(f"        {deity.description}")
+            lines.append("")
+
+        # Tenets
+        if religion.tenets:
+            lines.append(f"    {ANSI_BOLD}Core Tenets{ANSI_RESET}")
+            for tenet in religion.tenets:
+                lines.append(f"      {_color(94)}•{ANSI_RESET} {tenet}")
+            lines.append("")
+
+        # Clergy
+        if religion.clergy_titles:
+            titles_str = ", ".join(religion.clergy_titles[:4])
+            lines.append(f"    {_color(240)}Clergy: {titles_str}{ANSI_RESET}")
+            lines.append("")
+
+        # Holy days
+        if religion.holy_days:
+            lines.append(f"    {ANSI_BOLD}Holy Days{ANSI_RESET}")
+            for day in religion.holy_days:
+                lines.append(f"      {_color(33)}✦{ANSI_RESET} {day}")
+            lines.append("")
+
+        # Holy sites
+        if religion.holy_sites:
+            lines.append(f"    {ANSI_BOLD}Holy Sites{ANSI_RESET}")
+            for site in religion.holy_sites[:5]:
+                site_icon = {
+                    "temple": "🏛", "shrine": "◈", "monastery": "⌾",
+                    "oracle": "◎", "grove": "♣", "sanctuary": "☙",
+                }.get(site.site_type, "·")
+                lines.append(
+                    f"      {site_icon} {ANSI_BOLD}{site.name}{ANSI_RESET}"
+                    f"  {_color(240)}📍{site.settlement}, {site.region}{ANSI_RESET}"
+                )
+                lines.append(f"        {site.description}")
+            if len(religion.holy_sites) > 5:
+                lines.append(f"        {ANSI_DIM}...and {len(religion.holy_sites) - 5} more sites{ANSI_RESET}")
+            lines.append("")
+
+        # Separator between religions
+        if i < len(pantheon.religions) - 1:
+            lines.append(f"  {ANSI_DIM}──{ANSI_RESET}\n")
+
+    # Summary
+    total_sites = pantheon.total_holy_sites
+    total_deities = pantheon.total_deities
+    lines.append(
+        f"{ANSI_DIM}── {total_deities} deities across {len(pantheon.religions)} religion{'s' if len(pantheon.religions) != 1 else ''}"
+        f" · {total_sites} holy sites ──{ANSI_RESET}"
+    )
+
+    return "\n".join(lines)

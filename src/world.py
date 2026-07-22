@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from .narrative import Narrative
     from .chronicles import Chronicles
     from .magic import MagicSystem
+    from .religion import PantheonSystem
 
 # ── Terrain Types ──────────────────────────────────────────────────
 
@@ -69,6 +70,7 @@ class World:
     narrative: Optional['Narrative'] = None
     chronicles: Optional['Chronicles'] = None
     magic: Optional['MagicSystem'] = None
+    pantheon: Optional['PantheonSystem'] = None
 
     @property
     def tiles(self) -> int:

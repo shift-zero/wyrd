@@ -15,6 +15,7 @@ from datetime import date
 from typing import Optional
 
 from .world import World, Region, Settlement, TERRAIN, BIOMES
+from .religion import Deity
 
 
 def _terrain_percentages(world: World) -> dict[str, float]:
@@ -724,6 +725,125 @@ def export_world_ttrpg(
 
         # Random Tables (for GM use during sessions)
         "random_tables": _build_random_tables(world),
+
+        # Pantheon & Religion
+        "pantheon": _build_pantheon_section(world),
     }
 
     return json.dumps(document, indent=2, ensure_ascii=False)
+
+
+def _build_pantheon_section(world: World) -> dict:
+    """Build a comprehensive pantheon section for TTRPG export."""
+    pantheon = getattr(world, 'pantheon', None)
+    if not pantheon or not pantheon.religions:
+        return {
+            "religions": [],
+            "total_deities": 0,
+            "total_holy_sites": 0,
+        }
+
+    religions_data = []
+    for religion in pantheon.religions:
+        # Deities
+        deities_data = []
+        for d in religion.pantheon:
+            deity_entry = {
+                "name": d.name,
+                "surname": d.surname,
+                "full_name": f"{d.name} {d.surname}",
+                "domains": d.domains,
+                "alignment": d.alignment,
+                "symbol": d.symbol,
+                "holy_animal": d.holy_animal,
+                "description": d.description,
+                "clergy_title": d.clergy_title,
+                "is_primary": d.is_primary,
+            }
+            # Add TTRPG stat block for the deity (conceptually)
+            deity_entry["ttrpg_stats"] = _deity_to_ttrpg_stats(d)
+            deities_data.append(deity_entry)
+
+        # Holy sites
+        sites_data = []
+        for s in religion.holy_sites:
+            sites_data.append({
+                "name": s.name,
+                "deity": s.deity_name,
+                "settlement": s.settlement,
+                "region": s.region,
+                "site_type": s.site_type,
+                "description": s.description,
+                "suggested_encounter_level": _site_to_encounter_level(s.site_type),
+            })
+
+        # Region adherence
+        adherent_regions = [
+            rn for rn, rel_name in pantheon.region_religion.items()
+            if rel_name == religion.name
+        ]
+
+        religions_data.append({
+            "name": religion.name,
+            "description": religion.description,
+            "primary_deity": religion.primary_deity,
+            "deities": deities_data,
+            "clergy_titles": religion.clergy_titles,
+            "holy_days": religion.holy_days,
+            "tenets": religion.tenets,
+            "holy_sites": sites_data,
+            "adherent_regions": adherent_regions,
+            "adherent_region_count": len(adherent_regions),
+        })
+
+    return {
+        "religions": religions_data,
+        "region_religion_map": pantheon.region_religion,
+        "total_deities": pantheon.total_deities,
+        "total_holy_sites": pantheon.total_holy_sites,
+        "dominant_religion": pantheon.dominant_religion.name if pantheon.dominant_religion else None,
+    }
+
+
+def _deity_to_ttrpg_stats(d: Deity) -> dict:
+    """Generate TTRPG-style stats for a deity based on domains."""
+    base = {"STR": 18, "DEX": 18, "CON": 18, "INT": 18, "WIS": 18, "CHA": 18}
+
+    domain_bonuses = {
+        "War": {"STR": 2, "CON": 2},
+        "Nature": {"WIS": 2, "CON": 1},
+        "Knowledge": {"INT": 2, "WIS": 1},
+        "Death": {"WIS": 2, "INT": 1},
+        "Trickery": {"DEX": 2, "CHA": 2},
+        "Forge": {"STR": 2, "CON": 2},
+        "Life": {"WIS": 2, "CHA": 1},
+        "Tempest": {"STR": 1, "CON": 2},
+        "Twilight": {"WIS": 2, "DEX": 1},
+        "Wealth": {"INT": 2, "CHA": 2},
+        "Fate": {"WIS": 2, "INT": 2},
+        "Wilderness": {"DEX": 2, "WIS": 1},
+    }
+
+    for domain in d.domains:
+        bonuses = domain_bonuses.get(domain, {})
+        for stat, bonus in bonuses.items():
+            base[stat] = min(30, base[stat] + bonus)
+
+    # Deities are beyond mortal limits — boost primary stats
+    base["WIS"] = min(30, base["WIS"] + 2)
+    base["INT"] = min(30, base["INT"] + 2)
+
+    return base
+
+
+def _site_to_encounter_level(site_type: str) -> str:
+    """Suggest an encounter level range based on holy site type."""
+    levels = {
+        "temple": "3-7",
+        "shrine": "1-3",
+        "monastery": "5-9",
+        "oracle": "5-10",
+        "grove": "2-6",
+        "sanctuary": "1-5",
+    }
+    return levels.get(site_type, "Any")

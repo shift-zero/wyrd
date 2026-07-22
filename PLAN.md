@@ -22,6 +22,7 @@ wyrd/
 │   ├── chronicles.py # Era-based world history (Phase 5)
 │   ├── sim.py        # Year-by-year world simulation (Phase 6)
 │   ├── magic.py      # Magic system generation (Phase 8)
+│   ├── religion.py   # Pantheon/religion system (Phase 9)
 │   ├── serialize.py  # JSON save/load
 │   ├── explore.py    # Interactive terminal explorer
 │   ├── query.py      # Natural-language query engine
@@ -40,6 +41,7 @@ wyrd/
 │   ├── test_query.py
 │   ├── test_export_ttrpg.py
 │   ├── test_magic.py
+│   ├── test_religion.py
 │   ├── test_serve.py
 │   ├── test_worlds.py
 │   └── conftest.py
@@ -134,7 +136,7 @@ Interactive simulation viewing and character-driven world evolution. The world d
 | 5 ✅ | Sim event consequences on narrative | NPCs die in plagues/wars and are reflected in narrative; quests from dead characters become inactive; new quests emerge from sim events |
 | 6 ✅ | Branching timeline visualization | `wyrd branch --seed 42 --years 300` shows alternative sim paths side-by-side with event/era comparisons |
 
-## Phase 8 — The Web Awakens (current)
+## Phase 8 — The Web Awakens (complete ✅)
 Bring wyrd out of the terminal and onto the web. Interactive map viewers, persistent world management, and LLM-powered storytelling.
 
 | # | What | Verifiable |
@@ -144,3 +146,19 @@ Bring wyrd out of the terminal and onto the web. Interactive map viewers, persis
 | 3 ✅ | Conversational world agent | `wyrd ask "What's the most powerful city?"` uses LLM to answer from world data; deterministic fallback when no API key |
 | 4 ✅ | Multi-world management | `wyrd worlds` lists all generated worlds; `wyrd worlds --json` outputs structured metadata |
 | 5 ✅ | Magic system generation | `wyrd magic --seed 42` renders color-coded schools and traditions tied to world biomes and cultures |
+
+## Phase 9 — The Pantheon (current)
+Generative religion system. Every world gets a pantheon of named deities, organized into 1–2 religions, with holy sites grounded in actual settlements. TTRPG-ready deity stats, encounter levels for holy sites, and seed-deterministic generation.
+
+| # | What | Verifiable |
+|---|------|------------|
+| 1 ✅ | Deity generation with domains, alignment, symbols, holy animals | `wyrd pantheon --seed 42` shows named deities with descriptions, symbols, and assigned domains |
+| 2 ✅ | Religion organization (1–2 religions per world) | Pantheon generates 1–2 religions with distinct tenets, clergy titles, and holy days |
+| 3 ✅ | Holy sites tied to settlements | Each religion generates temples, shrines, monasteries, oracles, groves, and sanctuaries at existing settlements |
+| 4 ✅ | Region-to-religion mapping | Every world region is assigned a religion based on biome affinity and alignment |
+| 5 ✅ | Pantheon in TTRPG export | `wyrd export --seed 42 --format ttrpg` includes full pantheon section with deity stat blocks and encounter levels |
+| 6 ✅ | Serialization round-trip | Pantheon survives save/load; works with worlds that don't have one yet |
+| 7 🔲 | Religious conflict events in simulation | Deities and religious tensions influence sim events and era transitions |
+| 8 🔲 | Religious NPCs and quest hooks | Clergy characters with quests tied to holy sites and religious goals |
+| 9 🔲 | Religion-aware chronicle eras | Chronicle era types can be influenced by religious dominance shifts |
+

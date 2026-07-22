@@ -27,7 +27,14 @@ Entry point: `src/__main__.py`. Registers subcommands via `argparse`.
 | `quests` | Show available quests |
 | `narrative` | Full narrative (chars + events + quests) |
 | `run` | Year-by-year simulation |
+| `view` | Interactive curses simulation viewer |
+| `branch` | Compare branching simulation timelines |
 | `chronicles` | Era-based world history |
+| `magic` | Show magic system |
+| `pantheon` | Show pantheon and religions |
+| `ask "..."` | Ask a natural-language question |
+| `worlds` | List all generated worlds |
+| `serve` | Start web dashboard |
 
 ## `generate` Flags
 
@@ -49,3 +56,4 @@ Entry point: `src/__main__.py`. Registers subcommands via `argparse`.
 
 - [Rendering](rendering.md) — what generate/describe/load display
 - [Export](export.md) — what `export --format` produces
+- [Pantheon](pantheon.md) — what `pantheon` displays and exports
