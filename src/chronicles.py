@@ -461,7 +461,16 @@ def generate_chronicles(world, narrative=None):
             for e in narrative.events
         ]
 
-    # Determine world age and era span
+    # Gather religious data if available
+    pantheon_data = None
+    religion_names: list[str] = []
+    deity_names: list[str] = []
+    if hasattr(world, 'pantheon') and world.pantheon:
+        pantheon_data = world.pantheon
+        for rel in world.pantheon.religions:
+            religion_names.append(rel.name)
+            for d in rel.pantheon:
+                deity_names.append(f"{d.name} {d.surname}")
     world_age = 1000
     if narrative and hasattr(narrative, 'current_year'):
         world_age = narrative.current_year
@@ -647,6 +656,24 @@ def generate_chronicles(world, narrative=None):
             if rng.random() < 0.3:
                 world_modifiers.append(f"New roads connecting {focus_region}")
 
+        # Religion-aware world modifiers
+        if religion_names and rng.random() < 0.4:
+            rel_name = rng.choice(religion_names)
+            if era_type == "golden_age":
+                world_modifiers.append(f"Dominance of the {rel_name} faith")
+            elif era_type == "schism":
+                world_modifiers.append(f"Religious schism within {rel_name}")
+            elif era_type == "dark_age":
+                world_modifiers.append(f"Persecution of {rel_name} followers")
+            elif era_type == "founding":
+                world_modifiers.append(f"First temples of {rel_name} erected")
+            elif era_type == "cataclysm":
+                world_modifiers.append(f"Holy sites of {rel_name} destroyed")
+            elif era_type == "rebirth":
+                world_modifiers.append(f"Revival of {rel_name} traditions")
+            else:
+                world_modifiers.append(f"Rise of {rel_name} as a spiritual force")
+
         # Build era event list
         era_events = []
         for ev in era_narrative_events:
@@ -661,7 +688,7 @@ def generate_chronicles(world, narrative=None):
         num_legendary = rng.randint(1, 3)
         for le in range(num_legendary):
             le_rng = random.Random(chronicles_seed + i * 100 + le * 37)
-            le_type = le_rng.choice(["battle", "founding", "discovery", "natural", "pact"])
+            le_type = le_rng.choice(["battle", "founding", "discovery", "natural", "pact", "revelation"])
             le_year = le_rng.randint(start, end)
 
             le_desc_templates = {
@@ -670,6 +697,10 @@ def generate_chronicles(world, narrative=None):
                 "discovery": "{explorer} discovered {thing} in {area}.",
                 "natural": "The {phenomenon} reshaped {area} forever.",
                 "pact": "The {pact_name} was sworn by {parties} at {location}.",
+                "revelation": (
+                    "A divine revelation from {deity_name} was received by "
+                    "{prophet} at {location}. {message}"
+                ),
             }
 
             le_army = le_rng.choice([
@@ -736,6 +767,14 @@ def generate_chronicles(world, narrative=None):
                     "The Oath of Shared Waters",
                 ]),
                 parties=f"{le_char_name} and the {_make_faction_name(le_rng)}",
+                deity_name=le_rng.choice(deity_names) if deity_names else "the divine",
+                prophet=le_char_name,
+                message=le_rng.choice([
+                    "The revelation proclaimed a new path for the faithful.",
+                    "A sacred text was revealed, changing the course of the religion.",
+                    "The deity's words brought both comfort and a fearsome duty.",
+                    "The prophecy spoke of a coming age of trials.",
+                ]),
             )
 
             era_events.append({

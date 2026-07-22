@@ -663,6 +663,205 @@ def generate_quests(world: World, characters: list[Character],
     return quests
 
 
+def _generate_clergy_characters(
+    world: World, rng: random.Random,
+    existing_characters: list[Character],
+) -> list[Character]:
+    """Generate clergy NPCs for each holy site in the world's pantheon."""
+    clergy: list[Character] = []
+    if not world.pantheon:
+        return clergy
+
+    used_names_male: set = set()
+    used_names_female: set = set()
+    used_surnames: set = set(c.surname for c in existing_characters)
+
+    for rel in world.pantheon.religions:
+        for site in rel.holy_sites:
+            # Pick the deity for clergy title
+            deity = None
+            for d in rel.pantheon:
+                if d.name == site.deity_name:
+                    deity = d
+                    break
+            if deity is None and rel.pantheon:
+                deity = rng.choice(rel.pantheon)
+
+            clergy_title = deity.clergy_title if deity else "Priest"
+
+            # Generate name
+            gender = rng.choice(["male", "female"])
+            if gender == "male":
+                name = _pick_unique(rng, CHARACTER_NAMES_MALE, used_names_male)
+            else:
+                name = _pick_unique(rng, CHARACTER_NAMES_FEMALE, used_names_female)
+            surname = _pick_unique(rng, SURNAMES, used_surnames)
+
+            age = rng.randint(25, 75)
+            traits = rng.sample(PERSONALITY_TRAITS, k=rng.randint(2, 3))
+
+            # Clergy-specific backstory templates
+            backstory_templates = [
+                "Called to serve {deity_name} after {event}, they {action}.",
+                "Raised in the {settlement} temple, they {childhood_event}.",
+                "After {tragedy}, they found solace in the {religion_name} faith.",
+                "Trained under {mentor}, they {skill}.",
+                "A {vision} set them on the path of {deity_name}.",
+            ]
+            btpl = rng.choice(backstory_templates)
+            backstory = btpl.format(
+                deity_name=f"{deity.name} {deity.surname}" if deity else "the gods",
+                event=rng.choice(BACKSTORY_EVENTS),
+                action=rng.choice(BACKSTORY_ACTIONS),
+                childhood_event=rng.choice(CHILDHOOD_EVENTS),
+                tragedy=rng.choice(TRAGEDIES),
+                religion_name=rel.name,
+                mentor=rng.choice(MENTORS),
+                skill=rng.choice(SKILLS),
+                vision=rng.choice(MYSTERIOUS_EVENTS),
+                settlement=site.settlement,
+            )
+
+            clergy.append(Character(
+                name=name,
+                surname=surname,
+                age=age,
+                gender=gender,
+                occupation=clergy_title.lower(),
+                personality_traits=traits,
+                home_region=site.region,
+                home_settlement=site.settlement,
+                backstory=backstory,
+                status="alive",
+            ))
+
+    return clergy
+
+
+def _generate_religious_quests(
+    world: World, rng: random.Random,
+    characters: list[Character],
+) -> list[Quest]:
+    """Generate quests tied to holy sites, deities, and religious goals."""
+    quests: list[Quest] = []
+    if not world.pantheon:
+        return quests
+
+    used_names: set = set()
+    difficulty_labels = ["trivial", "easy", "moderate", "hard", "epic"]
+
+    # Religious quest templates
+    RELIGIOUS_QUEST_TEMPLATES = {
+        "pilgrimage": (
+            "Escort a group of pilgrims from {source} to {holy_site}. "
+            "The roads are dangerous, and {detail}."
+        ),
+        "relic_recovery": (
+            "A sacred relic of {deity_name} has been lost in {location}. "
+            "The {clergy_title} of {settlement} seeks brave souls to retrieve it."
+        ),
+        "defend_holy_site": (
+            "The {holy_site} is threatened by {threat}. "
+            "Defend it in the name of {deity_name}."
+        ),
+        "heresy_investigation": (
+            "Rumours of heresy spread through {settlement}. "
+            "The clergy suspect {suspicion}. Investigate discreetly."
+        ),
+        "divine_sign": (
+            "A mysterious {phenomenon} has been reported near {location}. "
+            "The {clergy_title} believes it is a sign from {deity_name}."
+        ),
+    }
+
+    RELIGIOUS_THREATS = [
+        "a band of relic thieves", "a rival faith's zealots",
+        "corrupted wildlife drawn to the sacred grounds",
+        "a landslide blocking the pilgrimage path",
+        "raiders targeting temple offerings",
+    ]
+
+    for rel in world.pantheon.religions:
+        if not rel.holy_sites:
+            continue
+        deity = rng.choice(rel.pantheon) if rel.pantheon else None
+        deity_name = f"{deity.name} {deity.surname}" if deity else "the divine"
+        clergy_title = deity.clergy_title if deity else "Priest"
+
+        num_religious_quests = rng.randint(1, min(3, len(rel.holy_sites)))
+        chosen_sites = rng.sample(rel.holy_sites, num_religious_quests)
+
+        for site in chosen_sites:
+            qtype = rng.choice(list(RELIGIOUS_QUEST_TEMPLATES.keys()))
+            tpl = RELIGIOUS_QUEST_TEMPLATES[qtype]
+
+            # Find giver: clergy character at this holy site
+            giver = rng.choice([c for c in characters
+                                if c.home_settlement == site.settlement
+                                and "priest" in c.occupation.lower()]) if any(
+                c for c in characters
+                if c.home_settlement == site.settlement
+                and "priest" in c.occupation.lower()
+            ) else None
+
+            # Find a source settlement for pilgrimage (different settlement)
+            source_settlements = [
+                s for r in world.regions for s in r.settlements
+                if s.name != site.settlement
+            ]
+            source = rng.choice(source_settlements).name if source_settlements else site.settlement
+
+            description = tpl.format(
+                source=source,
+                holy_site=site.name,
+                detail=rng.choice([
+                    "bandits prey on the faithful",
+                    "wild beasts stalk the old pilgrim road",
+                    "a blight has fallen on the waystations",
+                    "the mountain passes are treacherous this season",
+                ]),
+                deity_name=deity_name,
+                location=f"the {site.region} area",
+                clergy_title=clergy_title,
+                settlement=site.settlement,
+                threat=rng.choice(RELIGIOUS_THREATS),
+                suspicion=rng.choice([
+                    "a secret cult operating from within the temple",
+                    "a rival faith seeking to claim the holy site",
+                    "merchants spreading doubt for profit",
+                ]),
+                phenomenon=rng.choice([
+                    "strange lights above the old shrine",
+                    "a statue that weeps at dawn",
+                    "ancient runes glowing in the temple crypt",
+                ]),
+            )
+
+            difficulty = rng.choice(difficulty_labels)
+            rewards = rng.sample(QUEST_REWARDS, k=rng.randint(1, 2))
+            # Add a religious-themed reward
+            if rng.random() < 0.4:
+                rewards.append("a blessing from the temple")
+
+            quest_name = f"The {site.name} {qtype.replace('_', ' ').title()}"
+            if quest_name in used_names:
+                quest_name = f"{deity_name.split()[0] if deity_name != 'the divine' else 'Sacred'} {qtype.replace('_', ' ').title()}"
+
+            quests.append(Quest(
+                name=quest_name,
+                quest_type=qtype,
+                difficulty=difficulty,
+                description=description,
+                giver_character=giver.full_name if giver else None,
+                giver_settlement=site.settlement,
+                target_region=site.region,
+                rewards=rewards,
+                is_active=True,
+            ))
+
+    return quests
+
+
 def generate_narrative(world: World) -> Narrative:
     """Generate complete narrative for a world."""
     narrative_seed = world.seed + 2000000  # offset from terrain and lore seeds
@@ -671,8 +870,19 @@ def generate_narrative(world: World) -> Narrative:
 
     # Compose: lore affects character generation context
     narrative.characters = generate_characters(world, rng)
+
+    # Add clergy characters for holy sites if pantheon exists
+    if world.pantheon:
+        clergy = _generate_clergy_characters(world, rng, narrative.characters)
+        narrative.characters.extend(clergy)
+
     narrative.events = generate_events(world, narrative.characters, rng)
     narrative.quests = generate_quests(world, narrative.characters, rng)
+
+    # Add religious quests if pantheon exists
+    if world.pantheon:
+        religious_quests = _generate_religious_quests(world, rng, narrative.characters)
+        narrative.quests.extend(religious_quests)
 
     # Calculate current year based on events
     if narrative.events:

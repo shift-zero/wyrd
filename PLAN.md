@@ -158,7 +158,7 @@ Generative religion system. Every world gets a pantheon of named deities, organi
 | 4 ✅ | Region-to-religion mapping | Every world region is assigned a religion based on biome affinity and alignment |
 | 5 ✅ | Pantheon in TTRPG export | `wyrd export --seed 42 --format ttrpg` includes full pantheon section with deity stat blocks and encounter levels |
 | 6 ✅ | Serialization round-trip | Pantheon survives save/load; works with worlds that don't have one yet |
-| 7 🔲 | Religious conflict events in simulation | Deities and religious tensions influence sim events and era transitions |
-| 8 🔲 | Religious NPCs and quest hooks | Clergy characters with quests tied to holy sites and religious goals |
-| 9 🔲 | Religion-aware chronicle eras | Chronicle era types can be influenced by religious dominance shifts |
+| 7 ✅ | Religious conflict events in simulation | Deities and religious tensions influence sim events and era transitions |
+| 8 ✅ | Religious NPCs and quest hooks | Clergy characters with quests tied to holy sites and religious goals |
+| 9 ✅ | Religion-aware chronicle eras | Chronicle era types can be influenced by religious dominance shifts |
 

@@ -27,3 +27,5 @@ _test_*.json.gz
 # Auto-generated session notes
 .hermes/last_session.md
 .hermes/next_prompt.md
+.cron-context.md
+wyrd-*.json

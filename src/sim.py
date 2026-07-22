@@ -103,6 +103,25 @@ SIM_EVENT_TEMPLATES = {
         "Trade routes through {region} bring unprecedented wealth. "
         "{settlement} becomes {transformation}."
     ),
+    "religious_tension": (
+        "Religious tension flares between {settlement_a} and {settlement_b}. "
+        "Followers of {faith_a} and {faith_b} clash over {cause}. "
+        "{effect}"
+    ),
+    "divine_blessing": (
+        "A blessing from {deity} descends upon {settlement}. "
+        "Crops flourish, herds multiply, and the people prosper. "
+        "{effect}"
+    ),
+    "holy_pilgrimage": (
+        "A great pilgrimage to {holy_site} draws devotees "
+        "from across the land. {effect}"
+    ),
+    "heresy": (
+        "A heretical movement spreads through {settlement}, "
+        "challenging the authority of the {religion_name} clergy. "
+        "{effect}"
+    ),
 }
 
 
@@ -133,6 +152,7 @@ class SettlementSnapshot:
     prosperity: float = 0.5  # 0.0 = destitute, 1.0 = thriving
     food_stores: float = 100.0
     health: float = 1.0  # 0.0 = plague-ridden, 1.0 = healthy
+    religion: str | None = None  # Religion name from PantheonSystem
 
 
 @dataclass
@@ -524,7 +544,113 @@ def _simulate_tick(world: World, state: SimState, rng: random.Random,
                 affected_settlements=[s.name],
                 affected_regions=[s.region],
             ))
-    
+
+    # ── Religious events ──────────────────────────────────────────
+    # Only fire when the world has a pantheon
+    has_religion = (
+        world.pantheon is not None
+        and len(world.pantheon.religions) > 0
+    )
+
+    # Religious tension: settlements with different religions nearby
+    if has_religion and len(active_settlements) >= 2:
+        # Find settlement pairs with different religions
+        for s1 in active_settlements:
+            if not s1.is_active or not s1.religion:
+                continue
+            for s2 in active_settlements:
+                if not s2.is_active or not s2.religion:
+                    continue
+                if s1.name >= s2.name or s1.religion == s2.religion:
+                    continue
+                distance = math.sqrt((s1.x - s2.x) ** 2 + (s1.y - s2.y) ** 2)
+                if distance < 25 and rng.random() < 0.02 * chaos_factor:
+                    # Religious tension event!
+                    cause = rng.choice([
+                        "a disputed holy site",
+                        "proselytizing in forbidden territory",
+                        "an insult to a visiting priest",
+                        "competing harvest festivals",
+                        "a marriage across faiths",
+                    ])
+                    effect = rng.choice([
+                        "The clergy call for calm, but tensions remain high.",
+                        "Trade between the settlements suffers as a result.",
+                        "A council of elders is convened to mediate the dispute.",
+                        "The conflict simmers beneath the surface, waiting for a spark.",
+                        "Zealots on both sides call for action.",
+                    ])
+                    events.append(SimEvent(
+                        year=year,
+                        event_type="religious_tension",
+                        description=(
+                            f"Religious tension flares between {s1.name} and {s2.name}. "
+                            f"Followers of {s1.religion} and {s2.religion} clash over "
+                            f"{cause}. {effect}"
+                        ),
+                        affected_settlements=[s1.name, s2.name],
+                        affected_regions=list(set([s1.region, s2.region])),
+                    ))
+                    break  # One tension event per settlement per tick
+            else:
+                continue
+            break
+
+    # Divine blessing: settlement with religion, high prosperity
+    if has_religion:
+        for s in active_settlements:
+            if not s.is_active or not s.religion:
+                continue
+            if s.prosperity > 0.6 and s.health > 0.7 and rng.random() < 0.008 * chaos_factor:
+                # Pick a deity from the settlement's religion
+                deity_name = _pick_deity_for_religion(world, s.religion, rng)
+                boom_pop = max(1, int(s.population * rng.uniform(0.02, 0.06)))
+                s.population += boom_pop
+                s.prosperity = min(1.0, s.prosperity + 0.08)
+                effect = rng.choice([
+                    "The temple reports miraculous signs.",
+                    "Pilgrims arrive bearing gifts and offerings.",
+                    "The harvest is the richest in living memory.",
+                    "Sicknesses are healed at the holy shrine.",
+                ])
+                events.append(SimEvent(
+                    year=year,
+                    event_type="divine_blessing",
+                    description=(
+                        f"A blessing from {deity_name} descends upon {s.name}. "
+                        f"{effect} Population grows by {boom_pop}."
+                    ),
+                    affected_settlements=[s.name],
+                    affected_regions=[s.region],
+                ))
+
+        # Pilgrimage events: trigger when a settlement has a holy site from its religion
+        if has_religion and rng.random() < 0.01 * chaos_factor:
+            _maybe_pilgrimage_event(world, state, events, rng, year)
+
+        # Heresy events: religious settlements with low health/prosperity
+        for s in active_settlements:
+            if not s.is_active or not s.religion:
+                continue
+            if s.health < 0.4 and rng.random() < 0.015 * chaos_factor and s.population > 5:
+                effect = rng.choice([
+                    "The clergy denounce the heretics and call for their repentance.",
+                    "A splinter sect breaks away, causing a schism in the faith.",
+                    "The movement gains followers among the disaffected poor.",
+                    "The authorities move to suppress the uprising.",
+                ])
+                events.append(SimEvent(
+                    year=year,
+                    event_type="heresy",
+                    description=(
+                        f"A heretical movement spreads through {s.name}, "
+                        f"challenging the authority of the {s.religion} clergy. "
+                        f"{effect}"
+                    ),
+                    affected_settlements=[s.name],
+                    affected_regions=[s.region],
+                ))
+
     # Record population data
     pop_record = {
         "year": year,
@@ -588,13 +714,23 @@ def _update_modifiers(state: SimState) -> None:
     """Update world-level modifiers based on simulation trends."""
     state.world_modifiers.clear()
     total_pop = state.total_population
-    
+
     if total_pop > 5000:
         state.world_modifiers.append("Growing population strains resources")
     if state.num_abandoned > 2:
         state.world_modifiers.append(f"Ruins dot the landscape ({state.num_abandoned} abandoned settlements)")
     if total_pop < 200 and state.year > 50:
         state.world_modifiers.append("Population in decline — the world grows quiet")
+
+    # Religion-aware modifiers
+    active_religions = set()
+    for s in state.settlements.values():
+        if s.is_active and s.religion:
+            active_religions.add(s.religion)
+    if len(active_religions) >= 2:
+        state.world_modifiers.append(
+            f"Religious diversity: {len(active_religions)} faiths coexist"
+        )
 
 
 def _check_era_transition(state: SimState, year: int, rng: random.Random,
@@ -625,14 +761,25 @@ def _check_era_transition(state: SimState, year: int, rng: random.Random,
     total_pop = state.total_population
     num_active = state.num_settlements
     num_abandoned = state.num_abandoned
-    
+
+    # Check for religious diversity among active settlements
+    active_religions = set()
+    for s in state.settlements.values():
+        if s.is_active and s.religion:
+            active_religions.add(s.religion)
+    num_religions = len(active_religions)
+
     # Determine era name based on world conditions
     era_adjs = ["Rising", "Golden", "Iron", "Crimson", "Ashen", "Silent",
                 "Burning", "Fading", "Dawning", "Shattered", "Weeping",
                 "Kindled", "Hollow"]
     era_nouns = ["Tide", "Age", "Century", "Turning", "Cycle", "Season",
                  "Reign", "Crown", "Bloom", "Frost", "Flame", "Eclipse"]
-    
+
+    # Religion-themed era naming
+    faith_adjs = ["Pious", "Zealous", "Devout", "Sacred", "Heretic", "Schismatic"]
+    faith_nouns = ["Faith", "Schism", "Crusade", "Conviction", "Doubt", "Grace"]
+
     # Conditions-based era naming
     if total_pop > state.population_record[0]["total_population"] * 3 and num_abandoned <= 2:
         adj = rng.choice(["Golden", "Rising", "Dawning", "Kindled", "Prosperous"])
@@ -650,17 +797,25 @@ def _check_era_transition(state: SimState, year: int, rng: random.Random,
         adj = rng.choice(["Crimson", "Shattered", "Weeping", "Fallen"])
         noun = rng.choice(["War", "Blood", "Ash", "Bones"])
         era_type = "conflict"
+    elif num_religions >= 2 and rng.random() < 0.5:
+        # Religious diversity shapes the era
+        adj = rng.choice(faith_adjs)
+        noun = rng.choice(faith_nouns)
+        era_type = "religious_age"
     else:
         # Random flavor pick
         adj = rng.choice(era_adjs)
         noun = rng.choice(era_nouns)
         era_type = "transition"
-    
+
     era_name = f"The {adj} {noun}"
-    
-    # Build era description
-    era_desc = (
-        f"The world enters the {adj} {noun}. "
+
+    # Build era description — include religious flavor if available
+    era_desc = f"The world enters the {adj} {noun}. "
+    if num_religions >= 2:
+        rel_list = ", ".join(sorted(active_religions)[:3])
+        era_desc += f"{num_religions} faiths — {rel_list} — vie for influence. "
+    era_desc += (
         f"Population: {total_pop:,} across {num_active} settlements"
         + (f" with {num_abandoned} lying in ruins." if num_abandoned > 0 else ".")
     )
@@ -674,6 +829,63 @@ def _check_era_transition(state: SimState, year: int, rng: random.Random,
         "era_type": era_type,
         "description": era_desc,
     })
+
+
+# ── Religion Helpers ────────────────────────────────────────────────
+
+
+def _pick_deity_for_religion(world, religion_name: str, rng: random.Random) -> str:
+    """Pick a deity name from the specified religion's pantheon."""
+    if not world.pantheon or not world.pantheon.religions:
+        return "the gods"
+    for rel in world.pantheon.religions:
+        if rel.name == religion_name and rel.pantheon:
+            deity = rng.choice(rel.pantheon)
+            return f"{deity.name} {deity.surname}"
+    # Fallback: pick any deity from any religion
+    for rel in world.pantheon.religions:
+        if rel.pantheon:
+            deity = rng.choice(rel.pantheon)
+            return f"{deity.name} {deity.surname}"
+    return "the gods"
+
+
+def _maybe_pilgrimage_event(world, state, events, rng, year):
+    """Generate a pilgrimage event to a holy site, if one exists."""
+    if not world.pantheon:
+        return
+    # Collect all holy sites
+    all_holy_sites = []
+    for rel in world.pantheon.religions:
+        for site in rel.holy_sites:
+            all_holy_sites.append((rel.name, site))
+    if not all_holy_sites:
+        return
+    rel_name, chosen_site = rng.choice(all_holy_sites)
+    # Find the settlement where the holy site is located
+    source_settlements = [
+        s for s in state.settlements.values()
+        if s.is_active and s.religion == rel_name and s.name != chosen_site.settlement
+    ]
+    if not source_settlements:
+        return
+    source = rng.choice(source_settlements)
+    effect = rng.choice([
+        f"Devotees travel for weeks to reach the sacred site.",
+        f"The pilgrimage strengthens the faith of {rel_name} followers.",
+        f"Merchants follow the pilgrims, setting up temporary markets along the route.",
+        f"The temple reports a surge in donations and offerings.",
+    ])
+    events.append(SimEvent(
+        year=year,
+        event_type="holy_pilgrimage",
+        description=(
+            f"A great pilgrimage to {chosen_site.name} draws devotees "
+            f"from {source.name} across the land. {effect}"
+        ),
+        affected_settlements=[source.name, chosen_site.settlement],
+        affected_regions=[chosen_site.region],
+    ))
 
 
 # ── Character Integration ───────────────────────────────────────────
@@ -728,7 +940,8 @@ def _apply_narrative_consequences(world, state: SimState, events: list[SimEvent]
         ("gathering", "{event_type} has left {detail}. Collect supplies."),
     ]
 
-    spawnable_types = {"war", "plague", "famine", "disaster", "founding", "abandonment"}
+    spawnable_types = {"war", "plague", "famine", "disaster", "founding", "abandonment",
+                       "religious_tension", "divine_blessing", "holy_pilgrimage", "heresy"}
     new_quests = []
     for ev in events[-20:]:  # Only from recent events
         if ev.event_type in spawnable_types and rng.random() < 0.15:
@@ -749,6 +962,10 @@ def _apply_narrative_consequences(world, state: SimState, events: list[SimEvent]
                 "founding": "a need to establish trade routes to the new settlement",
                 "abandonment": "rumours of valuable goods left behind in the ruins",
                 "disaster": "urgent repair supplies needed from afar",
+                "religious_tension": "a fragile peace that could shatter at any moment",
+                "divine_blessing": "a pilgrimage route that needs protection",
+                "holy_pilgrimage": "sacred relics that require safe passage",
+                "heresy": "schismatic teachings threatening the established order",
             }
             detail = detail_options.get(ev.event_type, "unusual activity")
 
@@ -807,6 +1024,18 @@ _CHARACTER_ROLE_MAP: dict[str, list[str]] = {
     ],
     "trade_boom": [  # who'd drive a trade boom
         "merchant", "trader", "lord", "governor", "shipwright", "innkeeper",
+    ],
+    "religious_tension": [  # who'd be involved in religious conflict
+        "priest", "sage", "alchemist", "lord", "governor", "chieftain",
+    ],
+    "divine_blessing": [  # who'd witness a divine blessing
+        "priest", "healer", "herbalist", "sage", "farmer",
+    ],
+    "holy_pilgrimage": [  # who'd lead or join a pilgrimage
+        "priest", "sage", "healer", "bard", "trader",
+    ],
+    "heresy": [  # who'd be involved in a heresy
+        "priest", "sage", "scholar", "alchemist", "herbalist", "lord",
     ],
 }
 
@@ -897,6 +1126,10 @@ def initialize_sim_state(world: World) -> SimState:
     
     for region in world.regions:
         for settlement in region.settlements:
+            # Determine religion from PantheonSystem if available
+            religion_name = None
+            if world.pantheon and hasattr(world.pantheon, 'region_religion'):
+                religion_name = world.pantheon.region_religion.get(region.name)
             state.settlements[settlement.name] = SettlementSnapshot(
                 name=settlement.name,
                 region=region.name,
@@ -909,6 +1142,7 @@ def initialize_sim_state(world: World) -> SimState:
                 prosperity=0.5,
                 food_stores=settlement.population * 2,
                 health=1.0,
+                religion=religion_name,
             )
     
     # Initial population record
@@ -1149,12 +1383,16 @@ def render_sim_detailed(result: SimResult, world) -> str:
             "discovery": "✦", "prosperity": "↑", "disaster": "🌋",
             "exodus": "→", "founding": "▲", "abandonment": "✗",
             "trade_boom": "💰",
+            "religious_tension": "✝", "divine_blessing": "✨",
+            "holy_pilgrimage": "🕊", "heresy": "⚠",
         }
         event_colors = {
             "plague": _color(196), "famine": _color(130), "war": _color(160),
             "discovery": _color(33), "prosperity": _color(28), "disaster": _color(202),
             "exodus": _color(240), "founding": _color(226), "abandonment": _color(240),
             "trade_boom": _color(220),
+            "religious_tension": _color(99), "divine_blessing": _color(226),
+            "holy_pilgrimage": _color(45), "heresy": _color(196),
         }
         
         for ev in result.events[-50:]:  # Show last 50 events max
