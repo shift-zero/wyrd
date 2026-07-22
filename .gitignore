@@ -26,3 +26,4 @@ _test_*.json.gz
 /uv.lock
 # Auto-generated session notes
 .hermes/last_session.md
+.hermes/next_prompt.md
