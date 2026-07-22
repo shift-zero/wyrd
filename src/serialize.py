@@ -10,6 +10,7 @@ import os
 from typing import Optional
 from .world import World, Region, Settlement, TERRAIN, BIOMES
 from .lore import Lore
+from .narrative import Narrative, Character, EventChain, Quest
 
 
 class WyrdEncoder(json.JSONEncoder):
@@ -65,6 +66,56 @@ def world_to_dict(world: World) -> dict:
             "relationships": lore.relationships,
         }
 
+    # Narrative
+    if world.narrative:
+        narr = world.narrative
+        data["narrative"] = {
+            "seed": narr.seed,
+            "current_year": narr.current_year,
+            "characters": [
+                {
+                    "name": c.name,
+                    "surname": c.surname,
+                    "age": c.age,
+                    "gender": c.gender,
+                    "occupation": c.occupation,
+                    "personality_traits": c.personality_traits,
+                    "home_region": c.home_region,
+                    "home_settlement": c.home_settlement,
+                    "backstory": c.backstory,
+                    "status": c.status,
+                }
+                for c in narr.characters
+            ],
+            "events": [
+                {
+                    "name": e.name,
+                    "year": e.year,
+                    "event_type": e.event_type,
+                    "description": e.description,
+                    "regions_involved": e.regions_involved,
+                    "settlements_involved": e.settlements_involved,
+                    "characters_involved": e.characters_involved,
+                    "consequences": e.consequences,
+                }
+                for e in narr.events
+            ],
+            "quests": [
+                {
+                    "name": q.name,
+                    "quest_type": q.quest_type,
+                    "difficulty": q.difficulty,
+                    "description": q.description,
+                    "giver_character": q.giver_character,
+                    "giver_settlement": q.giver_settlement,
+                    "target_region": q.target_region,
+                    "rewards": q.rewards,
+                    "is_active": q.is_active,
+                }
+                for q in narr.quests
+            ],
+        }
+
     return data
 
 
@@ -106,6 +157,55 @@ def dict_to_world(data: dict) -> World:
         lore.histories = lore_data.get("histories", {})
         lore.relationships = lore_data.get("relationships", [])
         world.lore = lore
+
+    # Deserialize narrative
+    narrative_data = data.get("narrative")
+    if narrative_data:
+        narr = Narrative(seed=narrative_data["seed"])
+        narr.current_year = narrative_data.get("current_year", 1000)
+        narr.characters = [
+            Character(
+                name=cd["name"],
+                surname=cd.get("surname", ""),
+                age=cd.get("age", 0),
+                gender=cd.get("gender", "unknown"),
+                occupation=cd.get("occupation", "commoner"),
+                personality_traits=cd.get("personality_traits", []),
+                home_region=cd["home_region"],
+                home_settlement=cd["home_settlement"],
+                backstory=cd.get("backstory", ""),
+                status=cd.get("status", "alive"),
+            )
+            for cd in narrative_data.get("characters", [])
+        ]
+        narr.events = [
+            EventChain(
+                name=ed["name"],
+                year=ed.get("year", 0),
+                event_type=ed.get("event_type", "unknown"),
+                description=ed.get("description", ""),
+                regions_involved=ed.get("regions_involved", []),
+                settlements_involved=ed.get("settlements_involved", []),
+                characters_involved=ed.get("characters_involved", []),
+                consequences=ed.get("consequences", []),
+            )
+            for ed in narrative_data.get("events", [])
+        ]
+        narr.quests = [
+            Quest(
+                name=qd["name"],
+                quest_type=qd.get("quest_type", "exploration"),
+                difficulty=qd.get("difficulty", "moderate"),
+                description=qd.get("description", ""),
+                giver_character=qd.get("giver_character"),
+                giver_settlement=qd.get("giver_settlement", ""),
+                target_region=qd.get("target_region", "unknown"),
+                rewards=qd.get("rewards", []),
+                is_active=qd.get("is_active", True),
+            )
+            for qd in narrative_data.get("quests", [])
+        ]
+        world.narrative = narr
 
     return world
 

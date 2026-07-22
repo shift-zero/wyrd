@@ -80,6 +80,159 @@ def render_brief(world: World) -> str:
     )
 
 
+# ── Narrative Rendering ──────────────────────────────────────────────
+
+
+def render_characters(world: World) -> str:
+    """Render the characters of a world."""
+    if not world.narrative or not world.narrative.characters:
+        return f"{ANSI_DIM}(no characters generated){ANSI_RESET}"
+
+    lines = []
+    narr = world.narrative
+
+    lines.append(f"{ANSI_BOLD}═══ Characters of wyrd #{world.seed} ═══{ANSI_RESET}\n")
+
+    # Group characters by region
+    by_region: dict[str, list] = {}
+    for c in narr.characters:
+        by_region.setdefault(c.home_region, []).append(c)
+
+    for region in world.regions:
+        rname = region.name
+        chars = by_region.get(rname, [])
+        if not chars:
+            continue
+
+        lines.append(f"{ANSI_BOLD}{rname}{ANSI_RESET}  ({_color(240)}{len(chars)} characters{ANSI_RESET})")
+
+        for c in chars:
+            age_str = f", {c.age}" if c.age else ""
+            lines.append(
+                f"  {ANSI_BOLD}{c.full_name}{ANSI_RESET}"
+                f"{ANSI_DIM}{age_str}{ANSI_RESET}"
+                f" — {_color(28)}⏺{ANSI_RESET} {c.occupation}"
+                f"  {_color(240)}📍{c.home_settlement}{ANSI_RESET}"
+            )
+            trait_str = ", ".join(c.personality_traits)
+            lines.append(f"    {ANSI_ITALIC}{trait_str}{ANSI_RESET}")
+            lines.append(f"    {ANSI_DIM}{c.backstory}{ANSI_RESET}")
+
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def render_events(world: World) -> str:
+    """Render the event chains of a world as a timeline."""
+    if not world.narrative or not world.narrative.events:
+        return f"{ANSI_DIM}(no events recorded){ANSI_RESET}"
+
+    lines = []
+    narr = world.narrative
+
+    lines.append(f"{ANSI_BOLD}═══ Timeline of wyrd #{world.seed} ═══{ANSI_RESET}\n")
+
+    # Sort events chronologically
+    sorted_events = sorted(narr.events, key=lambda e: e.year)
+
+    event_colors = {
+        "conflict": _color(196),
+        "discovery": _color(33),
+        "natural": _color(130),
+        "political": _color(99),
+        "cultural": _color(213),
+    }
+    event_icons = {
+        "conflict": "⚔",
+        "discovery": "✦",
+        "natural": "🌋",
+        "political": "⚝",
+        "cultural": "♫",
+    }
+
+    for e in sorted_events:
+        color = event_colors.get(e.event_type, _color(255))
+        icon = event_icons.get(e.event_type, "·")
+        year_str = f"{e.year} AE" if e.year else "Unknown year"
+
+        lines.append(
+            f"  {ANSI_DIM}{year_str}{ANSI_RESET} "
+            f"{color}{icon}{ANSI_RESET} "
+            f"{ANSI_BOLD}{e.name}{ANSI_RESET}"
+        )
+        lines.append(f"    {e.description}")
+        if e.characters_involved:
+            chars_str = ", ".join(e.characters_involved)
+            lines.append(f"    {ANSI_DIM}Involved: {chars_str}{ANSI_RESET}")
+        if e.consequences:
+            for con in e.consequences:
+                lines.append(f"    {ANSI_DIM}→ {con}{ANSI_RESET}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def render_quests(world: World) -> str:
+    """Render the quests available in a world."""
+    if not world.narrative or not world.narrative.quests:
+        return f"{ANSI_DIM}(no quests available){ANSI_RESET}"
+
+    lines = []
+    narr = world.narrative
+
+    lines.append(f"{ANSI_BOLD}═══ Quests of wyrd #{world.seed} ═══{ANSI_RESET}\n")
+
+    difficulty_colors = {
+        "trivial": _color(28),
+        "easy": _color(33),
+        "moderate": _color(130),
+        "hard": _color(196),
+        "epic": _color(199),
+    }
+    quest_icons = {
+        "exploration": "🗺",
+        "combat": "⚔",
+        "diplomacy": "🤝",
+        "gathering": "🎒",
+        "intrigue": "🔍",
+    }
+
+    for q in narr.quests:
+        dcolor = difficulty_colors.get(q.difficulty, _color(255))
+        icon = quest_icons.get(q.quest_type, "·")
+        status_str = f"{ANSI_BOLD}ACTIVE{ANSI_RESET}" if q.is_active else f"{ANSI_DIM}COMPLETED{ANSI_RESET}"
+
+        lines.append(
+            f"  {icon} {ANSI_BOLD}{q.name}{ANSI_RESET}"
+            f"  {dcolor}[{q.difficulty}]{ANSI_RESET}"
+            f"  {status_str}"
+        )
+        lines.append(f"    {_color(240)}Type:{ANSI_RESET} {q.quest_type}")
+        lines.append(f"    {_color(240)}Location:{ANSI_RESET} {q.target_region}")
+        if q.giver_character:
+            lines.append(f"    {_color(240)}Given by:{ANSI_RESET} {q.giver_character}")
+        lines.append(f"    {q.description}")
+        if q.rewards:
+            reward_str = ", ".join(q.rewards)
+            lines.append(f"    {_color(226)}Reward:{ANSI_RESET} {reward_str}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def render_narrative(world: World) -> str:
+    """Render complete narrative (characters + timeline + quests)."""
+    parts = [
+        render_characters(world),
+        "",
+        render_events(world),
+        "",
+        render_quests(world),
+    ]
+    return "\n".join(parts)
+
+
 def render_lore(world: World) -> str:
     """Render the lore of a world."""
     if not world.lore:

@@ -6,6 +6,7 @@ from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .lore import Lore
+    from .narrative import Narrative
 
 # ── Terrain Types ──────────────────────────────────────────────────
 
@@ -63,6 +64,7 @@ class World:
     rivers: list[tuple[int, int]] = field(default_factory=list)
     regions: list[Region] = field(default_factory=list)
     lore: Optional['Lore'] = None
+    narrative: Optional['Narrative'] = None
 
     @property
     def tiles(self) -> int:

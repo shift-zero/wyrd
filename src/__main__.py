@@ -4,7 +4,7 @@ import argparse
 import os
 import sys
 from .generate import generate_world
-from .render import render_map, render_brief, render_lore
+from .render import render_map, render_brief, render_lore, render_characters, render_events, render_quests, render_narrative
 from .serialize import save_world, load_world
 from .export_html import export_world_html
 
@@ -49,6 +49,8 @@ def main():
                      help="Show one-line summary instead of map")
     gen.add_argument("--lore", action="store_true",
                      help="Show lore (culture, history, features, relationships)")
+    gen.add_argument("--narrative", action="store_true",
+                     help="Show narrative (characters, events, quests)")
     gen.add_argument("--save", type=str, default=None,
                      help="Save world to a JSON file")
 
@@ -92,6 +94,23 @@ def main():
     query_cmd.add_argument("--no-color", action="store_true",
                            help="Disable ANSI color in output")
 
+    # ── characters ─────────────────────────────────────────────────
+    chars_cmd = sub.add_parser("characters", help="List characters in a world")
+    _add_load_arg(chars_cmd)
+
+    # ── events ─────────────────────────────────────────────────────
+    events_cmd = sub.add_parser("events", help="Show event timeline for a world")
+    _add_load_arg(events_cmd)
+
+    # ── quests ─────────────────────────────────────────────────────
+    quests_cmd = sub.add_parser("quests", help="Show quests available in a world")
+    _add_load_arg(quests_cmd)
+
+    # ── narrative ──────────────────────────────────────────────────
+    narr_cmd = sub.add_parser("narrative",
+                               help="Show complete narrative (characters, events, quests)")
+    _add_load_arg(narr_cmd)
+
     args = parser.parse_args()
 
     # ── generate ───────────────────────────────────────────────────
@@ -110,6 +129,13 @@ def main():
             print(render_map(world, show_settlements=not args.no_settlements))
             print()
             print(render_lore(world))
+            if args.narrative:
+                print()
+                print(render_narrative(world))
+        elif args.narrative:
+            print(render_map(world, show_settlements=not args.no_settlements))
+            print()
+            print(render_narrative(world))
         else:
             print(render_map(world, show_settlements=not args.no_settlements))
 
@@ -128,6 +154,26 @@ def main():
             print(render_map(world, show_settlements=not args.no_settlements))
             print()
             print(render_lore(world))
+
+    # ── characters ─────────────────────────────────────────────────
+    elif args.command == "characters":
+        world = _get_world(args)
+        print(render_characters(world))
+
+    # ── events ─────────────────────────────────────────────────────
+    elif args.command == "events":
+        world = _get_world(args)
+        print(render_events(world))
+
+    # ── quests ─────────────────────────────────────────────────────
+    elif args.command == "quests":
+        world = _get_world(args)
+        print(render_quests(world))
+
+    # ── narrative ──────────────────────────────────────────────────
+    elif args.command == "narrative":
+        world = _get_world(args)
+        print(render_narrative(world))
 
     # ── save ───────────────────────────────────────────────────────
     elif args.command == "save":

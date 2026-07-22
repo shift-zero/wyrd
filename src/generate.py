@@ -9,6 +9,7 @@ import random
 import math
 from .world import World, TERRAIN, BIOMES, Region, Settlement
 from .lore import generate_lore, Lore
+from .narrative import generate_narrative, Narrative
 
 # ── Seeded 2D Value Noise ──────────────────────────────────────────
 
@@ -316,5 +317,8 @@ def generate_world(seed: int, width: int = 80, height: int = 40) -> World:
 
     # ── 5. Generate lore ──────────────────────────────────────────
     world.lore = generate_lore(world)
+
+    # ── 6. Generate narrative ─────────────────────────────────────
+    world.narrative = generate_narrative(world)
 
     return world
