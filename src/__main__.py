@@ -7,6 +7,7 @@ from .generate import generate_world
 from .render import render_map, render_brief, render_lore, render_characters, render_events, render_quests, render_narrative
 from .serialize import save_world, load_world
 from .export_html import export_world_html
+from .export_svg import export_world_svg
 
 
 def _get_world(args) -> 'World':
@@ -75,10 +76,13 @@ def main():
                           help="Hide settlement markers")
 
     # ── export ─────────────────────────────────────────────────────
-    export_cmd = sub.add_parser("export", help="Export a world to HTML")
+    export_cmd = sub.add_parser("export", help="Export a world to HTML or SVG")
     _add_load_arg(export_cmd)
     export_cmd.add_argument("--output", "-o", type=str, default=None,
-                            help="Output HTML file path")
+                            help="Output file path")
+    export_cmd.add_argument("--format", "-f", type=str, default="html",
+                            choices=["html", "svg"],
+                            help="Export format (default: html)")
     export_cmd.add_argument("--open", action="store_true",
                             help="Open the HTML file in browser after export")
 
@@ -187,20 +191,29 @@ def main():
     # ── export ─────────────────────────────────────────────────────
     elif args.command == "export":
         world = _get_world(args)
-        output = args.output or f"wyrd-{world.seed}.html"
-        html = export_world_html(world)
-        with open(output, "w") as f:
-            f.write(html)
-        print(f"🌐 wyrd #{world.seed} exported to {output}")
-        if args.open:
-            import subprocess
-            try:
-                subprocess.run(["open", output], check=False)
-            except FileNotFoundError:
+        fmt = args.format
+
+        if fmt == "svg":
+            output = args.output or f"wyrd-{world.seed}.svg"
+            svg = export_world_svg(world)
+            with open(output, "w") as f:
+                f.write(svg)
+            print(f"🗺️  wyrd #{world.seed} exported to {output}")
+        else:
+            output = args.output or f"wyrd-{world.seed}.html"
+            html = export_world_html(world)
+            with open(output, "w") as f:
+                f.write(html)
+            print(f"🌐 wyrd #{world.seed} exported to {output}")
+            if args.open:
+                import subprocess
                 try:
-                    subprocess.run(["xdg-open", output], check=False)
+                    subprocess.run(["open", output], check=False)
                 except FileNotFoundError:
-                    print(f"  Open {output} in your browser manually.")
+                    try:
+                        subprocess.run(["xdg-open", output], check=False)
+                    except FileNotFoundError:
+                        print(f"  Open {output} in your browser manually.")
 
     # ── explore ────────────────────────────────────────────────────
     elif args.command == "explore":
