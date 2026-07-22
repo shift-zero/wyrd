@@ -53,7 +53,7 @@ python3 -m src generate --seed 42
 - [x] Conflicts and relationships between settlements
 - [x] `wyrd generate --lore` and `wyrd describe --seed N` commands
 
-**Phase 3 — Explorer Mode** 🚧
+**Phase 3 — Explorer Mode** ✅
 - [x] World serialization (save/load as JSON)
 - [x] HTML export (shareable world pages)
 - [x] Pager-based explore mode

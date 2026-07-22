@@ -8,6 +8,14 @@ version = "0.1.0"
 description = "Generative fantasy sandbox — build worlds in the terminal"
 requires-python = ">=3.11"
 dependencies = []
+license = {text = "MIT"}
+readme = "README.md"
+keywords = ["fantasy", "procedural-generation", "cli", "worldbuilding"]
+
+[project.urls]
+Homepage = "https://github.com/shift-zero/wyrd"
+Repository = "https://github.com/shift-zero/wyrd"
+"Bug Tracker" = "https://github.com/shift-zero/wyrd/issues"
 
 [project.scripts]
 wyrd = "src.__main__:main"

@@ -227,7 +227,6 @@ def export_world_html(world: World) -> str:
     lore_html = lore_clean.replace("\n", "<br>")
 
     # ── Brief ───────────────────────────────────────────────────────
-    from .render import render_brief
     brief = render_brief(world)
 
     # ── Font size based on world dimensions ─────────────────────────
