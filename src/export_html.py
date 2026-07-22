@@ -112,6 +112,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <body>
 <h1>wyrd — Seed {seed}</h1>
 <div class="subtitle">{brief}</div>
+{snapshot_banner_html}
 
 <div class="map">{map_html}</div>
 
@@ -154,7 +155,7 @@ def _settlement_color(char: str) -> str:
     return "#ffd700"
 
 
-def export_world_html(world: World) -> str:
+def export_world_html(world: World, snapshot_year: int | None = None) -> str:
     """Export a world as a self-contained HTML page."""
     # ── Build map rows ──────────────────────────────────────────────
     map_rows = []
@@ -232,6 +233,19 @@ def export_world_html(world: World) -> str:
     # ── Font size based on world dimensions ─────────────────────────
     font_size = max(6, min(14, int(600 / max(world.width, 1))))
 
+    # ── Snapshot banner ─────────────────────────────────────────────
+    snapshot_banner_html = ""
+    if snapshot_year is not None:
+        total_pop = sum(s.population for r in world.regions for s in r.settlements)
+        num_settlements = sum(len(r.settlements) for r in world.regions)
+        snapshot_banner_html = (
+            f'<div style="background:#2a1a3e;padding:0.75rem 1rem;'
+            f'border-radius:8px;margin-bottom:1rem;font-size:0.85rem;">'
+            f'📜 <strong>Simulation Snapshot — Year {snapshot_year}</strong> &nbsp;|&nbsp; '
+            f'{total_pop:,} souls across {num_settlements} settlements'
+            f'</div>'
+        )
+
     # ── Date ────────────────────────────────────────────────────────
     from datetime import date
     today = date.today().isoformat()
@@ -239,6 +253,7 @@ def export_world_html(world: World) -> str:
     return HTML_TEMPLATE.format(
         seed=world.seed,
         brief=brief,
+        snapshot_banner_html=snapshot_banner_html,
         map_html=map_html,
         legend_html=legend_html,
         regions_html=regions_html,

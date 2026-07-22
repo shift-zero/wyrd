@@ -7,6 +7,7 @@ the canonical representation; JSON serves as cache / interchange format.
 
 import json
 import os
+import gzip
 from typing import Optional
 from .world import World, Region, Settlement, TERRAIN, BIOMES
 from .lore import Lore
@@ -307,8 +308,8 @@ def sim_state_to_dict(state: 'SimState') -> dict:
     }
 
 
-def save_sim_state(result, path: str) -> str:
-    """Save a SimResult (or SimState) to JSON."""
+def save_sim_state(result, path: str, compact: bool = False) -> str:
+    """Save a SimResult (or SimState) to JSON. Use compact=True for gzip compression."""
     from .sim import SimResult
     if isinstance(result, SimResult):
         # Save the snapshots dict for per-year loading
@@ -340,15 +341,23 @@ def save_sim_state(result, path: str) -> str:
         data = sim_state_to_dict(result)
     
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    json_str = json.dumps(data, indent=2 if not compact else None, ensure_ascii=False)
+    if path.endswith('.gz') or compact:
+        with gzip.open(path if path.endswith('.gz') else path + ".gz", "wt", encoding="utf-8") as f:
+            f.write(json_str)
+        return path if path.endswith('.gz') else path + ".gz"
     with open(path, "w") as f:
-        json.dump(data, f, indent=2)
+        f.write(json_str)
     return path
 
 
 def load_sim_state(path: str) -> Optional[dict]:
-    """Load simulation state/metadata from JSON."""
+    """Load simulation state/metadata from JSON (supports gzip)."""
     try:
+        if path.endswith('.gz'):
+            with gzip.open(path, "rt", encoding="utf-8") as f:
+                return json.load(f)
         with open(path) as f:
             return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
         return None

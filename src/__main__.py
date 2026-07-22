@@ -8,6 +8,7 @@ from .render import render_map, render_brief, render_lore, render_characters, re
 from .serialize import save_world, load_world
 from .export_html import export_world_html
 from .export_svg import export_world_svg
+from .export_ttrpg import export_world_ttrpg
 
 
 def _get_world(args) -> 'World':
@@ -30,6 +31,9 @@ def _apply_snapshot_if_needed(world: 'World', args) -> 'World':
 
     sim_file = f"wyrd-{world.seed}-sim.json"
     sim_data = load_sim_state(sim_file)
+    if sim_data is None:
+        # Try gzip-compressed variant
+        sim_data = load_sim_state(sim_file + ".gz")
     if sim_data is None:
         print(f"⚠ No simulation data found for wyrd #{world.seed} (expected {sim_file})")
         return world
@@ -117,7 +121,7 @@ def main():
     export_cmd.add_argument("--output", "-o", type=str, default=None,
                             help="Output file path")
     export_cmd.add_argument("--format", "-f", type=str, default="html",
-                            choices=["html", "svg"],
+                            choices=["html", "svg", "ttrpg"],
                             help="Export format (default: html)")
     export_cmd.add_argument("--open", action="store_true",
                             help="Open the HTML file in browser after export")
@@ -171,6 +175,8 @@ def main():
                          help="Show only summary, not detailed year log")
     run_cmd.add_argument("--snapshot-year", type=int, default=None,
                          help="Load world state at a specific year (from saved sim)")
+    run_cmd.add_argument("--compact", action="store_true",
+                         help="Save sim state as gzip-compressed JSON (smaller files)")
 
     # ── chronicles ─────────────────────────────────────────────────
     chron_cmd = sub.add_parser("chronicles",
@@ -281,7 +287,7 @@ def main():
             )
 
             # Save simulation state
-            save_sim_state(result, sim_file)
+            save_sim_state(result, sim_file, compact=args.compact)
 
             if args.summary:
                 print(render_sim_summary(result))
@@ -325,15 +331,42 @@ def main():
         world = _apply_snapshot_if_needed(world, args)
         fmt = args.format
 
+        # Collect sim events if snapshot year was specified
+        sim_events = None
+        if getattr(args, 'snapshot_year', None) is not None:
+            try:
+                from .serialize import load_sim_state
+                from .sim import SimEvent
+                sim_file = f"wyrd-{world.seed}-sim.json"
+                sim_data = load_sim_state(sim_file)
+                if sim_data and "events" in sim_data:
+                    sim_events = [
+                        SimEvent(year=e["year"], event_type=e["event_type"],
+                                 description=e["description"],
+                                 affected_settlements=e.get("affected_settlements", []),
+                                 affected_regions=e.get("affected_regions", []))
+                        for e in sim_data["events"]
+                    ]
+            except Exception:
+                pass
+
         if fmt == "svg":
             output = args.output or f"wyrd-{world.seed}.svg"
             svg = export_world_svg(world)
             with open(output, "w") as f:
                 f.write(svg)
             print(f"🗺️  wyrd #{world.seed} exported to {output}")
+        elif fmt == "ttrpg":
+            output = args.output or f"wyrd-{world.seed}.ttrpg.json"
+            snapshot_year = getattr(args, 'snapshot_year', None)
+            json_str = export_world_ttrpg(world, snapshot_year=snapshot_year, sim_events=sim_events)
+            with open(output, "w") as f:
+                f.write(json_str)
+            print(f"📜 wyrd #{world.seed} TTRPG campaign exported to {output}")
         else:
             output = args.output or f"wyrd-{world.seed}.html"
-            html = export_world_html(world)
+            snapshot_year = getattr(args, 'snapshot_year', None)
+            html = export_world_html(world, snapshot_year=snapshot_year)
             with open(output, "w") as f:
                 f.write(html)
             print(f"🌐 wyrd #{world.seed} exported to {output}")
