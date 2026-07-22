@@ -21,6 +21,7 @@ wyrd/
 │   ├── narrative.py  # Character, event, and quest generation
 │   ├── chronicles.py # Era-based world history (Phase 5)
 │   ├── sim.py        # Year-by-year world simulation (Phase 6)
+│   ├── magic.py      # Magic system generation (Phase 8)
 │   ├── serialize.py  # JSON save/load
 │   ├── explore.py    # Interactive terminal explorer
 │   ├── query.py      # Natural-language query engine
@@ -36,6 +37,9 @@ wyrd/
 │   ├── test_phase3.py
 │   ├── test_explore.py
 │   ├── test_query.py
+│   ├── test_export_ttrpg.py
+│   ├── test_magic.py
+│   ├── test_worlds.py
 │   └── conftest.py
 └── output/        # Generated worlds (gitignored)
 ```
@@ -136,5 +140,5 @@ Bring wyrd out of the terminal and onto the web. Interactive map viewers, persis
 | 1 | Web overview dashboard: serve world stats, map HTML, sim state in browser | `wyrd serve --seed 42` starts a web server; browser shows interactive world |
 | 2 ✅ | Sim-state-aware HTML map | `wyrd export --seed 42 --year 150` produces HTML showing evolved map with new settlements, ruins (⁂), population timeline, and event counts |
 | 3 | Conversational world agent | `wyrd ask "What's the most powerful city?"` uses LLM to answer from world data |
-| 4 | Multi-world management | `wyrd worlds` lists all generated worlds; `wyrd load <name>` selects by metadata |
-| 5 | Magic system generation | Procedurally generate magic systems, schools of magic, and magical traditions tied to world biomes and cultures |
+| 4 ✅ | Multi-world management | `wyrd worlds` lists all generated worlds; `wyrd worlds --json` outputs structured metadata |
+| 5 ✅ | Magic system generation | `wyrd magic --seed 42` renders color-coded schools and traditions tied to world biomes and cultures |
