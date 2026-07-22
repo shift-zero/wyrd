@@ -11,6 +11,7 @@ from typing import Optional
 from .world import World, Region, Settlement, TERRAIN, BIOMES
 from .lore import Lore
 from .narrative import Narrative, Character, EventChain, Quest
+from .chronicles import Chronicles, Era
 
 
 class WyrdEncoder(json.JSONEncoder):
@@ -116,6 +117,27 @@ def world_to_dict(world: World) -> dict:
             ],
         }
 
+    # Chronicles
+    if world.chronicles:
+        chron = world.chronicles
+        data["chronicles"] = {
+            "seed": chron.seed,
+            "world_age": chron.world_age,
+            "eras": [
+                {
+                    "name": era.name,
+                    "era_type": era.era_type,
+                    "start_year": era.start_year,
+                    "end_year": era.end_year,
+                    "description": era.description,
+                    "events": era.events,
+                    "world_modifiers": era.world_modifiers,
+                    "is_present": era.is_present,
+                }
+                for era in chron.eras
+            ],
+        }
+
     return data
 
 
@@ -206,6 +228,26 @@ def dict_to_world(data: dict) -> World:
             for qd in narrative_data.get("quests", [])
         ]
         world.narrative = narr
+
+    # Deserialize chronicles
+    chronicles_data = data.get("chronicles")
+    if chronicles_data:
+        chronicles = Chronicles(seed=chronicles_data["seed"])
+        chronicles.world_age = chronicles_data.get("world_age", 1000)
+        chronicles.eras = []
+        for ed in chronicles_data.get("eras", []):
+            era = Era(
+                name=ed["name"],
+                era_type=ed.get("era_type", "age_of"),
+                start_year=ed.get("start_year", 0),
+                end_year=ed.get("end_year", 100),
+                description=ed.get("description", ""),
+                events=ed.get("events", []),
+                world_modifiers=ed.get("world_modifiers", []),
+                is_present=ed.get("is_present", False),
+            )
+            chronicles.eras.append(era)
+        world.chronicles = chronicles
 
     return world
 
