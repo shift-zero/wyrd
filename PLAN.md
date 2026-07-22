@@ -95,7 +95,7 @@ Year-by-year simulation in the Dwarf Fortress tradition. The world is no longer 
 | 4 ✅ | Pause-and-inspect: stop the sim at any year and use explore/query | `--snapshot-year` flag on explore/query/export/save; sim state serialization (JSON save/load) with intermediate snapshots |
 | 5 ✅ | Seed-deterministic with optional branching | Same seed + same params → same outcome; `--seed-offset` enables branching |
 | 6 ✅ | Export any snapshot as TTRPG-ready campaign doc | `wyrd export --seed 42 --year 127 --format ttrpg` produces Foundry/WorldAnvil-ready JSON
-| 7 🇵 | Polish: compact sim output, snapshot-aware HTML map | `wyrd run --seed 42 --years 500 --compact` saves gzip sim; HTML shows snapshot state
+| 7 ✅ | Polish: compact sim output, snapshot-aware HTML map | `wyrd run --seed 42 --years 500 --compact` saves gzip sim; HTML shows snapshot state
 
 ### Design Principles
 
@@ -114,14 +114,14 @@ Year-by-year simulation in the Dwarf Fortress tradition. The world is no longer 
 | 4 ✅ | Export to HTML and SVG | `wyrd export --seed 42` produces HTML; `wyrd export --seed 42 --format svg` produces SVG |
 | 5 ✅ | Narrative engine with character generation | Characters with backstories grounded in the world |
 | 6 ✅ | Chronicles engine — era-based world history | `wyrd chronicles --seed 42` shows a causally linked timeline |
-| 7 ✅ | Simulation engine — year-by-year world evolution (6/6 complete, Phase 7 planned) | `wyrd run --seed 42 --years 500` evolves settlements, generates events, founding/abandonment/war |
+| 7 ✅ | Simulation engine — year-by-year world evolution (6/6 + Polish complete) | `wyrd run --seed 42 --years 500` evolves settlements, generates events, founding/abandonment/war |
 
-## Phase 7 — The Living World (planned)
+## Phase 7 — The Living World (in progress)
 Interactive simulation viewing and character-driven world evolution. The world doesn't just tick silently — you watch it grow, and the stories write themselves.
 
 | # | What | Verifiable |
 |---|------|------------|
-| 1 | Interactive curses sim viewer: watch the map evolve year by year | `wyrd view --seed 42 --years 300` shows real-time map evolution with pause/speed controls |
+| 1 ✅ | Interactive curses sim viewer: watch the map evolve year by year | `wyrd view --seed 42 --years 300` shows real-time map evolution with pause/speed controls |
 | 2 | Named character integration in sim events | Sim events reference actual Narrative characters as leaders, generals, heroes |
 | 3 | Character-driven founding events | New settlements are founded by named characters; migration events tied to character backstories |
 | 4 | Era transitions in simulation | Simulation can trigger chronicle-era transitions mid-sim; world modifiers change dynamically |
