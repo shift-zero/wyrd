@@ -26,6 +26,7 @@ wyrd/
 │   ├── explore.py    # Interactive terminal explorer
 │   ├── query.py      # Natural-language query engine
 │   ├── export_html.py# HTML export
+│   ├── serve.py      # Web dashboard server (Phase 8)
 │   ├── export_chronicles_html.py  # Chronicles HTML export
 │   └── __main__.py   # CLI entry point
 ├── tests/         # Test suite
@@ -39,6 +40,7 @@ wyrd/
 │   ├── test_query.py
 │   ├── test_export_ttrpg.py
 │   ├── test_magic.py
+│   ├── test_serve.py
 │   ├── test_worlds.py
 │   └── conftest.py
 └── output/        # Generated worlds (gitignored)
@@ -74,7 +76,7 @@ wyrd/
 | 1 ✅ | Character generation grounded in world cultures | `wyrd characters --seed 42` lists named characters with occupations, traits, backstories |
 | 2 ✅ | Event chains that unfold over time | `wyrd events --seed 42` shows chronological timeline with types and consequences |
 | 3 ✅ | Generated quests grounded in geography and politics | `wyrd quests --seed 42` shows active quests with givers, locations, rewards |
-| 4 ✅ | All narrative seed-deterministic (same world → same narrative) | Same seed produces identical characters, events, and quests |
+| 4 ✅ | All narrative seed-deterministic (same seed → same narrative) | Same seed produces identical characters, events, and quests |
 | 5 ✅ | Narrative serialization round-trip | Save/load preserves all narrative data; old saves without narrative still work |
 
 **Phase 5 — Chronicles** (done)
@@ -88,7 +90,7 @@ Generative world history. Not a static dump — a causally linked timeline of er
 | 4 ✅ | Seed-deterministic: same seed + same era range → same history | Always identical across runs |
 | 5 ✅ | History serialization + export to timeline HTML | `wyrd chronicles --seed 42 --format html` produces a readable chronicle page |
 
-## Phase 6 — The Turning of the World (in progress)
+**Phase 6 — The Turning of the World** (done)
 Year-by-year simulation in the Dwarf Fortress tradition. The world is no longer a static artifact — it *lives* and *changes*.
 
 | # | What | Verifiable |
@@ -128,7 +130,7 @@ Interactive simulation viewing and character-driven world evolution. The world d
 | 1 ✅ | Interactive curses sim viewer: watch the map evolve year by year | `wyrd view --seed 42 --years 300` shows real-time map evolution with pause/speed controls |
 | 2 ✅ | Named character integration in sim events | Sim events reference actual Narrative characters as leaders, generals, heroes when available; character selection is seed-deterministic and prefers occupation-relevant NPCs |
 | 3 ✅ | Character-driven founding events | New settlements are founded by named characters with backstory context; migration events tied to character backstories |
-| 4 ✅ | Era transitions in simulation | Simulation triggers era transitions every 50 years based on world conditions (population, abandonment, expansion); dynamic world modifiers | |
+| 4 ✅ | Era transitions in simulation | Simulation triggers era transitions every 50 years based on world conditions (population, abandonment, expansion); dynamic world modifiers |
 | 5 ✅ | Sim event consequences on narrative | NPCs die in plagues/wars and are reflected in narrative; quests from dead characters become inactive; new quests emerge from sim events |
 | 6 ✅ | Branching timeline visualization | `wyrd branch --seed 42 --years 300` shows alternative sim paths side-by-side with event/era comparisons |
 
@@ -137,7 +139,7 @@ Bring wyrd out of the terminal and onto the web. Interactive map viewers, persis
 
 | # | What | Verifiable |
 |---|------|------------|
-| 1 | Web overview dashboard: serve world stats, map HTML, sim state in browser | `wyrd serve --seed 42` starts a web server; browser shows interactive world |
+| 1 ✅ | Web overview dashboard: serve world stats, map HTML, sim state in browser | `wyrd serve --seed 42` starts a web server; browser shows interactive world dashboard with stats, map, regions, and JSON API |
 | 2 ✅ | Sim-state-aware HTML map | `wyrd export --seed 42 --year 150` produces HTML showing evolved map with new settlements, ruins (⁂), population timeline, and event counts |
 | 3 | Conversational world agent | `wyrd ask "What's the most powerful city?"` uses LLM to answer from world data |
 | 4 ✅ | Multi-world management | `wyrd worlds` lists all generated worlds; `wyrd worlds --json` outputs structured metadata |
