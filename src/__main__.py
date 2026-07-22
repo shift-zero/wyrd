@@ -4,7 +4,7 @@ import argparse
 import os
 import sys
 from .generate import generate_world
-from .render import render_map, render_brief, render_lore, render_characters, render_events, render_quests, render_narrative
+from .render import render_map, render_brief, render_lore, render_characters, render_events, render_quests, render_narrative, render_chronicles
 from .serialize import save_world, load_world
 from .export_html import export_world_html
 from .export_svg import export_world_svg
@@ -115,6 +115,11 @@ def main():
                                help="Show complete narrative (characters, events, quests)")
     _add_load_arg(narr_cmd)
 
+    # ── chronicles ─────────────────────────────────────────────────
+    chron_cmd = sub.add_parser("chronicles",
+                                help="Show era-based world history (chronicles)")
+    _add_load_arg(chron_cmd)
+
     args = parser.parse_args()
 
     # ── generate ───────────────────────────────────────────────────
@@ -178,6 +183,14 @@ def main():
     elif args.command == "narrative":
         world = _get_world(args)
         print(render_narrative(world))
+
+    # ── chronicles ─────────────────────────────────────────────────
+    elif args.command == "chronicles":
+        world = _get_world(args)
+        if not world.chronicles:
+            from .chronicles import generate_chronicles
+            world.chronicles = generate_chronicles(world, world.narrative)
+        print(render_chronicles(world))
 
     # ── save ───────────────────────────────────────────────────────
     elif args.command == "save":
