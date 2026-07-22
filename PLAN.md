@@ -46,7 +46,7 @@ wyrd/
 | 2 ✅ | Export to HTML | `wyrd export --seed 42` produces a self-contained HTML page |
 | 3 ✅ | Pager-based explore | `wyrd explore --seed 42` shows map+lore in a pager |
 | 4 ✅ | Interactive terminal UI (scroll, zoom, inspect) | Navigate a generated world in the terminal |
-| 5 | Query the world: "tell me about the northlands" | Natural-language queries about the world |
+| 5 ✅ | Query the world: "tell me about the northlands" | `wyrd query --seed 42 "tell me about Blackland"` returns region lore, culture, history, settlements |
 
 **Phase 4 — Narrative**
 - Characters generated from the world's cultures

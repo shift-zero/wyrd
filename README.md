@@ -32,6 +32,7 @@ python3 -m src generate --seed 42
 | `wyrd load file.json` | Load and display a saved world |
 | `wyrd export --seed N` | Export world to self-contained HTML |
 | `wyrd explore --seed N` | Full map + lore in a pager |
+| `wyrd query --seed N "tell me about..."` | Query worlds in natural language |
 
 ## Project Status
 
@@ -57,7 +58,7 @@ python3 -m src generate --seed 42
 - [x] HTML export (shareable world pages)
 - [x] Pager-based explore mode
 - [x] Interactive terminal UI (scroll, zoom, inspect)
-- [ ] Natural-language world queries
+- [x] Natural-language world queries
 
 ## Design
 
