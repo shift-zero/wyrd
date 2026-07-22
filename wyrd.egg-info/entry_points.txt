@@ -1,2 +1,0 @@
-[console_scripts]
-wyrd = src.__main__:main
