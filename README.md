@@ -17,8 +17,21 @@ wyrd generate --seed 42
 
 Or run without installing:
 ```bash
-python3 -m src.__main__ generate --seed 42
+python3 -m src generate --seed 42
 ```
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `wyrd generate --seed N` | Generate and display a world |
+| `wyrd generate --seed N --lore` | Generate with full lore |
+| `wyrd generate --seed N --brief` | One-line summary |
+| `wyrd describe --seed N` | Show lore only |
+| `wyrd save --seed N` | Save world to JSON |
+| `wyrd load file.json` | Load and display a saved world |
+| `wyrd export --seed N` | Export world to self-contained HTML |
+| `wyrd explore --seed N` | Full map + lore in a pager |
 
 ## Project Status
 
@@ -38,6 +51,13 @@ python3 -m src.__main__ generate --seed 42
 - [x] History snippets per region
 - [x] Conflicts and relationships between settlements
 - [x] `wyrd generate --lore` and `wyrd describe --seed N` commands
+
+**Phase 3 — Explorer Mode** 🚧
+- [x] World serialization (save/load as JSON)
+- [x] HTML export (shareable world pages)
+- [x] Pager-based explore mode
+- [ ] Interactive terminal UI (scroll, zoom, inspect)
+- [ ] Natural-language world queries
 
 ## Design
 
