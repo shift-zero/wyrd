@@ -393,6 +393,8 @@ def main():
 
         # Collect sim events if snapshot year was specified
         sim_events = None
+        abandoned_settlements = None
+        population_record = None
         if getattr(args, 'snapshot_year', None) is not None:
             try:
                 from .serialize import load_sim_state
@@ -407,6 +409,24 @@ def main():
                                  affected_regions=e.get("affected_regions", []))
                         for e in sim_data["events"]
                     ]
+
+                # Extract abandoned settlements from the snapshot for HTML ruin rendering
+                snap_key = str(args.snapshot_year)
+                if sim_data and "snapshots" in sim_data and snap_key in sim_data["snapshots"]:
+                    snap = sim_data["snapshots"][snap_key]
+                    abandoned = []
+                    for name, sd in snap.get("settlements", {}).items():
+                        if not sd.get("is_active", True):
+                            abandoned.append({
+                                "name": name,
+                                "x": sd.get("x", 0),
+                                "y": sd.get("y", 0),
+                            })
+                    abandoned_settlements = abandoned
+
+                # Extract population record
+                if sim_data and "population_record" in sim_data:
+                    population_record = sim_data["population_record"]
             except Exception:
                 pass
 
@@ -426,7 +446,16 @@ def main():
         else:
             output = args.output or f"wyrd-{world.seed}.html"
             snapshot_year = getattr(args, 'snapshot_year', None)
-            html = export_world_html(world, snapshot_year=snapshot_year)
+            pop_record = None
+            if population_record:
+                pop_record = population_record
+            html = export_world_html(
+                world,
+                snapshot_year=snapshot_year,
+                abandoned_settlements=abandoned_settlements,
+                population_record=pop_record,
+                sim_events_count=len(sim_events) if sim_events else 0,
+            )
             with open(output, "w") as f:
                 f.write(html)
             print(f"🌐 wyrd #{world.seed} exported to {output}")
