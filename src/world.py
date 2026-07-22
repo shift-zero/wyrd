@@ -138,6 +138,35 @@ class Region:
     settlements: list[Settlement] = field(default_factory=list)
 
 @dataclass
+class Landmark:
+    """A named geographical feature created by a catastrophic event."""
+    name: str
+    landmark_type: str  # crater, chasm, ash_waste, magma_field, drowned_coast, etc.
+    x: int
+    y: int
+    region: str | None
+    description: str
+    cataclysm_year: int
+    cataclysm_type: str
+
+    @property
+    def char(self) -> str:
+        return {
+            "crater": "⊙", "chasm": "≋", "ash_waste": "▒",
+            "magma_field": "◉", "drowned_coast": "≈", "sinkhole": "◎",
+            "petrified_forest": "♧", "rift": "╳", "scar": "┅",
+        }.get(self.landmark_type, "◆")
+
+    @property
+    def color(self) -> int:
+        return {
+            "crater": 130, "chasm": 240, "ash_waste": 243,
+            "magma_field": 202, "drowned_coast": 33, "sinkhole": 94,
+            "petrified_forest": 240, "rift": 196, "scar": 250,
+        }.get(self.landmark_type, 250)
+
+
+@dataclass
 class World:
     """A complete generated world."""
     seed: int
@@ -157,6 +186,7 @@ class World:
     chronicles: Optional['Chronicles'] = None
     magic: Optional['MagicSystem'] = None
     pantheon: Optional['PantheonSystem'] = None
+    landmarks: list['Landmark'] = field(default_factory=list)
 
     @property
     def tiles(self) -> int:
