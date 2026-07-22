@@ -112,34 +112,36 @@ def _generate_rivers(world: 'World', noise: Noise, rng: random.Random) -> list[t
     elevation = world.elevation
     visited = set()
 
-    # Find starting points: cells in mountains/hills that border higher terrain
+    # Find starting points: cells in hills or mountains
     candidates = []
     for y in range(1, height - 1):
         for x in range(1, width - 1):
             e = elevation[y][x]
-            if 0.65 < e < 0.9:  # hills to high mountains, not snowy peaks
-                # Check if it's a local high point
-                local_max = True
-                for dy in (-1, 0, 1):
-                    for dx in (-1, 0, 1):
-                        if dx == 0 and dy == 0:
-                            continue
-                        if elevation[y + dy][x + dx] > e + 0.01:
-                            local_max = False
-                            break
-                    if not local_max:
-                        break
-                if local_max:
+            if 0.55 < e < 0.9:  # hills to high mountains, not snowy peaks
+                # Check if it's a local high point (at least 2 of 4 cardinal neighbors lower)
+                lower_count = 0
+                for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                    if elevation[y + dy][x + dx] < e - 0.005:
+                        lower_count += 1
+                if lower_count >= 2:
                     candidates.append((e, x, y))
 
     # Sort by elevation (highest first), take top candidates
     candidates.sort(reverse=True)
-    max_rivers = max(2, width * height // 800)
+    max_rivers = max(3, width * height // 300)
     started = 0
+
+    # Skip candidates that are too close to existing river starts
+    min_start_dist = 5
+    used_starts: list[tuple[int, int]] = []
 
     for _, sx, sy in candidates:
         if started >= max_rivers:
             break
+
+        # Skip if too close to another river start
+        if any(abs(sx - ux) + abs(sy - uy) < min_start_dist for ux, uy in used_starts):
+            continue
 
         # Trace the river downhill
         cx, cy = sx, sy
@@ -152,7 +154,7 @@ def _generate_rivers(world: 'World', noise: Noise, rng: random.Random) -> list[t
             best_e = elevation[cy][cx]
             best_x, best_y = cx, cy
 
-            # Check all 8 neighbors
+            # Check all 8 neighbors — prefer steepest descent
             for dy in (-1, 0, 1):
                 for dx in (-1, 0, 1):
                     if dx == 0 and dy == 0:
@@ -171,17 +173,21 @@ def _generate_rivers(world: 'World', noise: Noise, rng: random.Random) -> list[t
             else:
                 cx, cy = best_x, best_y
                 path.append((cx, cy))
-                # Stop when we reach water
-                if elevation[cy][cx] < 0.38:
+                # Stop when we reach deep water (ocean)
+                if elevation[cy][cx] < 0.30:
+                    break
+                # If we hit an existing river cell, merge and stop
+                if (cx, cy) in visited and len(path) >= 3:
                     break
 
         # Check if river is long enough and doesn't overlap too much
-        if len(path) >= 5:
+        if len(path) >= 4:
             overlap = sum(1 for p in path if p in visited)
-            if overlap < len(path) // 2:
+            if overlap < len(path) * 0.6:  # allow up to 60% overlap
                 for p in path:
                     visited.add(p)
                     rivers.append(p)
+                used_starts.append((sx, sy))
                 started += 1
 
     return rivers
@@ -257,6 +263,10 @@ def generate_world(seed: int, width: int = 80, height: int = 40) -> World:
         world.terrain.append(row)
 
     # ── 4. Place settlements ───────────────────────────────────────
+    # Shuffle the name pool once per world so we can pop unique names
+    name_pool = list(SETTLEMENT_NAMES)
+    rng.shuffle(name_pool)  # deterministic because rng is seeded with world seed
+
     world.regions = []
     num_regions = rng.randint(3, 6)
 
@@ -289,7 +299,12 @@ def generate_world(seed: int, width: int = 80, height: int = 40) -> World:
                 sy = reg_rng.randint(2, height - 3)
                 tries += 1
 
-            name = reg_rng.choice(SETTLEMENT_NAMES)
+            # Pop a unique name from the shuffled pool
+            if not name_pool:
+                name_pool = list(SETTLEMENT_NAMES)
+                rng.shuffle(name_pool)
+            name = name_pool.pop()
+
             pop = reg_rng.randint(50, 3000)
             kind = ("hamlet" if pop < 200 else "village" if pop < 800
                     else "town" if pop < 2000 else "city")
