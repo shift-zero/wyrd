@@ -266,3 +266,89 @@ def load_world(path: str) -> World:
     with open(path) as f:
         data = json.load(f)
     return dict_to_world(data)
+
+
+# ── Simulation Serialization ──────────────────────────────────────────
+
+
+def sim_state_to_dict(state: 'SimState') -> dict:
+    """Serialize a SimState to a JSON-compatible dict."""
+    from .sim import SimState, SettlementSnapshot, SimEvent
+    return {
+        "year": state.year,
+        "settlements": {
+            name: {
+                "name": s.name,
+                "region": s.region,
+                "x": s.x,
+                "y": s.y,
+                "population": s.population,
+                "kind": s.kind,
+                "is_active": s.is_active,
+                "founded_year": s.founded_year,
+                "prosperity": s.prosperity,
+                "food_stores": s.food_stores,
+                "health": s.health,
+            }
+            for name, s in state.settlements.items()
+        },
+        "events": [
+            {
+                "year": e.year,
+                "event_type": e.event_type,
+                "description": e.description,
+                "affected_settlements": e.affected_settlements,
+                "affected_regions": e.affected_regions,
+            }
+            for e in state.events
+        ],
+        "world_modifiers": state.world_modifiers,
+        "population_record": state.population_record,
+    }
+
+
+def save_sim_state(result, path: str) -> str:
+    """Save a SimResult (or SimState) to JSON."""
+    from .sim import SimResult
+    if isinstance(result, SimResult):
+        # Save the snapshots dict for per-year loading
+        snapshots_dict = {}
+        for snap in result.snapshots:
+            snapshots_dict[snap.year] = sim_state_to_dict(snap)
+        
+        data = {
+            "wyrd_sim_version": "0.1.0",
+            "seed": result.seed,
+            "num_years": result.num_years,
+            "summary": result.summary,
+            "events": [
+                {
+                    "year": e.year,
+                    "event_type": e.event_type,
+                    "description": e.description,
+                    "affected_settlements": e.affected_settlements,
+                    "affected_regions": e.affected_regions,
+                }
+                for e in result.events
+            ],
+            "initial_state": sim_state_to_dict(result.initial_state),
+            "final_state": sim_state_to_dict(result.final_state),
+            "snapshots": snapshots_dict,
+            "population_record": result.final_state.population_record,
+        }
+    else:
+        data = sim_state_to_dict(result)
+    
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
+    return path
+
+
+def load_sim_state(path: str) -> Optional[dict]:
+    """Load simulation state/metadata from JSON."""
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None

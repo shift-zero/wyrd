@@ -115,6 +115,21 @@ def main():
                                help="Show complete narrative (characters, events, quests)")
     _add_load_arg(narr_cmd)
 
+    # ── run (simulation) ───────────────────────────────────────────
+    run_cmd = sub.add_parser("run",
+                              help="Run year-by-year simulation on a world")
+    _add_load_arg(run_cmd)
+    run_cmd.add_argument("--years", type=int, default=100,
+                         help="Number of years to simulate (default: 100)")
+    run_cmd.add_argument("--chaos", type=float, default=0.1,
+                         help="Chaos factor 0.0-1.0 (default: 0.1)")
+    run_cmd.add_argument("--seed-offset", type=int, default=0,
+                         help="Seed offset for branching (default: 0)")
+    run_cmd.add_argument("--summary", action="store_true",
+                         help="Show only summary, not detailed year log")
+    run_cmd.add_argument("--snapshot-year", type=int, default=None,
+                         help="Load world state at a specific year (from saved sim)")
+
     # ── chronicles ─────────────────────────────────────────────────
     chron_cmd = sub.add_parser("chronicles",
                                 help="Show era-based world history (chronicles)")
@@ -188,6 +203,44 @@ def main():
     elif args.command == "narrative":
         world = _get_world(args)
         print(render_narrative(world))
+
+    # ── run ─────────────────────────────────────────────────────────
+    elif args.command == "run":
+        world = _get_world(args)
+        from .sim import run_simulation, render_sim_summary, render_sim_detailed, SimState
+        from .serialize import load_sim_state, save_sim_state
+        import os
+
+        # Check if we already have a saved sim state at the requested year
+        sim_file = f"wyrd-{world.seed}-sim.json"
+        sim_state = None
+
+        if args.snapshot_year is not None and os.path.exists(sim_file):
+            sim_data = load_sim_state(sim_file)
+            if sim_data and args.snapshot_year in sim_data["snapshots"]:
+                sim_state = sim_data["snapshots"][args.snapshot_year]
+                print(f"📂 Loaded sim state at year {args.snapshot_year}")
+
+        if sim_state is None:
+            result = run_simulation(
+                world,
+                num_years=args.years,
+                seed_offset=args.seed_offset,
+                chaos_factor=args.chaos,
+                snapshot_interval=50,
+            )
+
+            # Save simulation state
+            save_sim_state(result, sim_file)
+
+            if args.summary:
+                print(render_sim_summary(result))
+            else:
+                print(render_sim_detailed(result, world))
+        else:
+            # Render from saved state
+            from .render import render_map
+            print(render_sim_summary_from_state(sim_state, world, world.seed))
 
     # ── chronicles ─────────────────────────────────────────────────
     elif args.command == "chronicles":
