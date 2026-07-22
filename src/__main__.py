@@ -219,6 +219,17 @@ def main():
     factions_cmd.add_argument("--id", type=int, default=None,
                               help="Show detail for a specific faction by index")
 
+    # ── bestiary ────────────────────────────────────────────────────
+    bestiary_cmd = sub.add_parser("bestiary",
+                                   help="List creatures in the world's bestiary")
+    _add_load_arg(bestiary_cmd)
+    bestiary_cmd.add_argument("--id", type=int, default=None,
+                               help="Show detail for a specific creature by index")
+    bestiary_cmd.add_argument("--habitat", type=str, default=None,
+                               help="Filter creatures by habitat (temperate, arid, tundra, tropical)")
+    bestiary_cmd.add_argument("--tier", type=int, default=None,
+                               help="Filter creatures by tier (1-5)")
+
     # ── chronicles ─────────────────────────────────────────────────
     chron_cmd = sub.add_parser("chronicles",
                                 help="Show era-based world history (chronicles)")
@@ -451,6 +462,36 @@ def main():
                 print(f"Faction #{idx} not found. There are {len(world.factions)} factions (0-{len(world.factions)-1}).")
         else:
             print(render_factions(world))
+
+    # ── bestiary ────────────────────────────────────────────────────
+    elif args.command == "bestiary":
+        world = _get_world(args)
+        if not world.bestiary:
+            from .bestiary import generate_bestiary
+            world.bestiary = generate_bestiary(world)
+        if args.id is not None:
+            idx = args.id
+            if 0 <= idx < len(world.bestiary):
+                from .render import render_creature_detail
+                print(render_creature_detail(world.bestiary[idx]))
+            else:
+                print(f"Creature #{idx} not found. There are {len(world.bestiary)} creatures (0-{len(world.bestiary)-1}).")
+        else:
+            from .render import render_bestiary
+            creatures = world.bestiary
+            if args.habitat:
+                creatures = [c for c in creatures if c.habitat == args.habitat]
+            if args.tier:
+                creatures = [c for c in creatures if c.tier == args.tier]
+            # Temporarily replace world.bestiary for filtered rendering
+            if args.habitat or args.tier:
+                from .world import World
+                old = world.bestiary
+                world.bestiary = creatures
+                print(render_bestiary(world))
+                world.bestiary = old
+            else:
+                print(render_bestiary(world))
 
     # ── chronicles ─────────────────────────────────────────────────
     elif args.command == "chronicles":

@@ -284,7 +284,7 @@ def _draw_info_panel(stdscr, world: World, cursor_x: int, cursor_y: int,
     # Controls line (after info lines + 1 padding)
     ctrl_y = info_y + len(lines) + 1
     if ctrl_y < max_y:
-        ctrl = " [↑↓←→/WASD] pan  [+/-] zoom  [i] inspect toggle  [r] regions  [l] lore  [z] zones  [f] factions  [q] quit  [h] help"
+        ctrl = " [↑↓←→/WASD] pan  [+/-] zoom  [i] inspect toggle  [r] regions  [l] lore  [z] zones  [f] factions  [b] bestiary  [q] quit  [h] help"
         try:
             stdscr.addstr(ctrl_y, 0, " " * (max_x - 1), curses.color_pair(16))
             stdscr.addstr(ctrl_y, 0, ctrl[:max_x - 1], curses.color_pair(16))
@@ -309,6 +309,7 @@ def _draw_help(stdscr) -> None:
         "    l         Show lore",
         "    z         Show adventure zones",
         "    f         Show factions",
+        "    b         Show bestiary",
         "",
         "  General",
         "    h / ?     Toggle this help screen",
@@ -676,6 +677,7 @@ def _explore_curses(stdscr, world: World) -> None:
     show_lore = False
     show_zones = False
     show_factions = False
+    show_bestiary = False
     running = True
 
     while running:
@@ -687,7 +689,7 @@ def _explore_curses(stdscr, world: World) -> None:
                      cursor_x, cursor_y)
         _draw_map(stdscr, world, offset_x, offset_y,
                   cursor_x, cursor_y, inspect_mode, zoom_level,
-                  show_cursor=(inspect_mode or show_help or show_regions or show_lore or show_zones or show_factions))
+                  show_cursor=(inspect_mode or show_help or show_regions or show_lore or show_zones or show_factions or show_bestiary))
         _draw_info_panel(stdscr, world, cursor_x, cursor_y, inspect_mode)
 
         # ── Overlays ────────────────────────────────────────────────
@@ -701,19 +703,22 @@ def _explore_curses(stdscr, world: World) -> None:
             _draw_zones_overlay(stdscr, world)
         elif show_factions:
             _draw_factions_overlay(stdscr, world)
+        elif show_bestiary:
+            _draw_bestiary_overlay(stdscr, world)
 
         curses.doupdate()
 
         # ── Handle input ────────────────────────────────────────────
         key = stdscr.getch()
 
-        if show_help or show_regions or show_lore or show_zones or show_factions:
+        if show_help or show_regions or show_lore or show_zones or show_factions or show_bestiary:
             # Any key dismisses overlay
             show_help = False
             show_regions = False
             show_lore = False
             show_zones = False
             show_factions = False
+            show_bestiary = False
             continue
 
         if key == ord("q") or key == 27:  # q or ESC
@@ -733,6 +738,9 @@ def _explore_curses(stdscr, world: World) -> None:
 
         elif key == ord("f"):
             show_factions = True
+
+        elif key == ord("b"):
+            show_bestiary = True
 
         elif key == ord("i"):
             inspect_mode = not inspect_mode

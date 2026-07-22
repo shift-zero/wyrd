@@ -748,9 +748,112 @@ def export_world_ttrpg(
 
         # Adventure Zones
         "adventure_zones": _build_adventure_zones(world),
+
+        # Bestiary / Creature Catalog
+        "bestiary": _build_bestiary_section(world),
+
+        # Terrain-Based Encounter Tables (with creatures)
+        "creature_encounters": _build_creature_encounters(world),
     }
 
     return json.dumps(document, indent=2, ensure_ascii=False)
+
+
+def _build_bestiary_section(world: World) -> list[dict]:
+    """Build a full creature catalog from the world's bestiary."""
+    if not world.bestiary:
+        return []
+
+    creatures = []
+    for c in world.bestiary:
+        sb = c.stat_block
+        creatures.append({
+            "name": c.name,
+            "tier": c.tier,
+            "tier_label": c.tier_label,
+            "type": c.creature_type,
+            "habitat": c.habitat,
+            "size": c.size,
+            "behavior": c.behavior.replace("_", " "),
+            "body_plan": c.body_plan,
+            "challenge_rating": c.challenge_rating,
+            "cr_label": c.cr_label,
+            "suggested_level_range": c.suggested_level_range,
+            "encounter_size": c.encounters,
+            "is_unique": c.is_unique,
+            "variant": c.variant or None,
+            "faction_affiliation": c.faction_affiliation or None,
+            "description": c.description,
+            "combat_tactics": c.combat_tactics,
+            "special_abilities": c.special_abilities,
+            "loot_drops": c.loot,
+            "stat_block": {
+                "armor_class": sb["armor_class"],
+                "hit_points": sb["hit_points"],
+                "damage_per_round": sb["damage_per_round"],
+                "size": sb["size"],
+                "type": sb["type"],
+            },
+        })
+    return creatures
+
+
+def _build_creature_encounters(world: World) -> dict:
+    """Build encounter tables grouped by terrain, populated with bestiary creatures."""
+    bestiary = world.bestiary if world.bestiary else []
+    terrain_pct = _terrain_percentages(world)
+
+    # Map habitat to creature lists
+    habitat_names = {"temperate": "grass", "arid": "grass", "tundra": "snow", "tropical": "forest"}
+    encounter_tables = {}
+
+    for terrain_key, pct in sorted(terrain_pct.items()):
+        if pct < 0.5:
+            continue
+        theme = _terrain_to_theme(terrain_key)
+        if not theme:
+            continue
+
+        # Find creatures matching this terrain
+        biome_for_terrain = {"grass": ["temperate", "arid"], "forest": ["temperate", "tropical"],
+                              "hills": ["temperate", "arid"], "mountains": ["tundra", "temperate"],
+                              "snow": ["tundra"], "deep_water": ["temperate"], "river": ["temperate"]}
+        matching_habitats = biome_for_terrain.get(terrain_key, ["temperate"])
+        matching_creatures = [c for c in bestiary if c.habitat in matching_habitats]
+
+        encounters = []
+        for c in matching_creatures[:5]:
+            encounters.append({
+                "creature": c.name,
+                "cr": c.challenge_rating,
+                "tier": c.tier,
+                "count": c.encounters,
+                "type": c.creature_type,
+            })
+
+        encounter_tables[terrain_key] = {
+            "theme": theme,
+            "coverage_pct": pct,
+            "creatures": encounters,
+        }
+
+    return encounter_tables
+
+
+def _terrain_to_theme(terrain_key: str) -> str:
+    """Map terrain to an encounter theme label."""
+    themes = {
+        "deep_water": "Sea & Coast",
+        "shallow": "Coastal Shallows",
+        "grass": "Grasslands & Plains",
+        "forest": "Forest & Woodland",
+        "hills": "Hills & Highlands",
+        "mountains": "Mountains & Peaks",
+        "snow": "Snow & Tundra",
+        "river": "Rivers & Waterways",
+        "sand": "Desert & Dunes",
+    }
+    return themes.get(terrain_key, "")
 
 
 def _build_adventure_zones(world: World) -> list[dict]:

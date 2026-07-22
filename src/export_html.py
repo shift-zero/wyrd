@@ -125,6 +125,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
 {factions_html}
 
+{bestiary_html}
+
 <div class="lore">{lore_html}</div>
 
 <div class="footer">
@@ -345,7 +347,50 @@ def export_world_html(
                 r_color = f"#{RELATIONSHIP_COLORS.get(rel.rel_type, 250):02x}{250:02x}{250:02x}"  # fallback
                 rel_lines.append(f'<div style="margin-left:1rem;color:#aaa;">{r_icon} {rel.description}</div>')
             rel_lines.append('</div>')
-            factions_html += "\n".join(rel_lines)
+            factions_html += "\\n".join(rel_lines)
+
+    # ── Bestiary ────────────────────────────────────────────────────
+    bestiary_html = ""
+    if world.bestiary:
+        beast_lines = []
+        for c in sorted(world.bestiary, key=lambda x: x.tier, reverse=True):
+            type_label = c.creature_type.replace("_", " ")
+            tier_stars = "✦" * c.tier
+            unique_tag = " ★" if c.is_unique else ""
+            faction_tag = f" ⚑ {c.faction_affiliation}" if c.faction_affiliation else ""
+            abilites = "; ".join(c.special_abilities[:2])
+            beast_lines.append(
+                f'<details style="margin-bottom:0.3rem;background:var(--surface);'
+                f'padding:0.4rem;border-radius:4px;font-size:0.8rem;">'
+                f'<summary style="cursor:pointer;font-weight:bold;">'
+                f'{c.size[0].upper()} {c.name}{unique_tag}'
+                f'<span style="color:#888;font-weight:normal;margin-left:0.5rem;">'
+                f'[{type_label}] CR {c.challenge_rating} {tier_stars}{faction_tag}'
+                f'</span>'
+                f'</summary>'
+                f'<div style="margin-top:0.3rem;color:#ccc;">'
+                f'<div>{c.description}</div>'
+                f'<div style="margin-top:0.2rem;color:#888;">'
+                f'Habitat: {c.habitat} · Behavior: {c.behavior.replace("_", " ")} · {c.size} · {c.body_plan}'
+                f'</div>'
+                f'<div style="margin-top:0.2rem;"><strong>AC</strong> {c.stat_block["armor_class"]} · '
+                f'<strong>HP</strong> {c.stat_block["hit_points"]} · '
+                f'<strong>Damage</strong> {c.stat_block["damage_per_round"]}'
+                f'</div>'
+            )
+            if c.special_abilities:
+                beast_lines.append(f'<div style="margin-top:0.2rem;"><strong>Abilities:</strong> {abilites}</div>')
+            if c.loot:
+                loot_str = "; ".join(c.loot[:3])
+                beast_lines.append(f'<div style="color:#aa0;">Loot: {loot_str}</div>')
+            beast_lines.append('</div></details>')
+
+        bestiary_html = (
+            '<div class="regions" style="margin-top:1rem;">'
+            '<h2>Bestiary</h2>'
+            + "\\n".join(beast_lines) +
+            '</div>'
+        )
 
     # ── Lore ────────────────────────────────────────────────────────
     lore_text = render_lore(world) if world.lore else "(no lore generated)"
@@ -421,6 +466,7 @@ def export_world_html(
         legend_html=legend_html,
         regions_html=regions_html,
         factions_html=factions_html,
+        bestiary_html=bestiary_html,
         lore_html=lore_html,
         font_size=font_size,
         date=today,
