@@ -289,12 +289,17 @@ def main():
                 print(f"📂 Loaded sim state at year {args.snapshot_year}")
 
         if sim_state is None:
+            # Get narrative characters for named event integration
+            sim_characters = getattr(world, 'narrative', None)
+            sim_chars_list = sim_characters.characters if sim_characters else None
+
             result = run_simulation(
                 world,
                 num_years=args.years,
                 seed_offset=args.seed_offset,
                 chaos_factor=args.chaos,
                 snapshot_interval=50,
+                characters=sim_chars_list,
             )
 
             # Save simulation state

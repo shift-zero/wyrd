@@ -122,7 +122,7 @@ Interactive simulation viewing and character-driven world evolution. The world d
 | # | What | Verifiable |
 |---|------|------------|
 | 1 ✅ | Interactive curses sim viewer: watch the map evolve year by year | `wyrd view --seed 42 --years 300` shows real-time map evolution with pause/speed controls |
-| 2 | Named character integration in sim events | Sim events reference actual Narrative characters as leaders, generals, heroes |
+| 2 ✅ | Named character integration in sim events | Sim events reference actual Narrative characters as leaders, generals, heroes when available; character selection is seed-deterministic and prefers occupation-relevant NPCs |
 | 3 | Character-driven founding events | New settlements are founded by named characters; migration events tied to character backstories |
 | 4 | Era transitions in simulation | Simulation can trigger chronicle-era transitions mid-sim; world modifiers change dynamically |
 | 5 | Sim event consequences on narrative | NPCs die, quests become impossible, new quests emerge from sim events |

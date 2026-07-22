@@ -399,3 +399,106 @@ class TestApplySimStateToWorld:
         r2 = run_simulation(applied, num_years=25, chaos_factor=0.3)
         assert r2.final_state.year == 25
         assert r2.final_state.total_population > 0
+
+
+class TestSimCharacterIntegration:
+    """Named character references in sim events must work correctly."""
+
+    def test_init_character_status_empty(self):
+        """No characters should produce empty status dict."""
+        from src.sim import _init_character_status
+        assert _init_character_status(None) == {}
+        assert _init_character_status([]) == {}
+
+    def test_init_character_status_populates(self):
+        """Characters should all start as 'alive'."""
+        from src.sim import _init_character_status
+        from src.narrative import Character
+        chars = [
+            Character("Aldric", "Stonehand", 35, "male", "warlord", ["brave"], "North", "Ironhaven", "A fierce leader"),
+            Character("Lyra", "Swiftarrow", 28, "female", "ranger", ["curious"], "Greenwood", "Foxford", "A skilled scout"),
+        ]
+        status = _init_character_status(chars)
+        assert status == {"Aldric Stonehand": "alive", "Lyra Swiftarrow": "alive"}
+
+    def test_select_named_character_prefers_settlement(self):
+        """Should prefer characters from the affected settlement with matching occupation."""
+        from src.sim import _select_named_character
+        from src.narrative import Character
+        import random
+        rng = random.Random(42)
+        chars = [
+            Character("Aldric", "Stonehand", 35, "male", "warlord", ["brave"], "North", "Ironhaven", ""),
+            Character("Lyra", "Swiftarrow", 28, "female", "ranger", ["curious"], "Greenwood", "Foxford", ""),
+            Character("Mira", "Deepwell", 45, "female", "farmer", ["patient"], "North", "Ironhaven", ""),
+        ]
+        # War in Ironhaven — should prefer Aldric (warlord)
+        name = _select_named_character(rng, chars, "Ironhaven", "North", "war")
+        assert name == "Aldric Stonehand"
+
+    def test_select_named_character_falls_back_to_any(self):
+        """Should fall back to any character from the settlement if no occupation match."""
+        from src.sim import _select_named_character
+        from src.narrative import Character
+        import random
+        rng = random.Random(42)
+        chars = [
+            Character("Mira", "Deepwell", 45, "female", "farmer", ["patient"], "North", "Ironhaven", ""),
+        ]
+        # War in Ironhaven — no warlord, fall back to Mira
+        name = _select_named_character(rng, chars, "Ironhaven", "North", "war")
+        assert name == "Mira Deepwell"
+
+    def test_select_named_character_returns_none_when_no_match(self):
+        """Should return None when no characters match."""
+        from src.sim import _select_named_character
+        import random
+        rng = random.Random(42)
+        name = _select_named_character(rng, None, "Ironhaven", "North", "war")
+        assert name is None
+
+    def test_describe_with_character_appends_name(self):
+        """Should append character name to description."""
+        from src.sim import _describe_with_character
+        result = _describe_with_character("Plague ravages Ironhaven.", "Aldric Stonehand", "{char} struggles.")
+        assert "Aldric Stonehand" in result
+        assert "struggles" in result
+
+    def test_describe_without_character_passes_through(self):
+        """Should return base unchanged when no character given."""
+        from src.sim import _describe_with_character
+        result = _describe_with_character("Plague ravages Ironhaven.", None)
+        assert result == "Plague ravages Ironhaven."
+
+    def test_simulation_with_characters_does_not_crash(self):
+        """Running sim with narrative characters should not crash."""
+        from src.sim import run_simulation, SimState
+        world = generate_world(42)
+        # Give world a narrative with a few characters
+        from src.narrative import Character
+        world.narrative = type('NarrativeStub', (), {
+            'seed': 42,
+            'characters': [
+                Character("Aldric", "Stonehand", 35, "male", "warlord", ["brave"], world.regions[0].name, world.regions[0].settlements[0].name, ""),
+                Character("Lyra", "Swiftarrow", 28, "female", "ranger", ["curious"], world.regions[-1].name, world.regions[-1].settlements[-1].name, ""),
+            ],
+            'events': [],
+            'quests': [],
+        })()
+        result = run_simulation(world, num_years=20, chaos_factor=0.3, characters=world.narrative.characters)
+        assert result.total_events >= 0
+        assert result.final_state.character_status is not None
+
+    def test_character_integration_seed_determinism(self):
+        """Same seed + same characters should produce identical events."""
+        from src.sim import run_simulation
+        from src.narrative import Character
+        w1 = generate_world(42)
+        w2 = generate_world(42)
+        chars = [
+            Character("Aldric", "Stonehand", 35, "male", "warlord", ["brave"], w1.regions[0].name, w1.regions[0].settlements[0].name, ""),
+        ]
+        r1 = run_simulation(w1, num_years=15, chaos_factor=0.3, characters=chars)
+        r2 = run_simulation(w2, num_years=15, chaos_factor=0.3, characters=chars)
+        for e1, e2 in zip(r1.events, r2.events):
+            assert e1.description == e2.description, f"Mismatch at {e1.year}: {e1.description} != {e2.description}"

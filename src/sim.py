@@ -148,6 +148,10 @@ class SimState:
     events: list[SimEvent] = field(default_factory=list)
     world_modifiers: list[str] = field(default_factory=list)
     population_record: list[dict] = field(default_factory=list)
+    character_status: dict[str, str] = field(default_factory=dict)
+    # Maps "Character Fullname" -> "alive" | "dead" | "missing"
+    # Tracks named characters from the narrative engine through sim years.
+    # Populated by _init_character_status and mutated by sim events.
     
     @property
     def total_population(self) -> int:
@@ -219,7 +223,8 @@ def _resource_availability(world: World, sx: int, sy: int, radius: int = 5) -> t
 
 
 def _simulate_tick(world: World, state: SimState, rng: random.Random,
-                   year: int, chaos_factor: float = 0.1) -> list[SimEvent]:
+                   year: int, chaos_factor: float = 0.1,
+                   characters: list | None = None) -> list[SimEvent]:
     """
     Simulate one year for the world.
     
@@ -293,10 +298,15 @@ def _simulate_tick(world: World, state: SimState, rng: random.Random,
                 death_toll = 0  # no one actually died — too small to matter
             s.health = rng.uniform(0.3, 0.6)
             if death_toll > 0:
+                char_name = _select_named_character(rng, characters, s.name, region_name, "plague")
+                desc = _describe_with_character(
+                    f"Plague ravages {s.name} in {region_name}, killing {death_toll}.",
+                    char_name, "{char} struggles to contain the outbreak."
+                )
                 events.append(SimEvent(
                     year=year,
                     event_type="plague",
-                    description=f"Plague ravages {s.name} in {region_name}, killing {death_toll}.",
+                    description=desc,
                     affected_settlements=[s.name],
                     affected_regions=[region_name],
                 ))
@@ -310,10 +320,15 @@ def _simulate_tick(world: World, state: SimState, rng: random.Random,
                 death_toll = 0
             s.food_stores = max(0, s.food_stores - s.population * 0.5)
             if death_toll > 0:
+                char_name = _select_named_character(rng, characters, s.name, region_name, "famine")
+                desc = _describe_with_character(
+                    f"Famine grips {s.name}. {death_toll} perish from hunger.",
+                    char_name, "{char} leads desperate prayers for rain."
+                )
                 events.append(SimEvent(
                     year=year,
                     event_type="famine",
-                    description=f"Famine grips {s.name}. {death_toll} perish from hunger.",
+                    description=desc,
                     affected_settlements=[s.name],
                     affected_regions=[region_name],
                 ))
@@ -345,10 +360,18 @@ def _simulate_tick(world: World, state: SimState, rng: random.Random,
                 events.append(SimEvent(
                     year=year,
                     event_type="war",
-                    description=(
-                        f"War erupts between {s1.name} ({s1.region}) and "
-                        f"{s2.name} ({s2.region}). "
-                        f"{actual_s1_loss + actual_s2_loss} total casualties."
+                    description=_describe_with_character(
+                        _describe_with_character(
+                            (
+                                f"War erupts between {s1.name} ({s1.region}) and "
+                                f"{s2.name} ({s2.region}). "
+                                f"{actual_s1_loss + actual_s2_loss} total casualties."
+                            ),
+                            _select_named_character(rng, characters, s1.name, s1.region, "war"),
+                            "{char} leads the assault.",
+                        ),
+                        _select_named_character(rng, characters, s2.name, s2.region, "war"),
+                        "{char} marshals the defenders.",
                     ),
                     affected_settlements=[s1.name, s2.name],
                     affected_regions=list(set([s1.region, s2.region])),
@@ -392,12 +415,14 @@ def _simulate_tick(world: World, state: SimState, rng: random.Random,
             )
             state.settlements[new_name] = new_s
             
+            char_name = _select_named_character(rng, characters, s.name, s.region, "founding")
             events.append(SimEvent(
                 year=year,
                 event_type="founding",
-                description=(
+                description=_describe_with_character(
                     f"A new settlement, {new_name}, is founded by emigrants "
-                    f"from {s.name}. Initial population: {emigrants}."
+                    f"from {s.name}. Initial population: {emigrants}.",
+                    char_name, "{char} leads the expedition."
                 ),
                 affected_settlements=[s.name, new_name],
                 affected_regions=[s.region],
@@ -410,10 +435,14 @@ def _simulate_tick(world: World, state: SimState, rng: random.Random,
             continue
         if s.population <= 3 and len(state.settlements) > sum(1 for ss in state.settlements.values() if ss.is_active):
             s.is_active = False
+            char_name = _select_named_character(rng, characters, s_name, None, "abandonment")
             events.append(SimEvent(
                 year=year,
                 event_type="abandonment",
-                description=f"{s_name} is abandoned. Its few remaining residents scatter.",
+                description=_describe_with_character(
+                    f"{s_name} is abandoned. Its few remaining residents scatter.",
+                    char_name, "{char} is the last to leave."
+                ),
                 affected_settlements=[s_name],
                 affected_regions=[s.region],
             ))
@@ -426,12 +455,14 @@ def _simulate_tick(world: World, state: SimState, rng: random.Random,
             boom_pop = int(s.population * rng.uniform(0.03, 0.08))
             s.population += boom_pop
             s.prosperity = min(1.0, s.prosperity + 0.05)
+            char_name = _select_named_character(rng, characters, s.name, s.region, "prosperity")
             events.append(SimEvent(
                 year=year,
                 event_type="prosperity",
-                description=(
+                description=_describe_with_character(
                     f"{s.name} experiences a trade boom. "
-                    f"Population grows by {boom_pop} as wealth flows in."
+                    f"Population grows by {boom_pop} as wealth flows in.",
+                    char_name, "{char} brokers lucrative trade agreements."
                 ),
                 affected_settlements=[s.name],
                 affected_regions=[s.region],
@@ -506,6 +537,123 @@ def _update_modifiers(state: SimState) -> None:
         state.world_modifiers.append("Population in decline — the world grows quiet")
 
 
+# ── Character Integration ───────────────────────────────────────────
+
+
+def _init_character_status(characters: list | None) -> dict[str, str]:
+    """Build character_status dict from narrative characters, all marked 'alive'."""
+    if not characters:
+        return {}
+    return {c.full_name: "alive" for c in characters}
+
+
+_CHARACTER_ROLE_MAP: dict[str, list[str]] = {
+    "plague": [  # who'd be involved in a plague event
+        "healer", "herbalist", "priest", "sage", "alchemist",
+    ],
+    "famine": [  # who'd be involved in a famine
+        "farmer", "miller", "baker", "brewer", "innkeeper", "trader",
+    ],
+    "war": [  # who'd be involved in war
+        "soldier", "guard", "ranger", "scout", "warlord", "chieftain",
+        "lord", "seneschal", "hunter",
+    ],
+    "discovery": [  # who'd make or witness a discovery
+        "sage", "scholar", "alchemist", "cartographer", "ranger", "miner",
+    ],
+    "prosperity": [  # who'd drive a prosperity event
+        "merchant", "trader", "lord", "governor", "innkeeper", "shipwright",
+    ],
+    "disaster": [  # who'd be affected by disaster
+        "mason", "carpenter", "miner", "shipwright", "sailor",
+    ],
+    "exodus": [  # who'd lead an exodus
+        "ranger", "scout", "hunter", "chieftain", "lord", "explorer",
+    ],
+    "founding": [  # who'd found a new settlement
+        "ranger", "scout", "hunter", "explorer", "trader", "warlord",
+        "chieftain", "lord", "governor", "shipwright",
+    ],
+    "abandonment": [  # who'd be the last to leave
+        "priest", "hermit", "judge", "eldest", "seneschal",
+    ],
+    "trade_boom": [  # who'd drive a trade boom
+        "merchant", "trader", "lord", "governor", "shipwright", "innkeeper",
+    ],
+}
+
+
+def _select_named_character(
+    rng: random.Random,
+    characters: list | None,
+    settlement_name: str,
+    region_name: str | None,
+    event_type: str,
+) -> str | None:
+    """
+    Pick a named (alive) character connected to the affected settlement or region.
+
+    Returns the character's full name, or None if no suitable character found.
+    """
+    if not characters:
+        return None
+
+    # Preferred occupations for this event type
+    preferred = _CHARACTER_ROLE_MAP.get(event_type, [])
+
+    # First: characters who live in the affected settlement AND have a preferred occupation
+    candidates = [
+        c for c in characters
+        if c.status == "alive" and c.home_settlement == settlement_name
+        and c.occupation.lower() in preferred
+    ]
+
+    # Second: characters from the affected region
+    if not candidates and region_name:
+        candidates = [
+            c for c in characters
+            if c.status == "alive" and c.home_region == region_name
+            and c.occupation.lower() in preferred
+        ]
+
+    # Third: any alive character from the settlement
+    if not candidates:
+        candidates = [
+            c for c in characters
+            if c.status == "alive" and c.home_settlement == settlement_name
+        ]
+
+    # Fourth: any alive character from the region
+    if not candidates and region_name:
+        candidates = [
+            c for c in characters
+            if c.status == "alive" and c.home_region == region_name
+        ]
+
+    if not candidates:
+        return None
+
+    return rng.choice(candidates).full_name
+
+
+def _describe_with_character(
+    base: str,
+    char_name: str | None,
+    occupation_prompt: str | None = None,
+) -> str:
+    """
+    Append a character reference to an event description.
+
+    If char_name is provided, appends a brief occupation-flavoured note.
+    If not, returns the base description unchanged.
+    """
+    if not char_name:
+        return base
+    if occupation_prompt:
+        return f"{base} — {occupation_prompt.format(char=char_name)}"
+    return f"{base} — {char_name}"
+
+
 # ── Initialization ──────────────────────────────────────────────────
 
 
@@ -548,7 +696,8 @@ def initialize_sim_state(world: World) -> SimState:
 def simulate_years(world: World, state: SimState, num_years: int,
                    seed_offset: int = 0, chaos_factor: float = 0.1,
                    snapshot_interval: int = 0,
-                   snapshots_out: list[SimState] | None = None) -> list[SimEvent]:
+                   snapshots_out: list[SimState] | None = None,
+                   characters: list | None = None) -> list[SimEvent]:
     """
     Run the simulation for a number of years.
     
@@ -576,7 +725,7 @@ def simulate_years(world: World, state: SimState, num_years: int,
         current_year = start_year + y
         state.year = current_year
         
-        year_events = _simulate_tick(world, state, rng, current_year, chaos_factor)
+        year_events = _simulate_tick(world, state, rng, current_year, chaos_factor, characters)
         all_events.extend(year_events)
         
         # Take intermediate snapshots at the specified interval
@@ -623,7 +772,8 @@ class SimResult:
 
 def run_simulation(world: World, num_years: int = 100,
                    seed_offset: int = 0, chaos_factor: float = 0.3,
-                   snapshot_interval: int = 50) -> SimResult:
+                   snapshot_interval: int = 50,
+                   characters: list | None = None) -> SimResult:
     """
     Run a complete simulation and return the result.
     
@@ -639,17 +789,21 @@ def run_simulation(world: World, num_years: int = 100,
     """
     initial_state = initialize_sim_state(world)
     state = copy.deepcopy(initial_state)
-    
+
+    # Initialize character tracking
+    state.character_status = _init_character_status(characters)
+
     snapshots: list[SimState] = []
-    
+
     # Take initial snapshot
     if snapshot_interval > 0:
         snapshots.append(copy.deepcopy(state))
-    
+
     events = simulate_years(
         world, state, num_years, seed_offset, chaos_factor,
         snapshot_interval=snapshot_interval,
         snapshots_out=snapshots,
+        characters=characters,
     )
     
     # Take final snapshot (only if not already captured by interval)
