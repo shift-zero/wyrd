@@ -217,6 +217,16 @@ def main():
     magic_cmd.add_argument("--save", type=str, default=None,
                             help="Save world with magic system to JSON file")
 
+    # ── serve ───────────────────────────────────────────────────────
+    serve_cmd = sub.add_parser("serve",
+                                help="Start web dashboard server")
+    serve_cmd.add_argument("--seed", type=int, default=None,
+                            help="World seed to show on startup")
+    serve_cmd.add_argument("--port", "-p", type=int, default=8080,
+                            help="Port to serve on (default: 8080)")
+    serve_cmd.add_argument("--no-browser", action="store_true",
+                            help="Don't open browser automatically")
+
     # ── worlds ──────────────────────────────────────────────────────
     worlds_cmd = sub.add_parser("worlds",
                                  help="List all generated worlds")
@@ -493,6 +503,15 @@ def main():
                     print(f"  {seed_str}  {size_str}  {pop_str} · {region_str}")
                     print(f"       {badge_str}  {ANSI_DIM}{w['file']}{ANSI_RESET}")
                 print()
+
+    # ── serve ───────────────────────────────────────────────────────
+    elif args.command == "serve":
+        from .serve import serve_world
+        serve_world(
+            seed=args.seed,
+            port=args.port,
+            open_browser=not args.no_browser,
+        )
 
     # ── save ───────────────────────────────────────────────────────
     elif args.command == "save":
