@@ -151,28 +151,33 @@ def main():
     # ── explore ────────────────────────────────────────────────────
     elif args.command == "explore":
         world = _get_world(args)
-        # Build a paginated view: map + lore
-        lines = []
-        lines.append(render_map(world))
-        lines.append("")
-        lines.append(render_lore(world))
-        full_text = "\n".join(lines)
-
-        # Check if stdout is a TTY — use a pager if possible
-        if sys.stdout.isatty():
+        # Try the interactive curses explorer first
+        from .explore import explore_world
+        try:
+            import curses
+            # Check if we're in a real terminal
+            if sys.stdout.isatty() and sys.stdin.isatty():
+                explore_world(world)
+            else:
+                raise OSError("not a TTY")
+        except (ImportError, OSError, Exception):
+            # Fallback: pager-based explore
+            from .render import render_map, render_lore
+            lines = []
+            lines.append(render_map(world))
+            lines.append("")
+            lines.append(render_lore(world))
+            full_text = "\n".join(lines)
             try:
                 import subprocess
                 pager = os.environ.get("PAGER", "less")
                 proc = subprocess.Popen(
-                    [pager, "-R"],  # -R preserves ANSI colors
+                    [pager, "-R"],
                     stdin=subprocess.PIPE,
                 )
                 proc.communicate(input=full_text.encode())
             except FileNotFoundError:
-                # Fallback: just print it
                 print(full_text)
-        else:
-            print(full_text)
 
 
 if __name__ == "__main__":
