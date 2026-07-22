@@ -155,8 +155,33 @@ def _settlement_color(char: str) -> str:
     return "#ffd700"
 
 
-def export_world_html(world: World, snapshot_year: int | None = None) -> str:
-    """Export a world as a self-contained HTML page."""
+def _ruin_color_hex() -> str:
+    """Dim red for abandoned settlement ruins."""
+    return "#660000"
+
+
+def export_world_html(
+    world: World,
+    snapshot_year: int | None = None,
+    abandoned_settlements: list[dict] | None = None,
+    population_record: list[dict] | None = None,
+    sim_events_count: int = 0,
+) -> str:
+    """Export a world as a self-contained HTML page.
+
+    Args:
+        world: The world to export (may have sim state applied)
+        snapshot_year: If provided, shows a simulation snapshot banner
+        abandoned_settlements: List of {name, x, y} for abandoned/ruined settlements
+        population_record: List of {year, total_population, ...} from sim state
+        sim_events_count: Total number of sim events that occurred
+    """
+    # ── Build ruin lookup ───────────────────────────────────────────
+    ruins: dict[tuple[int, int], str] = {}
+    if abandoned_settlements:
+        for r in abandoned_settlements:
+            ruins[(r["x"], r["y"])] = r.get("name", "Ruins")
+
     # ── Build map rows ──────────────────────────────────────────────
     map_rows = []
     for y in range(world.height):
@@ -166,7 +191,15 @@ def export_world_html(world: World, snapshot_year: int | None = None) -> str:
             hex_color = _terrain_color_hex(terrain_key)
             char = TERRAIN[terrain_key]["char"]
 
-            # Check for settlement
+            # Check for ruin first (abandoned settlement)
+            if (x, y) in ruins:
+                row_chars.append(
+                    f'<span style="color:{_ruin_color_hex()};font-weight:bold" '
+                    f'title="{ruins[(x, y)]} (ruins)">⁂</span>'
+                )
+                continue
+
+            # Check for active settlement
             settlement_char = None
             for region in world.regions:
                 for s in region.settlements:
@@ -238,11 +271,47 @@ def export_world_html(world: World, snapshot_year: int | None = None) -> str:
     if snapshot_year is not None:
         total_pop = sum(s.population for r in world.regions for s in r.settlements)
         num_settlements = sum(len(r.settlements) for r in world.regions)
+
+        # Population timeline chart (simple bar-based)
+        timeline_html = ""
+        if population_record and len(population_record) > 1:
+            pops = [(r["year"], r["total_population"]) for r in population_record
+                    if r["year"] % 25 == 0 or r == population_record[0] or r == population_record[-1]]
+            if len(pops) < 3:
+                pops = [(r["year"], r["total_population"]) for r in population_record]
+            pop_max = max(p[1] for p in pops) if pops else 1
+            pop_max = max(pop_max, 1)
+            bar_entries = []
+            for yr, p in pops:
+                pct = max(5, int(p / pop_max * 80))
+                bar_entries.append(
+                    f'<div style="display:flex;align-items:center;gap:0.5rem;font-size:0.75rem;'
+                    f'line-height:1.4">'
+                    f'<span style="min-width:2.5rem;text-align:right;color:#888;">Y{yr}</span>'
+                    f'<span style="display:inline-block;height:1rem;background:#e94560;border-radius:2px;'
+                    f'width:{pct}%;min-width:2px;"></span>'
+                    f'<span style="color:#ccc;">{p:,}</span>'
+                    f'</div>'
+                )
+            timeline_html = (
+                f'<div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid #333;">'
+                f'<div style="font-size:0.75rem;color:#888;margin-bottom:0.25rem;">📈 Population Timeline</div>'
+                + "".join(bar_entries) +
+                f'</div>'
+            )
+
+        subtitle = f'{total_pop:,} souls across {num_settlements} settlements'
+        if len(ruins) > 0:
+            subtitle += f' · {len(ruins)} ruined'
+        if sim_events_count > 0:
+            subtitle += f' · {sim_events_count} events recorded'
+
         snapshot_banner_html = (
             f'<div style="background:#2a1a3e;padding:0.75rem 1rem;'
             f'border-radius:8px;margin-bottom:1rem;font-size:0.85rem;">'
             f'📜 <strong>Simulation Snapshot — Year {snapshot_year}</strong> &nbsp;|&nbsp; '
-            f'{total_pop:,} souls across {num_settlements} settlements'
+            f'{subtitle}'
+            f'{timeline_html}'
             f'</div>'
         )
 
