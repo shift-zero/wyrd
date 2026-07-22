@@ -13,14 +13,25 @@ Not another one-shot CLI wrapper. This is *mine* — conceived, planned, and bui
 ```
 wyrd/
 ├── src/           # Core library
-│   ├── world.rs   # World generation (eventually Rust for performance)
-│   ├── render.rs  # ASCII/ANSI rendering
-│   └── lore.rs    # Procedural lore engine
-├── cli/           # CLI interface (Python for fast iteration early on)
-│   └── main.py
-├── data/          # Seed data — name lists, biome tables, lore fragments
-│   └── seeds/
-├── tests/
+│   ├── generate.py   # World generation (terrain, rivers, settlements)
+│   ├── world.py      # Core data models
+│   ├── nore.rs       # (eventually Rust for performance)
+│   ├── render.py     # ANSI/ASCII rendering + narrative rendering
+│   ├── lore.py       # Procedural lore engine
+│   ├── narrative.py  # Character, event, and quest generation
+│   ├── serialize.py  # JSON save/load
+│   ├── explore.py    # Interactive terminal explorer
+│   ├── query.py      # Natural-language query engine
+│   ├── export_html.py# HTML export
+│   └── __main__.py   # CLI entry point
+├── tests/         # Test suite
+│   ├── test_generate.py
+│   ├── test_lore.py
+│   ├── test_narrative.py
+│   ├── test_phase3.py
+│   ├── test_explore.py
+│   ├── test_query.py
+│   └── conftest.py
 └── output/        # Generated worlds (gitignored)
 ```
 
@@ -48,11 +59,14 @@ wyrd/
 | 4 ✅ | Interactive terminal UI (scroll, zoom, inspect) | Navigate a generated world in the terminal |
 | 5 ✅ | Query the world: "tell me about the northlands" | `wyrd query --seed 42 "tell me about Blackland"` returns region lore, culture, history, settlements |
 
-**Phase 4 — Narrative**
-- Characters generated from the world's cultures
-- Event chains that unfold over time
-- Generated quests grounded in geography and politics
-- Stories that feel native to the world
+**Phase 4 — Narrative** (now)
+| # | What | Verifiable |
+|---|------|------------|
+| 1 ✅ | Character generation grounded in world cultures | `wyrd characters --seed 42` lists named characters with occupations, traits, backstories |
+| 2 ✅ | Event chains that unfold over time | `wyrd events --seed 42` shows chronological timeline with types and consequences |
+| 3 ✅ | Generated quests grounded in geography and politics | `wyrd quests --seed 42` shows active quests with givers, locations, rewards |
+| 4 ✅ | All narrative seed-deterministic (same world → same narrative) | Same seed produces identical characters, events, and quests |
+| 5 ✅ | Narrative serialization round-trip | Save/load preserves all narrative data; old saves without narrative still work |
 
 ### Design Principles
 
@@ -69,4 +83,4 @@ wyrd/
 | 2 ✅ | Lore engine names regions, cultures, and features | `wyrd describe --seed 42` shows lore |
 | 3 ✅ | Interactive terminal UI (scroll, zoom, inspect) | Navigate a generated world in the terminal |
 | 4 | Export to SVG/HTML | Share worlds as web pages |
-| 5 | Narrative engine with character generation | Characters with backstories grounded in the world |
+| 5 ✅ | Narrative engine with character generation | Characters with backstories grounded in the world |
