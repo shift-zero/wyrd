@@ -547,7 +547,8 @@ def initialize_sim_state(world: World) -> SimState:
 
 def simulate_years(world: World, state: SimState, num_years: int,
                    seed_offset: int = 0, chaos_factor: float = 0.1,
-                   yield_interval: int = 1) -> list[SimEvent]:
+                   snapshot_interval: int = 0,
+                   snapshots_out: list[SimState] | None = None) -> list[SimEvent]:
     """
     Run the simulation for a number of years.
     
@@ -557,7 +558,8 @@ def simulate_years(world: World, state: SimState, num_years: int,
         num_years: How many years to simulate
         seed_offset: Offset for the RNG seed (used for branching)
         chaos_factor: How much random chaos to apply (0.0-1.0)
-        yield_interval: How often to yield control (for progress reporting)
+        snapshot_interval: Take snapshots every N years (0 = no intermediate snapshots)
+        snapshots_out: List to append snapshots to (if None, no snapshots taken)
     
     Returns:
         Complete list of events generated during the simulation
@@ -576,6 +578,10 @@ def simulate_years(world: World, state: SimState, num_years: int,
         
         year_events = _simulate_tick(world, state, rng, current_year, chaos_factor)
         all_events.extend(year_events)
+        
+        # Take intermediate snapshots at the specified interval
+        if snapshots_out is not None and snapshot_interval > 0 and current_year % snapshot_interval == 0:
+            snapshots_out.append(copy.deepcopy(state))
     
     return all_events
 
@@ -640,10 +646,14 @@ def run_simulation(world: World, num_years: int = 100,
     if snapshot_interval > 0:
         snapshots.append(copy.deepcopy(state))
     
-    events = simulate_years(world, state, num_years, seed_offset, chaos_factor)
+    events = simulate_years(
+        world, state, num_years, seed_offset, chaos_factor,
+        snapshot_interval=snapshot_interval,
+        snapshots_out=snapshots,
+    )
     
-    # Take final snapshot
-    if snapshot_interval > 0:
+    # Take final snapshot (only if not already captured by interval)
+    if snapshot_interval > 0 and (num_years == 0 or num_years % snapshot_interval != 0):
         snapshots.append(copy.deepcopy(state))
     
     return SimResult(
@@ -656,7 +666,50 @@ def run_simulation(world: World, num_years: int = 100,
     )
 
 
-# ── Rendering ─────────────────────────────────────────────────────────
+def apply_sim_state_to_world(world: World, sim_state: SimState) -> World:
+    """
+    Create a copy of a World with simulation-state settlements applied.
+    
+    This allows the explore, query, and export commands to see the world
+    as it exists at a specific simulation year — with evolved populations,
+    new founded settlements, and abandoned settlements removed.
+    
+    Args:
+        world: The base world (terrain, lore, etc.)
+        sim_state: The simulation state to apply
+    
+    Returns:
+        A new World with settlements reflecting the sim state
+    """
+    import copy
+    new_world = copy.deepcopy(world)
+    
+    # Build region name → region map
+    region_map: dict[str, Region] = {r.name: r for r in new_world.regions}
+    
+    # Clear existing settlements from all regions
+    for r in new_world.regions:
+        r.settlements.clear()
+    
+    # Add active settlements from the sim state
+    for s in sim_state.settlements.values():
+        if not s.is_active:
+            continue
+        settlement = Settlement(
+            name=s.name,
+            x=s.x,
+            y=s.y,
+            population=s.population,
+            kind=s.kind,
+        )
+        if s.region in region_map:
+            region_map[s.region].settlements.append(settlement)
+        else:
+            # New settlement in a sim-only region — add to first region as fallback
+            if new_world.regions:
+                new_world.regions[0].settlements.append(settlement)
+    
+    return new_world
 
 
 def render_sim_summary(result: SimResult) -> str:
