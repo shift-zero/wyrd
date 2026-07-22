@@ -178,6 +178,17 @@ def main():
     run_cmd.add_argument("--compact", action="store_true",
                          help="Save sim state as gzip-compressed JSON (smaller files)")
 
+    # ── view ────────────────────────────────────────────────────────
+    view_cmd = sub.add_parser("view",
+                              help="Run interactive simulation viewer (curses)")
+    _add_load_arg(view_cmd)
+    view_cmd.add_argument("--years", type=int, default=100,
+                          help="Number of years to simulate (default: 100)")
+    view_cmd.add_argument("--chaos", type=float, default=0.3,
+                          help="Chaos factor 0.0-1.0 (default: 0.3)")
+    view_cmd.add_argument("--seed-offset", type=int, default=0,
+                          help="Seed offset for branching (default: 0)")
+
     # ── chronicles ─────────────────────────────────────────────────
     chron_cmd = sub.add_parser("chronicles",
                                 help="Show era-based world history (chronicles)")
@@ -297,6 +308,17 @@ def main():
             # Render from saved state
             from .render import render_map
             print(render_sim_summary_from_state(sim_state, world, world.seed))
+
+    # ── view ─────────────────────────────────────────────────────────
+    elif args.command == "view":
+        world = _get_world(args)
+        from .viewer import view_simulation
+        view_simulation(
+            world,
+            num_years=args.years,
+            chaos_factor=args.chaos,
+            seed_offset=args.seed_offset,
+        )
 
     # ── chronicles ─────────────────────────────────────────────────
     elif args.command == "chronicles":
