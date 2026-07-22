@@ -45,7 +45,7 @@ wyrd/
 | 1 ✅ | World serialization (save/load JSON) | `wyrd save --seed 42` produces a JSON file; `wyrd load wyrd-42.json` restores it |
 | 2 ✅ | Export to HTML | `wyrd export --seed 42` produces a self-contained HTML page |
 | 3 ✅ | Pager-based explore | `wyrd explore --seed 42` shows map+lore in a pager |
-| 4 | Interactive terminal UI (scroll, zoom, inspect) | Navigate a generated world in the terminal |
+| 4 ✅ | Interactive terminal UI (scroll, zoom, inspect) | Navigate a generated world in the terminal |
 | 5 | Query the world: "tell me about the northlands" | Natural-language queries about the world |
 
 **Phase 4 — Narrative**
@@ -67,6 +67,6 @@ wyrd/
 |---|------|------------|
 | 1 | ASCII map renders terrain, water, forests, mountains, settlements | `wyrd generate --seed 42` outputs a beautiful map |
 | 2 ✅ | Lore engine names regions, cultures, and features | `wyrd describe --seed 42` shows lore |
-| 3 | Interactive explorer with scroll/zoom/inspect | Navigate a generated world in the terminal |
+| 3 ✅ | Interactive terminal UI (scroll, zoom, inspect) | Navigate a generated world in the terminal |
 | 4 | Export to SVG/HTML | Share worlds as web pages |
 | 5 | Narrative engine with character generation | Characters with backstories grounded in the world |

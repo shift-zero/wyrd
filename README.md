@@ -56,7 +56,7 @@ python3 -m src generate --seed 42
 - [x] World serialization (save/load as JSON)
 - [x] HTML export (shareable world pages)
 - [x] Pager-based explore mode
-- [ ] Interactive terminal UI (scroll, zoom, inspect)
+- [x] Interactive terminal UI (scroll, zoom, inspect)
 - [ ] Natural-language world queries
 
 ## Design
