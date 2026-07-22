@@ -14,7 +14,7 @@ from src.sim import (
     initialize_sim_state, simulate_years, run_simulation,
     SimState, SettlementSnapshot, SimEvent, SimResult,
     _calculate_carrying_capacity, _resource_availability,
-    _logistic_growth, _population_to_kind,
+    _logistic_growth, _population_to_kind, apply_sim_state_to_world,
 )
 
 
@@ -318,3 +318,84 @@ class TestEdgeCases:
         summaries_match = r1.summary == r2.summary
         # May or may not differ in 100 years, but at least events might
         assert r1.seed != r2.seed  # Seeds definitely differ
+
+
+class TestIntermediateSnapshots:
+    """Snapshots should be created at the specified intervals."""
+
+    def test_snapshot_interval_creates_intermediate_snapshots(self):
+        """With snapshot_interval=25, should have year 0, 25, 50, 75, 100."""
+        world = generate_world(42)
+        r = run_simulation(world, num_years=100, chaos_factor=0.3, snapshot_interval=25)
+        years = sorted(snap.year for snap in r.snapshots)
+        assert 0 in years, "Should have year 0 snapshot"
+        assert 25 in years, f"Should have year 25 snapshot, got {years}"
+        assert 50 in years, f"Should have year 50 snapshot, got {years}"
+        assert 75 in years, f"Should have year 75 snapshot, got {years}"
+        assert 100 in years, f"Should have year 100 snapshot, got {years}"
+        assert len(years) >= 5, f"Expected at least 5 snapshots, got {len(years)}: {years}"
+
+    def test_snapshot_interval_10(self):
+        """With snapshot_interval=10 and 50 years, should have 6 snapshots."""
+        world = generate_world(42)
+        r = run_simulation(world, num_years=50, chaos_factor=0.3, snapshot_interval=10)
+        years = sorted(snap.year for snap in r.snapshots)
+        assert len(years) == 6, f"Expected 6 snapshots, got {len(years)}: {years}"
+        assert years == [0, 10, 20, 30, 40, 50]
+
+    def test_snapshot_interval_disabled(self):
+        """With snapshot_interval <= 0, no intermediate snapshots."""
+        world = generate_world(42)
+        r = run_simulation(world, num_years=100, chaos_factor=0.3, snapshot_interval=0)
+        assert len(r.snapshots) == 0
+
+    def test_snapshot_determinism(self):
+        """Snapshots should be deterministic: same seed → same snapshots."""
+        world = generate_world(42)
+        r1 = run_simulation(world, num_years=50, chaos_factor=0.3, snapshot_interval=10)
+        r2 = run_simulation(world, num_years=50, chaos_factor=0.3, snapshot_interval=10)
+        for s1, s2 in zip(r1.snapshots, r2.snapshots):
+            assert s1.year == s2.year
+            assert s1.total_population == s2.total_population
+            assert s1.num_settlements == s2.num_settlements
+
+
+class TestApplySimStateToWorld:
+    """apply_sim_state_to_world should correctly merge sim state into world."""
+
+    def test_preserves_terrain_and_lore(self):
+        """The terrain and lore should remain unchanged."""
+        from src.sim import apply_sim_state_to_world
+        world = generate_world(42)
+        state = initialize_sim_state(world)
+        applied = apply_sim_state_to_world(world, state)
+        assert applied.terrain == world.terrain
+        assert applied.seed == world.seed
+        assert applied.width == world.width
+        assert applied.height == world.height
+        assert applied.lore is not None
+
+    def test_applies_sim_populations(self):
+        """Settlement populations should reflect sim state, not original."""
+        from src.sim import apply_sim_state_to_world
+        world = generate_world(42)
+        r = run_simulation(world, num_years=100, chaos_factor=0.3)
+        applied = apply_sim_state_to_world(world, r.final_state)
+        # Populations should have changed
+        applied_pop = sum(s.population for reg in applied.regions for s in reg.settlements)
+        assert applied_pop > 0
+        # Should match sim final state
+        assert applied_pop == r.final_state.total_population
+
+    def test_sim_state_to_world_round_trip(self):
+        """Running sim then applying state then running again should be valid."""
+        world = generate_world(42)
+        r1 = run_simulation(world, num_years=50, chaos_factor=0.3)
+        applied = apply_sim_state_to_world(world, r1.final_state)
+        # Applied world should reflect sim populations
+        applied_pop = sum(s.population for reg in applied.regions for s in reg.settlements)
+        assert applied_pop == r1.final_state.total_population
+        # The applied world works with run_simulation
+        r2 = run_simulation(applied, num_years=25, chaos_factor=0.3)
+        assert r2.final_state.year == 25
+        assert r2.final_state.total_population > 0
