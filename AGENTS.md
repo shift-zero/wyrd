@@ -44,6 +44,7 @@ generate.py  →  lore.py  →  narrative.py  →  chronicles.py  →  sim.py
 | [Serialization](docs/serialization.md) | JSON save/load, sim state |
 | [Explorer](docs/explorer.md) | Interactive curses UI |
 | [Query Engine](docs/query.md) | Natural-language pattern matching |
+| [Faction System](docs/faction.md) | Factions, relationships, political sim |
 | [Design](docs/design.md) | Principles, conventions, seed determinism |
 | [Doc Conventions](docs/doc-conventions.md) | How to write and maintain docs |
 

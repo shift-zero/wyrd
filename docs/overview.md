@@ -14,7 +14,10 @@
 | 6 | Simulation (year-by-year world evolution) | ✅ |
 | 7 | The Living World (interactive sim viewer, character integration) | ✅ |
 | 8 | The Web Awakens (web dashboard, magic system, world management) | ✅ |
-| 9 | The Pantheon (religion system, deity generation, holy sites) | 🔲 current |
+| 9 | The Pantheon (religion system, deity generation, holy sites) | ✅ |
+| 10 | Adventure Zones (dungeons, caves, ruins on the world map) | ✅ |
+| 11 | Faction System (political entities, relationships, power stats) | ✅ |
+| 12 | Political Simulation (faction wars, alliances, power drift in sim) | 🔲 current |
 
 ## Philosophy
 
