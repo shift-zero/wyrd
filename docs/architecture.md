@@ -10,6 +10,7 @@
        ├── narrative.py (characters, events, quests)
        ├── chronicles.py(era-based history)
        ├── sim.py       (year-by-year simulation)
+       ├── embody.py    (embodied character play mode)
        │
        ├── render.py    (ANSI terminal output)
        ├── serialize.py (JSON save/load)

@@ -17,7 +17,12 @@
 | 9 | The Pantheon (religion system, deity generation, holy sites) | ✅ |
 | 10 | Adventure Zones (dungeons, caves, ruins on the world map) | ✅ |
 | 11 | Faction System (political entities, relationships, power stats) | ✅ |
-| 12 | Political Simulation (faction wars, alliances, power drift in sim) | 🔲 current |
+| 12 | Political Simulation (faction wars, alliances, power drift in sim) | ✅ |
+| 13 | Cataclysmic Events (terrain mutation, landmark system, cascades) | ✅ |
+| 14 | Trade & Economy (trade routes, prosperity, disruption) | ✅ |
+| 15 | The Weirding (gateway TUI, unified curses interface) | ✅ |
+| 16 | Trade Route Map Visualization (roads, specialization titles) | ✅ |
+| 17 | Living Worlds (animated maps, TUI overhaul, embodied play) | 🟡 in progress |
 
 ## Philosophy
 
