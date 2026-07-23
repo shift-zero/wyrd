@@ -20,29 +20,38 @@ class TestTUIStructure:
         """TUI module imports cleanly."""
         from src import tui
         assert hasattr(tui, "WyrdTUI")
-        assert hasattr(tui, "WorldScreen")
-        assert hasattr(tui, "WorldMapWidget")
-        assert hasattr(tui, "WorldInfoPanel")
+        assert hasattr(tui, "SimScreen")
+        assert hasattr(tui, "SimMapWidget")
+        assert hasattr(tui, "SimInfoPanel")
+        assert hasattr(tui, "EventLogWidget")
+        assert hasattr(tui, "HelpScreen")
         assert hasattr(tui, "launch")
 
-    def test_world_screen_init(self):
-        """WorldScreen can be instantiated with a world."""
-        from src.tui import WorldScreen
+    def test_sim_screen_init(self):
+        """SimScreen can be instantiated with a world."""
+        from src.tui import SimScreen
         world = generate_world(42, width=30, height=20)
-        screen = WorldScreen(world)
+        screen = SimScreen(world)
         assert screen.world is world
 
-    def test_world_map_widget(self):
-        """WorldMapWidget can receive and render a world."""
-        from src.tui import WorldMapWidget
+    def test_sim_map_widget(self):
+        """SimMapWidget can receive and render a world."""
+        from src.tui import SimMapWidget
         from textual.widgets import Static
         world = generate_world(42, width=30, height=20)
-        widget = WorldMapWidget()
+        widget = SimMapWidget()
         # Verify it's a Static widget
         assert isinstance(widget, Static)
         # render_map should not throw
         widget.render_map(world)
         assert widget.world is world
+
+    def test_event_log_widget(self):
+        """EventLogWidget can be instantiated and log events."""
+        from src.tui import EventLogWidget
+        from textual.widgets import RichLog
+        widget = EventLogWidget()
+        assert isinstance(widget, RichLog)
 
     def test_launch_function_exists(self):
         """launch function accepts world or seed."""
@@ -51,3 +60,9 @@ class TestTUIStructure:
         world = generate_world(42, width=30, height=20)
         # Just verify it doesn't crash importing
         assert callable(launch)
+
+    def test_help_screen_init(self):
+        """HelpScreen can be instantiated."""
+        from src.tui import HelpScreen
+        screen = HelpScreen()
+        assert screen is not None
