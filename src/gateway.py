@@ -184,6 +184,9 @@ GATEWAY_HELP = [
     "    ? / h              Toggle this help screen",
     "    q / ESC            Quit wyrd",
     "",
+    "  Gazetteer",
+    "    G                  Open gazetteer — browse all entities",
+    "",
     "  Tip: Select a world and press 'e' to explore its terrain.",
     "       Press 'v' to watch centuries pass in real-time.",
 ]
@@ -260,6 +263,376 @@ def _launch_curses_view(stdscr, title: str, view_fn, *args, **kwargs):
     new_stdscr.keypad(True)
     curses.curs_set(0)
     return new_stdscr
+
+
+# ── Gazetteer mode (Phase 20 — Living Gazetteer) ──────────────────────
+
+
+def _collect_gazetteer_entities(world) -> list[dict]:
+    """Collect all entities from a world into a unified gazetteer list."""
+    entities = []
+
+    # 1. Settlements (from world regions)
+    for region in world.regions:
+        for s in region.settlements:
+            entities.append({
+                "type": "settlement",
+                "name": s.name,
+                "subtitle": f"{s.kind.title()} in {region.name} — Pop {s.population:,}",
+                "detail_lines": [
+                    f"  Kind:       {s.kind.title()}",
+                    f"  Region:     {region.name}",
+                    f"  Population: {s.population:,}",
+                    f"  Position:   ({s.x}, {s.y})",
+                ],
+                "badge_color": CP["badge_l"],
+                "badge": "S",
+                "sort_key": f"settlement_{s.name.lower()}",
+            })
+
+    # 2. Characters (from world.narrative)
+    if world.narrative and world.narrative.characters:
+        for c in world.narrative.characters:
+            status_icon = "✓" if c.status == "alive" else "✗"
+            entities.append({
+                "type": "character",
+                "name": c.full_name,
+                "subtitle": f"{c.occupation.title()} from {c.home_settlement} — {c.status}",
+                "detail_lines": [
+                    f"  Name:       {c.full_name}",
+                    f"  Occupation: {c.occupation.title()}",
+                    f"  Home:       {c.home_settlement}, {c.home_region}",
+                    f"  Age:        {c.age}",
+                    f"  Traits:     {', '.join(c.personality_traits)}",
+                    f"  Status:     {c.status}",
+                    f"  Backstory:  {c.backstory[:200]}",
+                ],
+                "badge_color": CP["badge_n"],
+                "badge": "C",
+                "sort_key": f"character_{c.surname.lower()}_{c.name.lower()}",
+            })
+
+    # 3. Factions
+    if world.factions:
+        for f in world.factions:
+            power = f.power_score
+            entities.append({
+                "type": "faction",
+                "name": f.name,
+                "subtitle": f"{f.faction_type.replace('_', ' ').title()} — Power {power} — {f.reputation}",
+                "detail_lines": [
+                    f"  Type:       {f.faction_type.replace('_', ' ').title()}",
+                    f"  Leader:     {f.leader_title} {f.leader_name}",
+                    f"  Reputation: {f.reputation}",
+                    f"  Power:      {power}/300  (Inf {f.influence} + Wel {f.wealth} + Mil {f.military})",
+                    f"  Stability:  {f.stability}/100",
+                    f"  Territory:  {', '.join(f.territory) if f.territory else 'None'}",
+                    f"  Goals:      {'; '.join(f.goals[:3])}",
+                    f"  {f.description}",
+                ],
+                "badge_color": CP["accent"],
+                "badge": "F",
+                "sort_key": f"faction_{f.name.lower()}",
+            })
+
+        # Relationships
+        if world.faction_relationships:
+            for rel in world.faction_relationships:
+                entities.append({
+                    "type": "faction_rel",
+                    "name": f"{rel.faction_a} ↔ {rel.faction_b}",
+                    "subtitle": f"Relationship: {rel.rel_type.replace('_', ' ').title()}",
+                    "detail_lines": [
+                        f"  {rel.faction_a} ↔ {rel.faction_b}",
+                        f"  Type: {rel.rel_type.replace('_', ' ').title()}",
+                        f"  {rel.description}",
+                    ],
+                    "badge_color": CP["badge_p"],
+                    "badge": "R",
+                    "sort_key": f"faction_rel_{rel.faction_a.lower()}_{rel.faction_b.lower()}",
+                })
+
+    # 4. Creatures (bestiary)
+    if world.bestiary:
+        for c in world.bestiary:
+            entities.append({
+                "type": "creature",
+                "name": c.name,
+                "subtitle": f"Tier {c.tier} {c.creature_type.replace('_', ' ').title()} — {c.habitat} — CR {c.challenge_rating}",
+                "detail_lines": [
+                    f"  Name:        {c.name}",
+                    f"  Type:        {c.creature_type.replace('_', ' ').title()}",
+                    f"  Tier:        {c.tier} (CR {c.challenge_rating})",
+                    f"  Habitat:     {c.habitat}",
+                    f"  Body Plan:   {c.body_plan}",
+                    f"  Behavior:    {c.behavior.replace('_', ' ').title()}",
+                    f"  Abilities:   {'; '.join(c.special_abilities[:4])}" if c.special_abilities else "",
+                    f"  Loot:        {'; '.join(c.loot[:4])}" if c.loot else "",
+                    f"  {c.description[:200]}",
+                ],
+                "badge_color": CP["badge_s"],
+                "badge": "B",
+                "sort_key": f"creature_{c.name.lower()}",
+            })
+
+    # 5. Adventure zones
+    if world.adventure_zones:
+        for z in world.adventure_zones:
+            from .world import ADVENTURE_ZONE_TYPES
+            zt = ADVENTURE_ZONE_TYPES.get(z.zone_type, {})
+            entities.append({
+                "type": "zone",
+                "name": z.name,
+                "subtitle": f"{z.zone_type.title()} in {z.region} — {z.difficulty} — {zt.get('desc', '')}",
+                "detail_lines": [
+                    f"  Name:        {z.name}",
+                    f"  Type:        {z.zone_type.title()} — {zt.get('desc', '')}",
+                    f"  Region:      {z.region}  ({z.x}, {z.y})",
+                    f"  Difficulty:  {z.difficulty}",
+                    f"  Inhabitants: {z.inhabitants or 'Unknown'}",
+                    f"  Treasure:    Tier {z.treasure_tier}",
+                    f"  Status:      {'Cleared' if z.is_cleared else 'Undisturbed'}",
+                    f"  {z.description[:200]}",
+                ],
+                "badge_color": CP["badge_m"],
+                "badge": "Z",
+                "sort_key": f"zone_{z.name.lower()}",
+            })
+
+    # 6. Deities (from pantheon)
+    if world.pantheon and world.pantheon.deities:
+        for d in world.pantheon.deities:
+            domains_str = ", ".join(d.domains) if hasattr(d, 'domains') and d.domains else ""
+            entities.append({
+                "type": "deity",
+                "name": d.name,
+                "subtitle": f"{d.title or ''} — {domains_str} — {d.alignment if hasattr(d, 'alignment') else ''}",
+                "detail_lines": [
+                    f"  Name:    {d.name}",
+                    f"  Title:   {d.title or 'Unknown'}",
+                    f"  Domains: {domains_str or 'Unknown'}",
+                    f"  Symbols: {d.symbol if hasattr(d, 'symbol') and d.symbol else 'Unknown'}",
+                ],
+                "badge_color": CP["badge_c"],
+                "badge": "D",
+                "sort_key": f"deity_{d.name.lower()}",
+            })
+
+    entities.sort(key=lambda e: e["sort_key"])
+    return entities
+
+
+GAZETTEER_TYPE_FILTERS = {
+    ord("1"): None,       # All
+    ord("2"): "settlement",
+    ord("3"): "character",
+    ord("4"): "faction",
+    ord("5"): "creature",
+    ord("6"): "zone",
+    ord("7"): "deity",
+}
+
+GAZETTEER_FILTER_NAMES = {
+    None: "All",
+    "settlement": "Settlements",
+    "character": "Characters",
+    "faction": "Factions",
+    "creature": "Creatures",
+    "zone": "Adventure Zones",
+    "deity": "Deities",
+}
+
+
+def _gazetteer_mode(stdscr, world):
+    """Interactive gazetteer browser — browse all world entities."""
+    curses.curs_set(0)
+    stdscr.nodelay(False)
+
+    entities = _collect_gazetteer_entities(world)
+    if not entities:
+        return
+
+    selected_idx = 0
+    scroll_offset = 0
+    active_filter = None  # None = all
+    show_detail = False
+    detail_entity = None
+    running = True
+    status_msg = ""
+    status_time = 0
+
+    while running:
+        h, w = stdscr.getmaxyx()
+        stdscr.clear()
+
+        # Apply filter
+        if active_filter is None:
+            filtered = entities
+        else:
+            filtered = [e for e in entities if e["type"] == active_filter]
+
+        if not filtered:
+            filtered = entities
+            active_filter = None
+
+        selected_idx = min(selected_idx, max(0, len(filtered) - 1))
+
+        # ── Header ──────────────────────────────────────────────────
+        title = f"  wyrd Gazetteer  —  {len(entities)} entities  "
+        _fill_line(stdscr, 0, CP["title"])
+        _draw(stdscr, 0, 0, title, CP["title"], bold=True)
+        _draw(stdscr, 0, max(0, w - 20), " [q] close  [G] close ", CP["dim"])
+
+        # ── Filter bar ──────────────────────────────────────────────
+        filter_y = 1
+        _fill_line(stdscr, filter_y, CP["dim"])
+        filter_text = " [1] All  [2] S  [3] C  [4] F  [5] B  [6] Z  [7] D"
+        active_name = GAZETTEER_FILTER_NAMES.get(active_filter, "All")
+        filter_str = f" Filter: {active_name} ({len(filtered)} shown) {filter_text}"
+        _draw(stdscr, filter_y, 0, filter_str, CP["info"])
+
+        # ── Column headers ──────────────────────────────────────────
+        header_y = 2
+        _fill_line(stdscr, header_y, CP["border"])
+        _draw(stdscr, header_y, 2, " Type Name                       Details", CP["dim"])
+
+        # ── Entity list ─────────────────────────────────────────────
+        list_y = 3
+        max_visible = h - list_y - 3
+        scroll_offset = max(0, min(scroll_offset, max(0, len(filtered) - max_visible)))
+
+        # Auto-scroll to keep selected visible
+        if selected_idx < scroll_offset:
+            scroll_offset = selected_idx
+        if selected_idx >= scroll_offset + max_visible:
+            scroll_offset = selected_idx - max_visible + 1
+
+        visible = filtered[scroll_offset:scroll_offset + max_visible]
+
+        for i, ent in enumerate(visible):
+            y = list_y + i
+            abs_idx = scroll_offset + i
+            is_sel = (abs_idx == selected_idx)
+
+            if is_sel:
+                _fill_line(stdscr, y, CP["highlight"])
+
+            marker = "▸ " if is_sel else "  "
+
+            # Badge
+            badge = f" {ent['badge']}"
+            badge_cp = ent["badge_color"]
+
+            # Name
+            name_col = f" {ent['name'][:max(20, w - 60)]}"
+
+            # Subtitle
+            sub_col = f" {ent['subtitle'][:max(10, w - len(name_col) - 10)]}" if ent['subtitle'] else ""
+
+            _draw(stdscr, y, 2, marker, CP["accent"], bold=True)
+            _draw(stdscr, y, 5, badge, badge_cp, bold=True)
+            _draw(stdscr, y, 8, name_col, CP["normal"], bold=is_sel)
+            _draw(stdscr, y, 8 + len(name_col), sub_col[:max(0, w - len(name_col) - 10)], CP["dim"])
+
+        # ── Status message ──────────────────────────────────────────
+        if status_msg and time_module.monotonic() - status_time < 3:
+            _fill_line(stdscr, h - 2, CP["border"])
+            _draw(stdscr, h - 2, 2, f"  {status_msg}", CP["accent"])
+        else:
+            status_msg = ""
+
+        # ── Status bar ──────────────────────────────────────────────
+        status_y = h - 1
+        mode_str = f" Gazetteer — {active_name} ({len(filtered)} items)"
+        hints = " [↑↓] nav  [Enter] detail  [1-7] filter  [q/G] close"
+        _fill_line(stdscr, status_y, CP["border"])
+        _draw(stdscr, status_y, 0, mode_str, CP["accent"], bold=True)
+        _draw(stdscr, status_y, max(0, w - len(hints) - 1), hints[:w - 3], CP["dim"])
+
+        stdscr.refresh()
+
+        # ── Detail popup ────────────────────────────────────────────
+        if show_detail and detail_entity:
+            detail_lines = detail_entity["detail_lines"]
+            # Build popup with header and close instruction
+            popup_lines = [
+                f" {detail_entity['badge']}  {detail_entity['name']}",
+                "",
+            ]
+            popup_lines.extend(detail_lines)
+            popup_lines.append("")
+            popup_lines.append(" [Enter] or [Esc] close ")
+
+            box_h = min(len(popup_lines) + 2, h - 1)
+            box_w = min(max(len(l) for l in popup_lines) + 4, w - 2)
+            start_y = max(0, (h - box_h) // 2)
+            start_x = max(0, (w - box_w) // 2)
+
+            # Background
+            for by in range(box_h):
+                for bx in range(box_w):
+                    try:
+                        if by in (0, box_h - 1) or bx in (0, box_w - 1):
+                            stdscr.addch(start_y + by, start_x + bx, " ",
+                                         curses.color_pair(CP["title"]))
+                        else:
+                            stdscr.addch(start_y + by, start_x + bx, " ",
+                                         curses.color_pair(CP["normal"]))
+                    except curses.error:
+                        pass
+
+            # Text
+            for i, line in enumerate(popup_lines):
+                y = start_y + 1 + i
+                if y >= h:
+                    break
+                if i == 0:
+                    _draw(stdscr, y, start_x + 2, line[:box_w - 2], CP["title"], bold=True)
+                elif "close" in line:
+                    _draw(stdscr, y, start_x + 2, line[:box_w - 2], CP["dim"])
+                else:
+                    _draw(stdscr, y, start_x + 2, line[:box_w - 2], CP["normal"])
+
+            stdscr.refresh()
+
+        # ── Input ──────────────────────────────────────────────────
+        key = stdscr.getch()
+
+        if show_detail:
+            if key in (10, 13, curses.KEY_ENTER, 27, ord("q"), ord("G")):
+                show_detail = False
+                detail_entity = None
+            continue
+
+        if key in (ord("q"), 27, ord("G")):
+            running = False
+
+        elif key in (curses.KEY_UP, ord("k")):
+            if filtered:
+                selected_idx = max(0, selected_idx - 1)
+        elif key in (curses.KEY_DOWN, ord("j")):
+            if filtered:
+                selected_idx = min(len(filtered) - 1, selected_idx + 1)
+
+        elif key in (10, 13, curses.KEY_ENTER):
+            if filtered and 0 <= selected_idx < len(filtered):
+                detail_entity = filtered[selected_idx]
+                show_detail = True
+
+        elif key in GAZETTEER_TYPE_FILTERS:
+            new_filter = GAZETTEER_TYPE_FILTERS[key]
+            if new_filter != active_filter:
+                active_filter = new_filter
+                selected_idx = 0
+                scroll_offset = 0
+                filter_name = GAZETTEER_FILTER_NAMES.get(new_filter, "All")
+                status_msg = f"Filter: {filter_name} ({len([e for e in entities if new_filter is None or e['type'] == new_filter])} items)"
+                status_time = time_module.monotonic()
+
+        elif key == ord("r"):
+            entities = _collect_gazetteer_entities(world)
+            status_msg = f"Refreshed — {len(entities)} entities"
+            status_time = time_module.monotonic()
 
 
 # ── Gateway main loop ──────────────────────────────────────────────────
@@ -396,7 +769,7 @@ def _gateway_loop(stdscr):
 
         # Build context-sensitive key hints (right-aligned)
         if worlds:
-            hints = " [↑↓/k j] sel  [g] gen  [l] load  [e] explore  [v] view  [p] play  [d] desc  [s] sim  [t] routes"
+            hints = " [↑↓/k j] sel  [g] gen  [l] load  [e] explore  [v] view  [p] play  [G] gazetteer  [d] desc  [s] sim  [t] routes"
         else:
             hints = " [g] generate  [l] load"
         hints += "  [?] help  [q] quit"
@@ -658,6 +1031,24 @@ def _gateway_loop(stdscr):
             _init_colors()
             stdscr.keypad(True)
             curses.curs_set(0)
+
+        elif key == ord("G"):
+            """Gazetteer mode — browse all world entities."""
+            world = world_in_session
+            if world is None and worlds and 0 <= selected_idx < len(worlds):
+                try:
+                    world = load_world(worlds[selected_idx]["path"])
+                except Exception:
+                    status_msg = "❌ Could not load world"
+                    status_time = time_module.monotonic()
+                    continue
+            if world is None:
+                status_msg = "❌ No world loaded"
+                status_time = time_module.monotonic()
+                continue
+            world_in_session = world
+            _gazetteer_mode(stdscr, world)
+            stdscr.clear()
 
         elif key == ord("p"):
             """Play/embody — launch embodied play mode for the selected world."""
