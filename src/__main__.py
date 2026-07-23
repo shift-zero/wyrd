@@ -247,6 +247,11 @@ def main():
     view_cmd.add_argument("--seed-offset", type=int, default=0,
                           help="Seed offset for branching (default: 0)")
 
+    # ── tui ─────────────────────────────────────────────────────────
+    tui_cmd = sub.add_parser("tui",
+                             help="Explore a world in the Textual-based TUI viewer")
+    _add_load_arg(tui_cmd)
+
     # ── branch ─────────────────────────────────────────────────────
     branch_cmd = sub.add_parser("branch",
                                 help="Compare branching simulation timelines")
@@ -482,6 +487,12 @@ def main():
             chaos_factor=args.chaos,
             seed_offset=args.seed_offset,
         )
+
+    # ── tui ──────────────────────────────────────────────────────────
+    elif args.command == "tui":
+        world = _get_world(args)
+        from .tui import launch as launch_tui
+        launch_tui(world=world)
 
     # ── branch ────────────────────────────────────────────────────────
     elif args.command == "branch":
