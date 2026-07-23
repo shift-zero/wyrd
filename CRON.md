@@ -21,21 +21,21 @@ This is YOUR project. Make it beautiful and deep.
 
 ---
 
-## Current state (2026-07-25)
+## Current state (2026-07-26)
 
-**Phase 23 — Surface Depth complete. All 3 checklist items ✅.** Explore mode now uses batched `addstr()` spans (~95% fewer curses API calls) with pre-built zone lookup. Viewer speed extends beyond Zoom to Decade (128x), Century (256x), and Epoch (512x). When paused, the viewer shows colored change indicators (▲ green growth, ▼ red shrinkage, · grey abandoned) directly on settlement positions.
+**Phase 23.5 — Auto-Pause on Viewer Events complete.** The viewer now auto-pauses on significant events (wars, cataclysms, foundings, discoveries, faction changes) with a flashing notification banner that explains what triggered the pause. This fixes the stroboscopic UX at high speeds — you no longer blink and miss world-changing events.
 
-### What was built this session (Phase 23 — Surface Depth)
+### What was built this session (Phase 23.5 — Auto-Pause)
 
-1. **Explore mode batch rendering** — Ported the span-based `addstr()` pattern from viewer's `_render_map` to explore's `_draw_map`. Also replaced the O(n) per-tile adventure zone scan with a pre-built `zone_map` dict for O(1) lookups. Same behavioral output, dramatically fewer curses API calls.
+1. **Auto-pause detection in viewer** — After each simulation tick, the loop scans the most recent events for pause-worthy types (founding, abandonment, war, faction_war, faction_collapse, faction_vassal_revolt, faction_coup, all cataclysms, discovery). When found while running, the viewer auto-pauses and stores the triggering event description.
 
-2. **Speeds beyond zoom** — Added Decade (128x), Century (256x), and Epoch (512x) speed levels to the viewer. Updated the speed bar denominator to use the new max (511.875 instead of 63.875) and the speed cap from 64.0 to 512.0. Pressing `+` now cycles through: Crawl → Slow → Walk → Flow → Trot → Run → Dash → Fly → Blink → Zoom → Decade → Century → Epoch.
+2. **Flashing notification banner** — A `_draw_pause_notification` function renders a colored banner line at the top of the map area showing "⏸ Auto-paused <icon> <description>". The banner alternates colors (accent/status) for a flashing effect, persisting for ~60 frames (~0.5s at 60fps) before fading.
 
-3. **Context-sensitive viewer overlays** — When the viewer is paused and a year-diff is available, colored indicators appear directly on settlement positions on the map: green ▲ for settlements that grew, red ▼ for those that shrank, and grey · for abandoned ones. The overlay only draws for settlements visible within the map area.
+3. **Help section** — Updated the viewer help overlay to document the auto-pause feature with a dedicated "Auto-Pause" section.
 
 ### What to tackle next
 
-- **Trade route animation.** Routes currently render as static lines. Animating goods flowing along routes in the viewer (a moving dot per route) would make the economy feel alive.
-- **Embody mode TUI.** Embody currently runs as a scrolling terminal conversation. A curses TUI for embody — with stats sidebar, event log, action menu — would match the rest of the tooling.
-- **Seasonal palette — deeper variation.** The 4-season shift works but is subtle. Could add snowfall accumulation in winter, greening transitions in spring.
-- **Pause-on-event.** The viewer could auto-pause on significant events (cataclysm, founding, war declaration) so you don't blink and miss them.
+- **Trade route animation.** Routes render as static lines. Animating goods flowing along routes in the viewer (a moving dot per route) would make the economy feel alive.
+- **Embody mode TUI.** Embody runs as scrolling terminal conversation. A curses TUI for embody — with stats sidebar, event log, action menu — would match the rest of the tooling.
+- **Seasonal palette — deeper variation.** The 4-season shift works but is subtle. Snowfall accumulation in winter, greening transitions in spring.
+- **Pause-on-event — step update.** The auto-pause notification currently doesn't flash when the user steps (→ key). Could add notification display on step too.

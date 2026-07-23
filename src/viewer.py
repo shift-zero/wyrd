@@ -351,6 +351,19 @@ def _draw_status_bar(stdscr, h, w, seed, year, total, paused, speed, month=None)
     _draw(stdscr, h - 1, max(0, w - len(hints) - 1), hints[:w - len(mode_str) - 3], _CP["dim"])
 
 
+def _draw_pause_notification(stdscr, msg: str | None, frames_left: int, h: int, w: int):
+    """Draw a brief auto-pause notification banner near the top of the screen."""
+    if msg is None or frames_left <= 0:
+        return
+    prefix = " ⏸ Auto-paused "
+    text = f"{prefix}{msg}"
+    text = text[:w - 4]
+    # Flash: alternate between accent and status colors
+    cp = _CP["status"] if frames_left // 6 % 2 == 0 else _CP["accent"]
+    _fill_line(stdscr, 2, _CP["header"])
+    _draw(stdscr, 2, 2, text, cp, bold=True)
+
+
 # ── Population chart overlay ─────────────────────────────────────────
 
 def _draw_chart(stdscr, state: SimState, h, w):
@@ -664,6 +677,12 @@ VIEWER_HELP = [
     "    h / ?          Toggle this help screen",
     "    q / ESC        Quit viewer",
     "",
+    "  Auto-Pause",
+    "    The viewer pauses automatically on significant events",
+    "    (wars, cataclysms, foundings, discoveries, faction changes).",
+    "    A flashing banner shows what triggered the pause.",
+    "    Press Space to resume watching.",
+    "",
     "  Tip: Watch the map evolve as centuries pass.",
     "       Use [ and ] to highlight settlements, then press 'i'.",
     "       New settlements appear in green.",
@@ -948,6 +967,19 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
     selected_settlement: dict | None = None
     show_settlement_popup: bool = False
 
+    # ── Pause-on-event ────────────────────────────────────────────
+    PAUSE_EVENT_TYPES = {
+        "founding", "abandonment",
+        "war", "faction_war", "faction_collapse",
+        "faction_vassal_revolt", "faction_coup",
+        "earthquake", "volcanic_eruption", "great_plague",
+        "tsunami", "meteor_strike", "great_fire", "magical_cataclysm",
+        "discovery",
+    }
+    auto_pause_msg: str | None = None
+    auto_pause_frames = 0
+    AUTO_PAUSE_SHOW_FRAMES = 60  # show notification ~60 frames
+
     # Cache terrain for fast map rendering
     terrain = [[TERRAIN[world.terrain[y][x]]["char"]
                 for x in range(world.width)]
@@ -1023,6 +1055,24 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
         # Decay remaining
         flash_tiles = {pos: f - 1 for pos, f in flash_tiles.items() if f > 1}
 
+        # ── Auto-pause on significant events ─────────────────────
+        if not paused:
+            # Check the most recent events for pause-worthy types
+            pause_triggered = False
+            for ev in reversed(events[-20:]):
+                if ev.event_type in PAUSE_EVENT_TYPES:
+                    icon = _EVENT_ICON.get(ev.event_type, "●")
+                    # Only auto-pause for events in the current year
+                    if ev.year == cur_year or (ev.year == cur_year - 1 and cur_month < 3):
+                        auto_pause_msg = f" ⏸ {icon} {ev.description[:70]}"
+                        pause_triggered = True
+                        break
+            if pause_triggered:
+                paused = True
+                auto_pause_frames = AUTO_PAUSE_SHOW_FRAMES
+                last = time.monotonic()
+                accum = 0.0
+
         # ── Build render world ───────────────────────────────────────
         sim_world = apply_sim_state_to_world(world, state)
         smap = _build_smap(sim_world)
@@ -1043,6 +1093,14 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
         _draw_header(stdscr, world.seed, cur_year, years,
                      paused, speed, w, cur_month)
         _draw_stats(stdscr, state, speed)
+
+        # Auto-pause notification overlay (fades after ~60 frames)
+        if auto_pause_frames > 0:
+            _draw_pause_notification(stdscr, auto_pause_msg, auto_pause_frames, h, w)
+            auto_pause_frames -= 1
+            if auto_pause_frames <= 0:
+                auto_pause_msg = None
+
         _render_map(stdscr, sim_world, smap, map_h, w, new_founds, flash_tiles, cur_month)
 
         # Draw change overlay when paused (growth/shrinkage indicators)

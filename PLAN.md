@@ -139,9 +139,28 @@ The simulation engine (`sim.py`) currently ticks in whole years. This is a deep 
 ||---|------|------------|
 ||| 1 ✅ | Explore mode batch rendering — port span-based `addstr()` from viewer to explore's `_draw_map` with pre-built zone lookup | ~95% fewer curses API calls per frame for explore terrain |
 ||| 2 ✅ | Speeds beyond zoom — Decade (128x), Century (256x), Epoch (512x) with labels and speed bar extension | `+` key cycles through Crawl→Epoch, Epoch simulates ~43 years/second |
-||| 3 ✅ | Context-sensitive viewer overlays — green ▲/red ▼/grey · on changed settlements when paused | Pause the viewer to see ▲ on growing towns, ▼ on shrinking ones, · on abandoned |
+||| 3 ✅ | Context-sensitive viewer overlays — green ▲/red ▼/grey · on changed settlements when paused | Pause the viewer to see ▲ on growing towns, ▼ on shrinking ones, · on abandoned ||
 ||
-||## Design Principles|
+```
+
+## Phase 23.5 — Auto-Pause on Viewer Events (2026-07-26 ✅)
+
+**Thesis:** When running the viewer at high speeds (Decade/Epoch), significant events flash by invisibly. Auto-pausing on wars, cataclysms, foundings, and discoveries makes the world feel alive and lets you *see* history unfold instead of watching it strobe past.
+
+### Items
+
+| # | What | Verifiable |
+|---|------|------------|
+| 1 ✅ | Auto-pause on significant events in viewer — wars, cataclysms, foundings, discoveries, faction changes | Run viewer at Epoch speed; it auto-pauses on the first major event with a flashing banner explaining why |
+| 2 ✅ | Flashing notification banner — shows event icon + description, alternates colors for attention | Banner persists ~60 frames with alternating accent/satus colors, then fades |
+| 3 ✅ | Help documentation — new section in viewer help overlay | Press ? in viewer to see Auto-Pause section |
+
+### What to tackle next
+- **Embody mode TUI** — 1943 lines of `print()` statements. A curses TUI with stats sidebar, event log, and action menu would match the rest of the tooling.
+- **Trade route animation** — Animate goods flowing along routes (a moving dot per route) in the viewer.
+- **Pause-on-step notification** — Show the auto-pause banner when the user manually steps (→) into a significant event.
+
+## Design Principles
 
 1. **Every output is beautiful.** ANSI color, careful layout, no debug spew.
 2. **Worlds feel real.** Generated geography constrains lore, not the other way around.
