@@ -1251,8 +1251,8 @@ def _gateway_loop(stdscr):
                 continue
             world_in_session = world
             curses.endwin()
-            from .embody import embody_play
-            embody_play(world, years=100, chaos=0.3, load_save=True)
+            from .embody_tui import embody_tui_play
+            embody_tui_play(world, years=100, chaos=0.3, load_save=True)
             print("\n── Press Enter to return to wyrd gateway...")
             input()
             stdscr = curses.initscr()

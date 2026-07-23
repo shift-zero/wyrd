@@ -265,16 +265,18 @@ def main():
 
     # ── embody ──────────────────────────────────────────────────────
     embody_cmd = sub.add_parser("embody",
-                                help="Play as a character in the world")
+        help="Embodied play mode — live as a character in the world")
     _add_load_arg(embody_cmd)
     embody_cmd.add_argument("--name", type=str, default=None,
-                            help="Character name (generated if omitted)")
+        help="Character name (random if omitted)")
     embody_cmd.add_argument("--years", type=int, default=100,
-                            help="Max years to simulate (default: 100)")
+        help="Maximum years to simulate (default: 100)")
     embody_cmd.add_argument("--chaos", type=float, default=0.3,
-                            help="Chaos factor 0.0-1.0 (default: 0.3)")
+        help="Chaos factor for simulation (0.0-1.0)")
     embody_cmd.add_argument("--no-load-save", action="store_true",
-                            help="Skip loading saved character state (start fresh)")
+        help="Start fresh, ignoring any saved character state")
+    embody_cmd.add_argument("--tui", action="store_true",
+        help="Use curses TUI interface instead of print/input mode")
 
     # ── zones ───────────────────────────────────────────────────────
     zones_cmd = sub.add_parser("zones",
@@ -550,14 +552,24 @@ def main():
     # ── embody ──────────────────────────────────────────────────────
     elif args.command == "embody":
         world = _get_world(args)
-        from .embody import embody_play
-        embody_play(
-            world,
-            name=args.name,
-            years=args.years,
-            chaos=args.chaos,
-            load_save=not args.no_load_save,
-        )
+        if getattr(args, 'tui', False):
+            from .embody_tui import embody_tui_play
+            embody_tui_play(
+                world,
+                name=args.name,
+                years=args.years,
+                chaos=args.chaos,
+                load_save=not args.no_load_save,
+            )
+        else:
+            from .embody import embody_play
+            embody_play(
+                world,
+                name=args.name,
+                years=args.years,
+                chaos=args.chaos,
+                load_save=not args.no_load_save,
+            )
 
     # ── zones ───────────────────────────────────────────────────────
     elif args.command == "zones":

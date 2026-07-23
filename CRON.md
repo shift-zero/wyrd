@@ -23,20 +23,28 @@ This is YOUR project. Make it beautiful and deep.
 
 ## Current state (2026-07-27)
 
-**Phase 19 — Trade route animation complete.** The viewer now shows gold dotted trade lines between connected settlements with animated ◆ dots moving along each route. Goods flow visibly between economies. Step-pause notification added — manual stepping through a significant event shows the same flashing banner as auto-pause.
+**Phase 19 — Embody mode TUI complete.** The print/input embody mode now has a proper curses TUI (`embody_tui.py`, 750 lines) with stats sidebar, scrollable event log, action bar, and overlay dialogs for choices, travel, and market.
 
-### What was built this session (Phase 19 — Trade Route Animation)
+### What was built this session (Phase 19 — Embody Mode TUI)
 
-1. **Bresenham line drawer** — `_bresenham_line()` in viewer.py yields cartesian coordinates along a clean line between any two points. Used to draw trade routes and position animated dots.
+1. **Embodied Play TUI** — `src/embody_tui.py` (750 lines) provides a full curses TUI for embody mode:
+   - **Stats sidebar** — character name, profession, health bar (animated), gold, age, season/year, location, all 5 skills with progress bars, deeds, visited settlements, reputation
+   - **Event log** — scrollable right panel with color-coded event types (red for combat, green for prosperity, blue for discoveries) — scroll with ↑↓/PgUp/PgDn
+   - **Action bar** — persistent bottom bar showing all available keybinds
+   - **Choice overlays** — transparent overlay for interactive events (1/2/3 choices) with result feedback flowing into the event log
+   - **Travel overlay** — scrollable destination picker inside the TUI
+   - **Market overlay** — buy/sell interface within the TUI
+   - **Help overlay** — `?` key shows contextual help (same panel pattern as gateway)
+   - **Scrollable log** — up/down/page-up/page-down navigation
+   - **Heir system** — death shows epilogue, offers heir continuation (terminal fallback)
 
-2. **Trade route rendering** — `_draw_trade_routes()` renders gold `·` dotted lines between connected settlements. A `◆` dot travels from source to destination at a unique phase per route. When paused, dots hold position so the trade network is always readable.
+2. **CLI integration** — `wyrd embody --seed 42 --tui` launches the TUI. Gateway defaults to TUI. Legacy `print()` mode still available without `--tui`.
 
-3. **Viewer help update** — Added a "Trade Routes" section to the in-viewer help overlay explaining the visual language.
-
-4. **Step-pause notification** — Manual step (→ key) now checks for significant events in the stepped year and triggers the same flashing auto-pause banner, so you don't miss world events even when stepping manually.
+3. **Gateway integration** — `p` key in gateway launches the TUI instead of print mode. Old `embody_play` is preserved for CLI users who don't want curses.
 
 ### What to tackle next
 
-- **Seasonal palette — deeper variation.** The 4-season shift works but is subtle. Snowfall accumulation in winter (grass → snow transition near cold regions), greening transitions in spring, more dramatic autumn reds. Could use a temperature map computed from latitude + elevation.
-- **Embody mode TUI.** Embody (1943 lines) runs as scrolling terminal conversation. A curses TUI with stats sidebar, event log, and action menu would match the rest of the tooling.
-- **Trade route animation — route legend.** Add a small indicator showing how many active routes exist, maybe the current goods flowing or a route count in the status bar.
+- **Seasonal palette — deeper variation.** Snow accumulation on cold terrain, greening transitions in spring, dramatic autumn reds using temperature maps from latitude + elevation.
+- **Heir TUI integration** — the heir prompt currently drops to terminal after character death in TUI mode. Could present options within curses.
+- **Embody TUI mobile support** — handle small terminal sizes more gracefully (collapse sidebar at <100 columns).
+- **Trade route legend** — small route count indicator in the viewer status bar.
