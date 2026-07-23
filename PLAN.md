@@ -303,7 +303,7 @@ Eventual stretch: your character's descendants inherit through generations.
 
 | # | What | Verifiable |
 |---|------|------------|
-| 1 🔲 | Live map animation during simulation | `wyrd run --seed 42 --years 100` renders map that animates tile changes, pop growth/shrink, trade route formation in real-time (partial: tiles flash on growth/shrink/founding/abandonment) — 2026-07-23 |
+| 1 ✅ | Live map animation during simulation | `wyrd tui --seed 42` → Space — settlement tiles show green ↑ (growth), red ↓ (decline), gold ✦ (founding), dim ✗ (abandonment) with 1.5s auto-fade; animation legend appears during overlay | 2026-07-23 |
 | 2 🟡 | Textual-based TUI (or equivalent Python framework) | `wyrd` drops into a polished, navigable interface with tabs, help, status bar, modal overlays (sim-aware: `wyrd tui --seed 42` launches Textual viewer with sim controls, event log, live stats, year-diff; press `r` to reset/rewind sim) — 2026-07-23 |
 | 3 ✅ | Embodied character play mode (MVP) | `wyrd embody --seed 42 --name "Rikard"` — play as a character with location, travel, news, aging, and year-by-year advancement; auto-save/resume via `wyrd-{seed}-char.json`; legacy tracking with Life Ledger on death — 2026-07-23 |
 | 4 ✅ | Event-driven notifications with branching (2026-07-23) | Sim events arrive as interactive notifications with choice prompts — 7 scenario types: stranger, plague, war, merchant, discovery, religious, exodus — 95 tests |

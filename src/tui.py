@@ -80,6 +80,118 @@ _EVENT_COLORS = {
 # ── Map Widget ────────────────────────────────────────────────────────
 
 
+# ── Animation overlay helpers ─────────────────────────────────────────
+
+_ANIM_OVERLAY_SPEC = {
+    "grew":      {"char": "↑", "color": 46,  "bold": True},   # green
+    "shrank":    {"char": "↓", "color": 196, "bold": True},   # red
+    "founded":   {"char": "✦", "color": 220, "bold": True},   # gold
+    "abandoned": {"char": "✗", "color": 243, "bold": False},  # dim grey
+}
+
+
+def _render_map_with_overlays(
+    world: World,
+    overlays: dict[tuple[int, int], dict] | None = None,
+    show_settlements: bool = True,
+) -> str:
+    """Render the world map, overlaying custom colors/chars at given positions.
+
+    *overlays* maps ``(x, y)`` → ``{"color": int, "char": str, "bold": bool}``.
+    Tiles with an overlay entry replace their normal char with the overlay.
+    """
+    lines: list[str] = []
+
+    # Title bar
+    lines.append(f"{ANSI_BOLD}wyrd — seed {world.seed}{ANSI_RESET}")
+    lines.append(f"{world.width}×{world.height} | {len(world.regions)} regions\n")
+
+    # Build settlement lookup
+    settlement_grid: dict[tuple[int, int], Settlement] = {}
+    for region in world.regions:
+        for s in region.settlements:
+            settlement_grid[(s.x, s.y)] = s
+
+    overlay = overlays or {}
+
+    # Map body
+    for y in range(world.height):
+        row: list[str] = []
+        for x in range(world.width):
+            # Overlay wins
+            if (x, y) in overlay:
+                ov = overlay[(x, y)]
+                if ov.get("bold", True):
+                    row.append(f"{_color(ov['color'])}{ANSI_BOLD}{ov['char']}{ANSI_RESET}")
+                else:
+                    row.append(f"{_color(ov['color'])}{ov['char']}{ANSI_RESET}")
+                continue
+
+            terrain_key = world.terrain[y][x]
+            info = TERRAIN[terrain_key]
+
+            # Settlement marker
+            s = settlement_grid.get((x, y))
+            if s is not None and show_settlements:
+                row.append(f"{_color(226)}{ANSI_BOLD}{s.char}{ANSI_RESET}")
+                continue
+
+            # Landmark
+            lm_match = None
+            for lm in world.landmarks:
+                if lm.x == x and lm.y == y:
+                    lm_match = lm
+                    break
+            if lm_match is not None:
+                row.append(f"{_color(lm_match.color)}{ANSI_BOLD}{lm_match.char}{ANSI_RESET}")
+                continue
+
+            # Adventure zone
+            az_match = None
+            for z in world.adventure_zones:
+                if z.x == x and z.y == y:
+                    az_match = z
+                    break
+            if az_match is not None and show_settlements:
+                row.append(f"{_color(az_match.color)}{ANSI_BOLD}{az_match.char}{ANSI_RESET}")
+                continue
+
+            # Default terrain
+            row.append(f"{_color(info['color'])}{info['char']}{ANSI_RESET}")
+        lines.append("".join(row))
+
+    # Legend (compact)
+    lines.append("")
+    for key_, info_ in TERRAIN.items():
+        lines.append(f"  {_color(info_['color'])}{info_['char']}{ANSI_RESET}  {info_['desc']}")
+    lines.append(f"\n  {_color(226)}{ANSI_BOLD}●{ANSI_RESET}  Settlement")
+
+    # Animation legend when active
+    if overlays:
+        # Collect unique overlay types present
+        seen_types: set[str] = set()
+        for ov in overlays.values():
+            for tname, spec in _ANIM_OVERLAY_SPEC.items():
+                if (ov.get("char"), ov.get("color")) == (spec["char"], spec["color"]):
+                    seen_types.add(tname)
+                    break
+        for tname in ["grew", "shrank", "founded", "abandoned"]:
+            if tname in seen_types:
+                sp = _ANIM_OVERLAY_SPEC[tname]
+                lines.append(
+                    f"  {_color(sp['color'])}{ANSI_BOLD if sp['bold'] else ''}"
+                    f"{sp['char']}{ANSI_RESET}  {tname.title()}"
+                )
+
+    # Region list
+    lines.append(f"\n{ANSI_BOLD}Regions:{ANSI_RESET}")
+    for region in world.regions:
+        settlements = ", ".join(f"{s.name} ({s.kind})" for s in region.settlements)
+        lines.append(f"  {ANSI_BOLD}{region.name}{ANSI_RESET} — {settlements}")
+
+    return "\n".join(lines)
+
+
 class SimMapWidget(Static):
     """Displays the world's ASCII map. Updates automatically during sim."""
 
@@ -89,11 +201,52 @@ class SimMapWidget(Static):
     pop: int = 0
     settlements_count: int = 0
 
+    _animation_overlays: dict[tuple[int, int], dict] = {}
+    _animation_timer: Timer | None = None
+
     def render_map(self, world: World) -> None:
         """Render the world map as an ANSI-colored string."""
         self.world = world
+        # Cancel any pending animation timer
+        self._cancel_animation()
+        self._animation_overlays = {}
         map_str = render_map(world, show_settlements=self.show_settlements)
         self.update(map_str)
+
+    def render_animated(self, world: World, overlays: dict) -> None:
+        """Render the map with transient animation overlays."""
+        self.world = world
+        self._animation_overlays = overlays
+        map_str = _render_map_with_overlays(
+            world, overlays=overlays, show_settlements=self.show_settlements
+        )
+        self.update(map_str)
+
+    def flash_overlays(
+        self, world: World, overlays: dict, duration: float = 1.5
+    ) -> None:
+        """Show animation overlays, then auto-revert to normal map."""
+        if not overlays:
+            return
+        self.render_animated(world, overlays)
+        self._cancel_animation()
+        self._animation_timer = self.set_timer(duration, self._clear_animation)
+
+    def _clear_animation(self) -> None:
+        """Revert to normal map and clear overlay state."""
+        self._animation_overlays = {}
+        self._animation_timer = None
+        if self.world:
+            map_str = render_map(self.world, show_settlements=self.show_settlements)
+            self.update(map_str)
+
+    def _cancel_animation(self) -> None:
+        if self._animation_timer is not None:
+            try:
+                self._animation_timer.stop()
+            except Exception:
+                pass
+            self._animation_timer = None
 
     def on_mount(self) -> None:
         if self.world:
@@ -444,7 +597,9 @@ class SimScreen(Screen):
         self._update_ui_state()
         map_widget = self.query_one(SimMapWidget)
         sim_world = apply_sim_state_to_world(self.world, self.sim_state)
-        map_widget.render_map(sim_world)
+        # Animate changed tiles
+        overlays = self._compute_animation_overlays(self._last_diff) if self._last_diff else {}
+        map_widget.flash_overlays(sim_world, overlays)
 
     def _do_tick(self) -> None:
         """Run one sim tick and capture events."""
@@ -538,6 +693,40 @@ class SimScreen(Screen):
             "rebuilt": rebuilt[:10],
             "year": self.sim_year,
         }
+
+    def _compute_animation_overlays(self, diff: dict) -> dict[tuple[int, int], dict]:
+        """Convert a year-diff into map overlay entries for tile animation.
+
+        Returns dict mapping ``(x, y)`` → overlay spec (char, color, bold)
+        for settlements that grew, shrank, were founded, or were abandoned.
+        """
+        overlays: dict[tuple[int, int], dict] = {}
+        if self.sim_state is None:
+            return overlays
+
+        settlements = self.sim_state.settlements
+
+        for name, _old, _new_, _delta in diff.get("grew", []):
+            ss = settlements.get(name)
+            if ss is not None:
+                overlays[(ss.x, ss.y)] = dict(_ANIM_OVERLAY_SPEC["grew"])
+
+        for name, _old, _new_, _delta in diff.get("shrank", []):
+            ss = settlements.get(name)
+            if ss is not None:
+                overlays[(ss.x, ss.y)] = dict(_ANIM_OVERLAY_SPEC["shrank"])
+
+        for name, _pop, _pros in diff.get("new", []):
+            ss = settlements.get(name)
+            if ss is not None:
+                overlays[(ss.x, ss.y)] = dict(_ANIM_OVERLAY_SPEC["founded"])
+
+        for name in diff.get("abandoned", []):
+            ss = settlements.get(name)
+            if ss is not None:
+                overlays[(ss.x, ss.y)] = dict(_ANIM_OVERLAY_SPEC["abandoned"])
+
+        return overlays
 
 
 # ── Help Screen ───────────────────────────────────────────────────────
