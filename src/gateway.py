@@ -222,6 +222,7 @@ def _launch_terminal_view(stdscr, title: str, render_fn, *args, **kwargs):
     print(text)
     input(f"\n── {title} ── Press Enter to return to wyrd gateway...")
     # Restart curses for the gateway
+    stdscr = curses.initscr()
     curses.start_color()
     curses.use_default_colors()
     _init_colors()
@@ -238,6 +239,7 @@ def _launch_curses_view(stdscr, title: str, view_fn, *args, **kwargs):
     except Exception:
         pass
     # Restart curses for the gateway
+    new_stdscr = curses.initscr()
     curses.start_color()
     curses.use_default_colors()
     _init_colors()

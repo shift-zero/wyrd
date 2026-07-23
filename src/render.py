@@ -1133,6 +1133,8 @@ def render_trade_route_map(
             dtype if dtype in _ROUTE_ECON_COLORS else "trading"
         )
         color = _ROUTE_ECON_COLORS.get(etype, 226)
+        is_road = getattr(r, 'is_road', False)
+        dot_char = "━" if is_road else "·"
 
         for px, py in _bresenham_line(sx, sy, dx, dy):
             # Don't overwrite settlement positions
@@ -1143,7 +1145,12 @@ def render_trade_route_map(
                 tk = world.terrain[py][px]
                 if tk in ("deep_water", "shallow", "ocean"):
                     continue
-                route_layer[(px, py)] = (color, "·")
+                # Road routes use a highlight color; regular routes use route color
+                if is_road:
+                    clr = 220  # golden highlight for roads
+                else:
+                    clr = color
+                route_layer[(px, py)] = (clr, dot_char)
 
     # Apply route dots onto the grid (skipping settlements)
     for (x, y), (clr, ch) in route_layer.items():
@@ -1178,6 +1185,7 @@ def render_trade_route_map(
             if etype in seen_types:
                 lines.append(f"  {_color(_ROUTE_ECON_COLORS[etype])}{_ROUTE_ECON_ICONS[etype]}{ANSI_RESET}  {etype}")
         lines.append(f"  {_color(226)}·{ANSI_RESET}  Trade route path")
+        lines.append(f"  {_color(220)}━{ANSI_RESET}  Road (persistent route, 50+ years)")
         lines.append("")
 
     # Route listings (top 10)
@@ -1191,13 +1199,15 @@ def render_trade_route_map(
             dt = s_info.get(dst, ("?", "?", "?"))[2]
             si = _ROUTE_ECON_ICONS.get(st, "📦")
             di = _ROUTE_ECON_ICONS.get(dt, "📦")
+            road_flag = " 🛤️" if getattr(r, 'is_road', False) else ""
             lines.append(
-                f"  {si} {ANSI_BOLD}{src}{ANSI_RESET} ↔ {di} {ANSI_BOLD}{dst}{ANSI_RESET}"
+                f"  {si} {ANSI_BOLD}{src}{ANSI_RESET} ↔ {di} {ANSI_BOLD}{dst}{ANSI_RESET}{road_flag}"
             )
             lines.append(
                 f"    {ANSI_DIM}{getattr(r, 'goods', 'goods')}  "
                 f"(vol: {getattr(r, 'volume', 0.5):.0%}, "
-                f"dist: {getattr(r, 'distance', 0):.0f}){ANSI_RESET}"
+                f"dist: {getattr(r, 'distance', 0):.0f}"
+                f"{', road' if getattr(r, 'is_road', False) else ''}){ANSI_RESET}"
             )
         if len(active) > 10:
             lines.append(f"  {ANSI_DIM}… and {len(active) - 10} more{ANSI_RESET}")

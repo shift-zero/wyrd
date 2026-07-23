@@ -98,6 +98,8 @@ class TradeRoute:
     distance: float  # Euclidean distance between settlements
     is_active: bool = True
     established_year: int = 0
+    years_active: int = 0  # consecutive years this route has been active
+    is_road: bool = False  # True when years_active >= 50
 
     @property
     def key(self) -> str:
@@ -330,6 +332,19 @@ def _apply_trade_effects(
             boost = max(0.0, min(0.15, vol * 0.015))
             s.prosperity = min(1.0, s.prosperity + boost)
 
+    # Road bonus: settlements connected by roads get extra prosperity
+    # (roads are upgraded routes with higher volume, but we also give
+    #  a flat bonus for being on a road network)
+    road_connected: set[str] = set()
+    for route in routes:
+        if route.is_active and route.is_road:
+            road_connected.add(route.source)
+            road_connected.add(route.destination)
+    for s_name in road_connected:
+        s = state.settlements.get(s_name)
+        if s and s.is_active:
+            s.prosperity = min(1.0, s.prosperity + 0.01)
+
 
 # ── Route Disruption ──────────────────────────────────────────────────
 
@@ -508,6 +523,21 @@ def _simulate_economy_tick(
     """
     events: list[tuple[str, str, str]] = []
 
+    # 0. Track route age, upgrade persistent routes to roads
+    for route in routes:
+        if route.is_active:
+            route.years_active += 1
+            if route.years_active >= 50 and not route.is_road:
+                route.is_road = True
+                route.volume = min(1.0, route.volume * 1.5)  # roads boost trade volume
+                events.append((
+                    "road_construction",
+                    f"A well-trodden path between {route.source} and {route.destination} becomes a proper road — trade flourishes!",
+                    "🛤️",
+                ))
+        else:
+            route.years_active = 0  # reset if route disrupted
+
     # 1. Check for route disruptions
     disruptions = _check_route_disruptions(state, routes, rng, year)
     for reason, desc, _ in disruptions:
@@ -566,6 +596,8 @@ def trade_route_to_dict(route: TradeRoute) -> dict:
         "distance": route.distance,
         "is_active": route.is_active,
         "established_year": route.established_year,
+        "years_active": route.years_active,
+        "is_road": route.is_road,
     }
 
 
@@ -579,6 +611,8 @@ def trade_route_from_dict(d: dict) -> TradeRoute:
         distance=d.get("distance", 10.0),
         is_active=d.get("is_active", True),
         established_year=d.get("established_year", 0),
+        years_active=d.get("years_active", 0),
+        is_road=d.get("is_road", False),
     )
 
 

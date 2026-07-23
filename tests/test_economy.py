@@ -531,3 +531,185 @@ class TestIntegration:
         # Both should exist (though rare)
         assert len(state.faction_state) > 0
         assert len(state.trade_routes) > 0
+
+
+class TestRoadInfrastructure:
+    """Tests for Phase 16 road/infrastructure system."""
+
+    def test_road_upgrade_after_50_years(self):
+        """Active routes upgrade to roads after 50+ consecutive years."""
+        from src.generate import generate_world
+        from src.sim import initialize_sim_state
+        from src.economy import TradeRoute
+
+        world = generate_world(42, width=30, height=20)
+        state = initialize_sim_state(world)
+        state.year = 100
+
+        # Create a route that has been active for 60 years
+        route = TradeRoute(
+            source="Testville",
+            destination="Testburg",
+            goods="grain for ore",
+            volume=0.5,
+            distance=10.0,
+            is_active=True,
+            established_year=40,
+            years_active=60,
+            is_road=False,
+        )
+
+        # Run economy tick
+        from src.economy import _simulate_economy_tick
+        from src.economy import reconstruct_routes, serialize_routes
+        routes = [route]
+        rng = random.Random(42)
+        routes_out, events = _simulate_economy_tick(
+            world, state, rng, 100, routes, 0.3
+        )
+
+        # Route should now be a road
+        assert len(routes_out) == 1
+        upgraded = routes_out[0]
+        assert upgraded.is_road, "Route with 60 years_active should be a road"
+        assert upgraded.volume > 0.5, "Road should boost trade volume"
+
+        # Should emit a road construction event
+        road_events = [e for e in events if e[0] == "road_construction"]
+        assert len(road_events) == 1
+
+    def test_road_takes_50_years(self):
+        """Route with <50 years active should NOT become a road."""
+        from src.generate import generate_world
+        from src.sim import initialize_sim_state
+        from src.economy import TradeRoute
+
+        world = generate_world(42, width=30, height=20)
+        state = initialize_sim_state(world)
+        state.year = 50
+
+        route = TradeRoute(
+            source="Testville",
+            destination="Testburg",
+            goods="grain for ore",
+            volume=0.5,
+            distance=10.0,
+            is_active=True,
+            established_year=49,
+            years_active=1,
+            is_road=False,
+        )
+
+        from src.economy import _simulate_economy_tick
+        routes = [route]
+        rng = random.Random(42)
+        routes_out, events = _simulate_economy_tick(
+            world, state, rng, 50, routes, 0.3
+        )
+
+        assert not routes_out[0].is_road, "1-year-old route should not be a road"
+        road_events = [e for e in events if e[0] == "road_construction"]
+        assert len(road_events) == 0
+
+    def test_years_active_resets_on_disruption(self):
+        """Inactive routes should reset years_active to 0."""
+        from src.economy import TradeRoute
+
+        route = TradeRoute(
+            source="Src", destination="Dst",
+            goods="goods", volume=0.5, distance=10.0,
+            is_active=False, established_year=0,
+            years_active=55, is_road=True,
+        )
+        # Run economy tick cycles
+        from src.economy import _simulate_economy_tick
+        from src.generate import generate_world
+        from src.sim import initialize_sim_state
+        world = generate_world(42, width=30, height=20)
+        state = initialize_sim_state(world)
+
+        rng = random.Random(42)
+        routes, events = _simulate_economy_tick(
+            world, state, rng, 100, [route], 0.3
+        )
+
+        # Inactive route should have years_active reset to 0
+        assert routes[0].years_active == 0
+
+    def test_road_serialization_roundtrip(self):
+        """is_road and years_active survive serialization."""
+        from src.economy import TradeRoute, trade_route_to_dict, trade_route_from_dict
+
+        route = TradeRoute(
+            source="A", destination="B",
+            goods="grain for ore", volume=0.8,
+            distance=15.0, is_active=True,
+            established_year=10, years_active=60,
+            is_road=True,
+        )
+
+        d = trade_route_to_dict(route)
+        assert d["is_road"] is True
+        assert d["years_active"] == 60
+
+        restored = trade_route_from_dict(d)
+        assert restored.is_road is True
+        assert restored.years_active == 60
+        assert restored.source == "A"
+        assert restored.destination == "B"
+
+    def test_road_defaults_for_old_data(self):
+        """Old saved data without road fields should load gracefully."""
+        from src.economy import trade_route_from_dict
+
+        old_data = {
+            "source": "OldTown",
+            "destination": "OldVillage",
+            "goods": "local goods",
+            "volume": 0.3,
+            "distance": 12.0,
+            "is_active": True,
+            "established_year": 0,
+        }
+
+        restored = trade_route_from_dict(old_data)
+        assert restored.years_active == 0
+        assert restored.is_road is False
+        assert restored.source == "OldTown"
+
+    def test_road_prosperity_bonus(self):
+        """Settlements connected by roads get additional prosperity."""
+        from src.generate import generate_world
+        from src.sim import initialize_sim_state, SettlementSnapshot
+        from src.economy import _apply_trade_effects, TradeRoute
+
+        world = generate_world(42, width=30, height=20)
+        state = initialize_sim_state(world)
+
+        # Add two test settlements with known prosperity
+        state.settlements["A"] = SettlementSnapshot(
+            name="A", region="Test", x=5, y=5,
+            population=500, kind="village",
+            economy_type="farming", prosperity=0.5,
+        )
+        state.settlements["B"] = SettlementSnapshot(
+            name="B", region="Test", x=15, y=5,
+            population=300, kind="hamlet",
+            economy_type="mining", prosperity=0.5,
+        )
+
+        # Road route between them
+        routes = [
+            TradeRoute(
+                source="A", destination="B",
+                goods="grain for ore", volume=0.5,
+                distance=10.0, is_active=True, established_year=0,
+                years_active=60, is_road=True,
+            ),
+        ]
+
+        _apply_trade_effects(state, routes)
+
+        # Both road-connected settlements should have higher prosperity
+        assert state.settlements["A"].prosperity > 0.5
+        assert state.settlements["B"].prosperity > 0.5
