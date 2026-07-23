@@ -26,6 +26,7 @@ ECONOMY_TYPES = [
     "fishing",
     "trading",
     "pastoral",
+    "caravansary",
 ]
 
 ECONOMY_ICONS = {
@@ -35,6 +36,7 @@ ECONOMY_ICONS = {
     "fishing": "\U0001f41f",  # 🐟
     "trading": "\U0001f4b0",  # 💰
     "pastoral": "\U0001f404", # 🐄
+    "caravansary": "\U0001f9ed",  # 🧭
 }
 
 ECONOMY_COLORS = {
@@ -44,6 +46,7 @@ ECONOMY_COLORS = {
     "fishing": 33,    # ocean blue
     "trading": 226,   # bright gold
     "pastoral": 40,   # fresh green
+    "caravansary": 179,  # desert tan
 }
 
 # Specialization titles — awarded after 100+ consecutive years with the same economy type
@@ -73,6 +76,10 @@ SPECIALIZATION_TITLES = {
         "The Wool Kingdom", "The Green Pastures", "The Shepherd's Delight",
         "The Herder's Realm", "The Flock's Haven",
     ],
+    "caravansary": [
+        "The Oasis Gate", "The Salt Road's Jewel", "The Sand-Draped Market",
+        "The Dune Caravansary", "The Thirstless Haven",
+    ],
 }
 
 # Complementary economy pairs: which economies trade with which
@@ -82,8 +89,9 @@ COMPLEMENTARY_ECONOMIES = {
     "logging": ["farming", "mining", "trading"],
     "mining": ["farming", "logging", "fishing", "trading"],
     "fishing": ["farming", "mining", "trading"],
-    "trading": ["farming", "logging", "mining", "fishing", "pastoral"],
+    "trading": ["farming", "logging", "mining", "fishing", "pastoral", "caravansary"],
     "pastoral": ["farming", "trading", "mining"],
+    "caravansary": ["trading", "farming", "mining"],
 }
 
 TRADE_GOODS = {
@@ -111,6 +119,12 @@ TRADE_GOODS = {
     ("farming", "pastoral"): "grain for wool",
     ("pastoral", "mining"): "wool for tools",
     ("mining", "pastoral"): "tools for wool",
+    ("caravansary", "trading"): "salt for finished goods",
+    ("trading", "caravansary"): "finished goods for salt",
+    ("caravansary", "farming"): "spices for grain",
+    ("farming", "caravansary"): "grain for spices",
+    ("caravansary", "mining"): "salt for ore",
+    ("mining", "caravansary"): "ore for salt",
 }
 
 
@@ -206,7 +220,11 @@ def _assign_economy(
         if proportions.get("shallow", 0) + proportions.get("deep_water", 0) > 0.25:
             return "fishing"
 
-    # 3. Mining — hills/mountains dominant
+    # 3. Desert oasis trade — settlements near desert
+    if proportions.get("desert", 0) > 0.25:
+        return "caravansary"
+
+    # 4. Mining — hills/mountains dominant
     mining_terrain = proportions.get("mountains", 0) + proportions.get("hills", 0)
     if mining_terrain > 0.25:
         return "mining"

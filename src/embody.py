@@ -157,6 +157,9 @@ _OCCUPATIONS = [
     "carpenter", "priest", "scholar", "soldier", "thief",
     "innkeeper", "miller", "shepherd", "miner", "potter",
     "alchemist", "ranger", "sailor", "scribe", "tailor",
+    "tanner", "healer", "herbalist", "bard", "mason",
+    "weaver", "guard", "trader", "baker", "brewer",
+    "cartographer", "scout", "sage",
 ]
 
 # ── Helpers ───────────────────────────────────────────────────────────

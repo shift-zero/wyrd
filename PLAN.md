@@ -45,17 +45,44 @@ wyrd/
 └── output/        # Generated worlds (gitignored)
 ```
 
-## Phase 18 — Depth & Quality (in progress)
+## Phase 19 — Human-First UX (current)
 
-**Focus:** Making existing systems richer instead of adding new modules.
+**Thesis:** wyrd has deep systems but the interface is still a dev tool's face. The TUI is messy, hard to navigate, and everything happens in year-sized chunks that are too fast to follow and too slow to feel real.
 
-| # | What | Status | Verified |
-|---|------|--------|----------|
-| 1 | Bestiary tests + bugfixes + travel encounters | ✅ 2026-07-23 | 65 tests, all pass; `wyrd embody` travel has creature encounters |
-| 2 | Shop/market system | ✅ 2026-07-23 | 32 tests, all pass; `m` command in embody opens market |
-| 3 | Performance — resource map precomputation + pytest-xdist | ✅ 2026-07-23 | 794 tests in 82s (vs 156s = 47% faster) |
-| 4 | REST API v1 — 15 JSON endpoints + standalone server | ✅ 2026-07-23 | 36 tests, all pass; `wyrd api --port 9090` |
-| 5 | **Embodied play depth — skills, reputation, 3 new scenarios** | ✅ 2026-07-23 | 36 tests, all pass; 794 total; skill system, reputation, bandit/festival/monster hunt |
+Two priorities:
+
+### 1. TUI overhaul (top priority)
+
+The TUI works but isn't *pleasant*. Problems:
+- Keybinds aren't discoverable — you have to know them or press `?`
+- Screen layout is cluttered, no visual hierarchy
+- Navigation between views feels janky
+- No persistent status bar showing what mode you're in
+
+Target: clean, Bubbletea-inspired feel. Modal panels, consistent navigation, visual hierarchy, smooth transitions. Even if the Textual foundation exists, the UX needs iteration — better world picker, clearer maps, easier inspection.
+
+### 2. Variable time passage
+
+Right now the sim ticks in year increments. For embodied play this means your character ages a year every decision. For the viewer it means map changes are sudden jumps.
+
+The sim needs sub-year granularity:
+- **Days/weeks/months as the base tick** in embody mode — travel takes days, news arrives weekly, you don't age a year every time you breathe
+- **Variable speed control** — slow (days visible) to fast (years flying by), with smooth transitions
+- **In the viewer:** sub-year map ticks so you can *watch* seasons change, armies march, trade caravans move — not just see the map after the fact
+- **In embody:** days go by as you rest/travel/craft. A year passes meaningfully. Your character doesn't jump from 25 to 26 in one screen refresh
+
+The simulation engine (`sim.py`) currently ticks in whole years. This is a deep change — the economy, faction sim, cataclysm, and event systems all assume year ticks. But even a simple decorator that interpolates year-level events into month-level pulses would make the world feel alive instead of stroboscopic.
+
+### Checklist
+
+| # | What | Verifiable |
+|---|------|------------|
+| 1 🔲 | TUI layout overhaul — clean panels, status bar, consistent navigation | Navigating the TUI feels natural without pressing `?` first |
+| 2 🔲 | Keybind discoverability — persistent help hints, modal context labels | You always know what keys do in the current view |
+| 3 🔲 | Sub-year time tick in sim engine — months as base unit | `wyrd run` can tick in months; events schedule at month granularity |
+| 4 🔲 | Variable speed control in viewer — smooth from slow (days) to fast (decades) | `v` viewer has speed slider that goes from "days crawl by" to "years fly by" |
+| 5 🔲 | Embody mode uses sub-year ticks — travel days, rest weeks, age yearly | Moving between settlements takes visible days, not instant teleport |
+| 6 🔲 | Seasonal rendering — map colors shift subtly as months pass | A year of sim shows 4 distinct seasonal palette shifts on the map |
 
 ## Design Principles
 

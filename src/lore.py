@@ -166,6 +166,26 @@ FOREST_ADJS = [
     "Tangle", "High", "Silent", "Green", "Ancient", "Murk",
 ]
 
+SWAMP_FEATURES = [
+    "{adj} Bog", "{adj} Marsh", "{adj} Fen", "{adj} Wetlands",
+    "{adj} Mire", "{adj} Swamp", "The {adj} Morass",
+]
+
+SWAMP_ADJS = [
+    "Choking", "Bleak", "Murky", "Black", "Still", "Stagnant",
+    "Whispering", "Veiled", "Drowned", "Sunken", "Hissing",
+]
+
+DESERT_FEATURES = [
+    "{adj} Wastes", "{adj} Desert", "{adj} Sands", "{adj} Dunes",
+    "{adj} Expanse", "{adj} Barrens", "The {adj} Dust",
+]
+
+DESERT_ADJS = [
+    "Scorching", "Endless", "Bleak", "Crimson", "Silent", "Burning",
+    "Ashen", "Shifting", "Salt", "Obsidian", "Forgotten",
+]
+
 
 # ── History Templates ───────────────────────────────────────────────
 
@@ -396,8 +416,17 @@ def generate_lore(world: World) -> Lore:
         # Named features per region (1-3 features)
         # Check what terrain types exist in this region's approximate area
         num_features = reg_rng.randint(1, 3)
+        # Determine which feature types are relevant based on biome and terrain
+        feature_options = ["mountain", "river", "forest"]
+        if region.biome != "tundra":
+            # Coastal biomes can have bays; deserts can appear in arid regions
+            feature_options.append("bay")
+        if region.biome in ("temperate", "tropical"):
+            feature_options.append("swamp")
+        if region.biome in ("arid",):
+            feature_options.append("desert")
         for _ in range(num_features):
-            feature_type = reg_rng.choice(["mountain", "river", "bay", "forest"])
+            feature_type = reg_rng.choice(feature_options)
             if feature_type == "mountain":
                 name = _make_name(reg_rng, MOUNTAIN_FEATURES, MOUNTAIN_ADJS, [""])
                 name = name.replace("  ", " ").strip()
@@ -433,6 +462,24 @@ def generate_lore(world: World) -> Lore:
                     "name": name,
                     "region": region.name,
                     "desc": f"A dense woodland within {region.name}'s domain.",
+                })
+            elif feature_type == "swamp":
+                name = _make_name(reg_rng, SWAMP_FEATURES, SWAMP_ADJS, [""])
+                name = name.replace("  ", " ").strip()
+                lore.features.append({
+                    "type": "swamp",
+                    "name": name,
+                    "region": region.name,
+                    "desc": f"A vast wetland that dominates the lowlands of {region.name}.",
+                })
+            elif feature_type == "desert":
+                name = _make_name(reg_rng, DESERT_FEATURES, DESERT_ADJS, [""])
+                name = name.replace("  ", " ").strip()
+                lore.features.append({
+                    "type": "desert",
+                    "name": name,
+                    "region": region.name,
+                    "desc": f"A scorched expanse stretching across {region.name}.",
                 })
 
     # ── 2. Settlement relationships ─────────────────────────────────

@@ -143,6 +143,31 @@ BIOME_BEASTS = {
             "Jungle Hydra", "Crystal Moth (dreamweaver)", "Ancient Treant",
         ],
     },
+    "swamp": {
+        "common": [
+            "Moccasin Snake", "Marsh Frog (giant)", "Leech Swarm",
+            "Crane", "Swamp Boar",
+        ],
+        "uncommon": [
+            "Giant Leech", "Bog Wraith", "Will-o'-Wisp", "Poison Toad",
+        ],
+        "rare": [
+            "Hydra (swamp variety)", "Black Dragon Whelp", "Blight Treant",
+        ],
+    },
+    "desert": {
+        "common": [
+            "Sand Viper", "Dune Runner (lizard)", "Scorpion (giant)",
+            "Jackal", "Desert Hawk",
+        ],
+        "uncommon": [
+            "Giant Scorpion", "Sand Wyrmling", "Mirage Hound",
+            "Crystal Beetle", "Dust Devil",
+        ],
+        "rare": [
+            "Ash Drake", "Sun Elemental", "Obsidian Hydra", "Sphinx",
+        ],
+    },
 }
 
 # ── Faction-Attuned Creatures ─────────────────────────────────────────
@@ -339,6 +364,13 @@ def _generate_creature_name(creature_type: str, habitat: str, rng: random.Random
         "tropical": [
             "Jungle {base}", "Moss {base}", "Canopy {base}", "Verdant {base}",
         ],
+        "swamp": [
+            "Bog {base}", "Marsh {base}", "Swamp {base}", "Fen {base}",
+        ],
+        "desert": [
+            "Sand {base}", "Dune {base}", "Ash {base}", "Waste {base}",
+            "Scorched {base}",
+        ],
     }
 
     bases = {
@@ -373,10 +405,26 @@ def _generate_creature_name(creature_type: str, habitat: str, rng: random.Random
 # ── Main Generation ───────────────────────────────────────────────────
 
 def _get_habitats(world: 'World') -> list[str]:
-    """Get the set of biomes present in the world."""
+    """Get the set of biomes present in the world, plus special terrain habitats."""
     biomes = set()
     for region in world.regions:
         biomes.add(region.biome)
+    # Scan terrain for special habitats (swamp, desert) not covered by biomes
+    if hasattr(world, 'terrain') and world.terrain:
+        has_swamp = any(
+            world.terrain[y][x] == "swamp"
+            for y in range(world.height)
+            for x in range(world.width)
+        )
+        has_desert = any(
+            world.terrain[y][x] == "desert"
+            for y in range(world.height)
+            for x in range(world.width)
+        )
+        if has_swamp:
+            biomes.add("swamp")
+        if has_desert:
+            biomes.add("desert")
     return list(biomes)
 
 
@@ -388,6 +436,8 @@ def _pick_creature_type(habitat: str, rng: random.Random) -> str:
         "arid": [0.25, 0.25, 0.08, 0.05, 0.02, 0.10, 0.08, 0.05, 0.07, 0.05],
         "tundra": [0.20, 0.15, 0.15, 0.08, 0.05, 0.10, 0.05, 0.02, 0.15, 0.05],
         "tropical": [0.30, 0.25, 0.05, 0.05, 0.15, 0.05, 0.08, 0.02, 0.02, 0.03],
+        "swamp": [0.25, 0.25, 0.10, 0.05, 0.08, 0.05, 0.08, 0.02, 0.02, 0.10],
+        "desert": [0.20, 0.25, 0.08, 0.05, 0.02, 0.12, 0.08, 0.05, 0.10, 0.05],
     }
     weights = habitat_biases.get(habitat, base_weights)
     return rng.choices(CREATURE_TYPES, weights=weights, k=1)[0]

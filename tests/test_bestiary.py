@@ -83,7 +83,7 @@ class TestCreatureStructure:
 
     def test_all_creatures_have_habitats(self):
         _, bestiary = self._make_world_and_bestiary()
-        valid_habitats = {"temperate", "arid", "tundra", "tropical", "various"}
+        valid_habitats = {"temperate", "arid", "tundra", "tropical", "swamp", "desert", "various"}
         for c in bestiary:
             assert c.habitat in valid_habitats, f"Invalid habitat: {c.habitat}"
 
@@ -159,7 +159,7 @@ class TestHabitats:
         habitats = _get_habitats(world)
         assert len(habitats) >= 1
         for h in habitats:
-            assert h in ("temperate", "arid", "tundra", "tropical")
+            assert h in ("temperate", "arid", "tundra", "tropical", "swamp", "desert")
 
     def test_no_regions_fallback(self):
         """World with no regions should fall back to all biome types."""

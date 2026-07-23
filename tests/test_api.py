@@ -442,7 +442,8 @@ class TestTerrain:
             for cell in row:
                 assert cell["terrain"] in (
                     "deep_water", "shallow", "sand", "grass",
-                    "forest", "hills", "mountains", "snow", "river"
+                    "forest", "hills", "mountains", "snow", "river",
+                    "swamp", "desert",
                 )
 
 

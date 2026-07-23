@@ -303,8 +303,8 @@ class WyrdHandler(BaseHTTPRequestHandler):
                 if len(parts) >= 3 and parts[1] == "snapshot":
                     year = int(parts[2])
                     self._handle_world_detail(seed, year)
-                elif len(parts) >= 3 and parts[1] == "events":
-                    year = int(parts[2]) if len(parts) > 2 else None
+                elif len(parts) >= 2 and parts[1] == "events":
+                    year = int(parts[2]) if len(parts) >= 3 else None
                     self._handle_world_events(seed, year)
                 else:
                     self._handle_world_detail(seed)

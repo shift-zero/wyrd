@@ -248,18 +248,32 @@ def generate_world(seed: int, width: int = 80, height: int = 40) -> World:
             e = world.elevation[y][x]
             m = world.moisture[y][x]
 
-            if e < 0.3:
+            if e < 0.30:
                 t = "deep_water"
             elif e < 0.38:
                 t = "shallow"
             elif e < 0.42:
                 t = "sand"
             elif e < 0.55:
-                t = "grass"
+                # Swamp: high moisture lowlands
+                if m > 0.55:
+                    t = "swamp"
+                else:
+                    t = "grass"
             elif e < 0.68:
-                t = "forest" if m > 0.4 else "grass"
+                if m < 0.15:
+                    t = "desert"
+                elif m > 0.4:
+                    t = "forest"
+                else:
+                    t = "grass"
             elif e < 0.82:
-                t = "hills" if m < 0.6 else "forest"
+                if m < 0.15:
+                    t = "desert"
+                elif m < 0.6:
+                    t = "hills"
+                else:
+                    t = "forest"
             elif e < 0.93:
                 t = "mountains"
             else:
@@ -297,7 +311,7 @@ def generate_world(seed: int, width: int = 80, height: int = 40) -> World:
             # Ensure settlement is on land
             tries = 0
             river_set_local = river_set
-            while ((world.terrain[sy][sx] in ("deep_water", "shallow", "river")
+            while ((world.terrain[sy][sx] in ("deep_water", "shallow", "river", "swamp")
                     or (sx, sy) in river_set_local)
                    and tries < 10):
                 sx = reg_rng.randint(2, width - 3)

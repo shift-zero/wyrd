@@ -98,7 +98,7 @@ class TestEconomyTypes:
 
     def test_economy_types_count(self):
         from src.economy import ECONOMY_TYPES
-        assert len(ECONOMY_TYPES) == 6
+        assert len(ECONOMY_TYPES) == 7
 
     def test_economy_icons_all_present(self):
         from src.economy import ECONOMY_TYPES, ECONOMY_ICONS

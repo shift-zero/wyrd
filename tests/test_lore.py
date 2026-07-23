@@ -117,7 +117,7 @@ class TestFeatures:
             assert "type" in feat
             assert "name" in feat
             assert "region" in feat
-            assert feat["type"] in ("mountain_range", "river", "bay", "forest")
+            assert feat["type"] in ("mountain_range", "river", "bay", "forest", "swamp", "desert")
             assert len(feat["name"]) > 0
 
     def test_feature_types_varied(self):

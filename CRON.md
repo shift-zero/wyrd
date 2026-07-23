@@ -23,44 +23,28 @@ This is YOUR project. Make it beautiful and deep.
 
 ## Current state (2026-07-23)
 
-**Phase 18 (Depth & Quality) in progress. 794 tests pass — 36 new embody depth tests. Embodied play: skill system, reputation, 3 new scenarios.**
+**Phase 18 depth work ongoing. 794 tests pass.** Added swamp/desert terrain types with full ecosystem integration — economy, bestiary, lore, adventure zones, rendering, and docs. Fixed pre-existing serve.py routing bug.
 
-### What was done this session
-1. **Skill system (5 skills)** — Added `skills` and `skill_xp` fields to `PlayerCharacter`:
-   - Combat, Trade, Persuasion, Survival, Crafting — each levels 1-10
-   - Triangular XP thresholds (level 2=15, level 3=45, level 4=90, level 5=150…)
-   - `_gain_skill_xp()` auto-levels and prints level-up messages
-   - `_skill_bonus()` returns +5% per level over 1 for outcome improvement
-   - Skills shown in status screen (`s` command)
-   - Skills persist through save/load and multi-generational inheritance (2/3 of parent's XP)
+### What was done this session: Phase 18 — World Generation Variety
 
-2. **Reputation system** — Per-settlement reputation (-10 to +10):
-   - `_change_reputation()` modifies standing and returns flavor text
-   - Affects: sheltering strangers (+1), bandit fighting (+2), festival organizing (+2), religious joining (+1), robbing (-2)
-   - Reputation shown in status screen, persists through save/load
-   - Heirs inherit partial reputation
+1. **Swamp terrain** (`≡`, color 64) — High-moisture lowlands (9-20% of map), settlements avoid swamps. New lore features (Bog, Marsh, Fen), new bestiary creatures (Bog Wraith, Hydra swamp variety, Blight Treant), new caravansary economy type for desert settlements.
 
-3. **3 new interactive event scenarios** (10 total now):
-   - **🗡 Bandit raid** — Fight/pay/hide. Higher chance during war. Skills matter for fight outcome.
-   - **🎉 Festival** — Join/organize/skip. Higher during prosperity. Organize gives crafting XP.
-   - **🐉 Monster hunt** — Hunt/hire/ignore. Requires world bestiary with aggressive creatures. Uses combat + survival skills.
+2. **Desert terrain** (`:`, color 179) — Very-low-moisture midlands (0-0.3% of map, ~60% of seeds). New lore features (Wastes, Dunes, Barrens), new bestiary creatures (Sun Elemental, Sphinx, Dust Devil), adventure zones in deserts (dungeons, caves, ruins, towers).
 
-4. **Skill integration in all existing scenarios** — Every existing scenario now grants skill XP and uses skill bonuses:
-   - Stranger: persuasion affects item drop chance
-   - War: combat skill improves survival (0.6 base + up to 0.45 bonus)
-   - Merchant: trade skill shifts profit pool toward gains
-   - Discovery: survival skill unlocks rare items + more gold
-   - Religious: persuasion increases health restoration
-   - Exodus: survival + crafting XP for different choices
+3. **Bestiary integration** — `_get_habitats()` now scans terrain for swamp/desert tiles and adds them as habitats. Creature templates, naming patterns, and type biases for both habitats.
 
-5. **36 new tests** — Skills (12), Reputation (8), Bandit (6), Festival (4), Monster Hunt (6)
+4. **Economy: caravansary type** — Desert settlements get a "caravansary" economy (spices, salt). New icon 🧭, color 179, trade goods, specialization titles.
 
-### What to tackle next — Phase 18 remaining candidates
+5. **Bugfix: serve.py routing** — `/world/{seed}/events` route was broken (`parts[1]` IndexError due to wrong `len(parts) >= 3` guard). Fixed to check `len(parts) >= 2` for events endpoint.
+
+6. **Docs** — Updated world.md (terrain table), generation.md (classification thresholds with swamp/desert).
+
+### What to tackle next — Phase 19: Human-First UX
+
 | # | What | Status |
 |---|------|--------|
-| 1 | Embodied play depth (skills ✅, scenarios ✅, reputation ✅) | 🟢 |
-| 2 | TUI polish | 🔲 |
-| 3 | World generation variety | 🔲 |
-| 4 | REST API — v1 complete | 🟢 |
-| 5 | Bestiary depth — done | 🟢 |
-| 6 | Multi-world interaction | 🔲 |
+| 1 | TUI polish — Clean layouts, discoverable keybinds, persistent help/status | 🔲 |
+| 2 | Sub-year sim ticks — Months as base unit, economy/faction/event adapt | 🔲 |
+| 3 | Variable speed — Smooth control from slow (days) to fast (decades) | 🔲 |
+| 4 | Embody uses sub-year — Travel takes days, rest takes weeks | 🔲 |
+| 5 | Seasonal rendering — Map palette shifts subtly as months pass | 🔲 |

@@ -15,6 +15,8 @@ All core types live in `src/world.py`. Zero external dependencies.
 | `mountains` | `▲` | 130 | 4 | Mountains |
 | `snow` | `◌` | 255 | 5 | Snowy peaks |
 | `river` | `≈` | 45 | 0 | River |
+| `swamp` | `≡` | 64 | 1 | Swamp / marshland |
+| `desert` | `:` | 179 | 1 | Desert / arid waste |
 
 ## Key Dataclasses
 

@@ -22,49 +22,49 @@ ADVENTURE_ZONE_TYPES = {
         "char": "D",
         "color": 160,
         "desc": "Dungeon — underground complex",
-        "preferred_terrain": ["hills", "mountains"],
+        "preferred_terrain": ["hills", "mountains", "desert"],
     },
     "cave": {
         "char": "C",
         "color": 250,
         "desc": "Cave — natural cavern system",
-        "preferred_terrain": ["hills", "mountains"],
+        "preferred_terrain": ["hills", "mountains", "desert"],
     },
     "ruin": {
         "char": "R",
         "color": 124,
         "desc": "Ruins — abandoned structures",
-        "preferred_terrain": ["grass", "forest", "hills"],
+        "preferred_terrain": ["grass", "forest", "hills", "desert", "swamp"],
     },
     "tower": {
         "char": "T",
         "color": 179,
         "desc": "Tower — isolated arcane or watch tower",
-        "preferred_terrain": ["hills", "grass"],
+        "preferred_terrain": ["hills", "grass", "desert"],
     },
     "grove": {
         "char": "G",
         "color": 34,
         "desc": "Grove — sacred natural area",
-        "preferred_terrain": ["forest"],
+        "preferred_terrain": ["forest", "swamp"],
     },
     "lair": {
         "char": "L",
         "color": 196,
         "desc": "Lair — monster den or creature nesting ground",
-        "preferred_terrain": ["hills", "mountains", "forest"],
+        "preferred_terrain": ["hills", "mountains", "forest", "swamp", "desert"],
     },
     "shrine": {
         "char": "S",
         "color": 99,
         "desc": "Shrine — small religious or mystical site",
-        "preferred_terrain": ["grass", "hills", "forest"],
+        "preferred_terrain": ["grass", "hills", "forest", "desert", "swamp"],
     },
     "mine": {
         "char": "M",
         "color": 172,
         "desc": "Mine — old excavation or mineral works",
-        "preferred_terrain": ["hills", "mountains"],
+        "preferred_terrain": ["hills", "mountains", "desert"],
     },
 }
 
@@ -82,6 +82,8 @@ TERRAIN = {
     "mountains":   {"char": "▲", "color": 130, "height": 4,   "desc": "Mountains"},
     "snow":        {"char": "◌", "color": 255, "height": 5,   "desc": "Snowy peaks"},
     "river":       {"char": "≈", "color": 45,  "height": 0,   "desc": "River"},
+    "swamp":       {"char": "≡", "color": 64,  "height": 1,   "desc": "Swamp / marshland"},
+    "desert":      {"char": ":", "color": 179, "height": 1,   "desc": "Desert / arid waste"},
 }
 
 # ── Biomes ─────────────────────────────────────────────────────────

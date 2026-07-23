@@ -889,11 +889,13 @@ def render_bestiary(world) -> str:
         habitat_color = {
             "temperate": _color(28), "arid": _color(172),
             "tundra": _color(250), "tropical": _color(35),
+            "swamp": _color(64), "desert": _color(179),
             "various": _color(99),
         }.get(habitat, _color(250))
         habitat_label = {
             "temperate": "Temperate Forests", "arid": "Arid Wastes",
             "tundra": "Tundra & Snow", "tropical": "Tropical Jungles",
+            "swamp": "Swamps & Marshlands", "desert": "Deserts & Wastes",
             "various": "Various / Faction-Tied",
         }.get(habitat, habitat)
 
