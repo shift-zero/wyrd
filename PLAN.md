@@ -15,307 +15,50 @@ wyrd/
 ├── src/           # Core library
 │   ├── generate.py   # World generation (terrain, rivers, settlements)
 │   ├── world.py      # Core data models
-│   ├── nore.rs       # (eventually Rust for performance)
 │   ├── render.py     # ANSI/ASCII rendering + narrative rendering
 │   ├── lore.py       # Procedural lore engine
 │   ├── narrative.py  # Character, event, and quest generation
-│   ├── chronicles.py # Era-based world history (Phase 5)
-│   ├── sim.py        # Year-by-year world simulation (Phase 6)
-│   ├── economy.py    # Trade & economy system (Phase 14)
-│   ├── magic.py      # Magic system generation (Phase 8)
-│   ├── religion.py   # Pantheon/religion system (Phase 9)
-│   ├── cataclysm.py  # Cataclysmic events (Phase 13)
+│   ├── chronicles.py # Era-based world history
+│   ├── sim.py        # Year-by-year world simulation
+│   ├── economy.py    # Trade & economy system
+│   ├── magic.py      # Magic system generation
+│   ├── religion.py   # Pantheon/religion system
+│   ├── cataclysm.py  # Cataclysmic events
+│   ├── faction.py    # Faction system
+│   ├── bestiary.py   # Creature generation
 │   ├── serialize.py  # JSON save/load
 │   ├── explore.py    # Interactive terminal explorer
 │   ├── query.py      # Natural-language query engine
 │   ├── export_html.py# HTML export
-│   ├── serve.py      # Web dashboard server (Phase 8)
+│   ├── serve.py      # Web dashboard + REST API v1
 │   ├── export_chronicles_html.py  # Chronicles HTML export
-│   └── __main__.py   # CLI entry point
-├── tests/         # Test suite
+│   └── __main__.py   # CLI entry point (25 subcommands)
+├── tests/         # Test suite (758 tests)
 │   ├── test_generate.py
 │   ├── test_lore.py
 │   ├── test_narrative.py
 │   ├── test_chronicles.py
 │   ├── test_sim.py
-│   ├── test_phase3.py
-│   ├── test_explore.py
-│   ├── test_query.py
-│   ├── test_export_ttrpg.py
-│   ├── test_magic.py
-│   ├── test_religion.py
-│   ├── test_serve.py
-│   ├── test_worlds.py
-│   ├── test_cataclysm.py
+│   ├── test_api.py        # REST API v1 tests (36)
 │   ├── test_economy.py
-│   └── conftest.py
+│   └── ...
 └── output/        # Generated worlds (gitignored)
 ```
-
-### Phase Strategy
-
-**Phase 1 — World Generator** (done)
-- Procedural ASCII map with terrain, biomes, elevation
-- Named settlements with population tiers
-- Rivers, coastlines, mountain ranges
-- ANSI-colored terminal output
-- Seed-based generation (same seed = same world)
-
-**Phase 2 — Lore Engine** (done)
-- Region names, culture names, settlement descriptions
-- Named geographical features (The Whispering Strait, etc.)
-- History snippets per region
-- Conflicts and relationships between settlements
-
-**Phase 3 — Explorer Mode** (done)
-| # | What | Verifiable |
-|---|------|------------|
-| 1 ✅ | World serialization (save/load JSON) | `wyrd save --seed 42` produces a JSON file; `wyrd load wyrd-42.json` restores it |
-| 2 ✅ | Export to HTML | `wyrd export --seed 42` produces a self-contained HTML page |
-| 3 ✅ | Pager-based explore | `wyrd explore --seed 42` shows map+lore in a pager |
-| 4 ✅ | Interactive terminal UI (scroll, zoom, inspect) | Navigate a generated world in the terminal |
-| 5 ✅ | Query the world: "tell me about the northlands" | `wyrd query --seed 42 "tell me about Blackland"` returns region lore, culture, history, settlements |
-
-**Phase 4 — Narrative** (done)
-| # | What | Verifiable |
-|---|------|------------|
-| 1 ✅ | Character generation grounded in world cultures | `wyrd characters --seed 42` lists named characters with occupations, traits, backstories |
-| 2 ✅ | Event chains that unfold over time | `wyrd events --seed 42` shows chronological timeline with types and consequences |
-| 3 ✅ | Generated quests grounded in geography and politics | `wyrd quests --seed 42` shows active quests with givers, locations, rewards |
-| 4 ✅ | All narrative seed-deterministic (same seed → same narrative) | Same seed produces identical characters, events, and quests |
-| 5 ✅ | Narrative serialization round-trip | Save/load preserves all narrative data; old saves without narrative still work |
-
-**Phase 5 — Chronicles** (done)
-Generative world history. Not a static dump — a causally linked timeline of eras that shaped the world into what it is.
-
-| # | What | Verifiable |
-|---|------|------------|
-| 1 ✅ | Era-based history generation (ages, cataclysms, golden ages) | `wyrd chronicles --seed 42` outputs a timeline of distinct eras with descriptions |
-| 2 ✅ | Legendary events with named participants from the narrative engine | Events reference actual characters and settlements from the world |
-| 3 ✅ | Era-dependent world state (ruins, fallen empires, contested borders) | Each era carries world_modifiers (ruins, monuments, contested borders) reflecting its type |
-| 4 ✅ | Seed-deterministic: same seed + same era range → same history | Always identical across runs |
-| 5 ✅ | History serialization + export to timeline HTML | `wyrd chronicles --seed 42 --format html` produces a readable chronicle page |
-
-**Phase 6 — The Turning of the World** (done)
-Year-by-year simulation in the Dwarf Fortress tradition. The world is no longer a static artifact — it *lives* and *changes*.
-
-| # | What | Verifiable |
-|---|------|------------|
-| 1 ✅ | Tick-based simulator: settlements grow/decline year by year | `wyrd run --seed 42 --years 300` shows population changes, new settlements, founding events |
-| 2 ✅ | Causal event chain: wars, famines, plagues, discoveries emerge from conditions | Viewing year 150+ shows wars, trade booms, and famines that result from crowding and scarcity |
-| 3 ✅ | Dynamic map evolution: borders shift, ruins appear, new roads form | Settlements multiply from ~11 to 88+ over 500 years; new names appear from emigration |
-| 4 ✅ | Pause-and-inspect: stop the sim at any year and use explore/query | `--snapshot-year` flag on explore/query/export/save; sim state serialization (JSON save/load) with intermediate snapshots |
-| 5 ✅ | Seed-deterministic with optional branching | Same seed + same params → same outcome; `--seed-offset` enables branching |
-| 6 ✅ | Export any snapshot as TTRPG-ready campaign doc | `wyrd export --seed 42 --year 127 --format ttrpg` produces Foundry/WorldAnvil-ready JSON
-| 7 ✅ | Polish: compact sim output, snapshot-aware HTML map | `wyrd run --seed 42 --years 500 --compact` saves gzip sim; HTML shows snapshot state
 
 ## Phase 18 — Depth & Quality (in progress)
 
 **Focus:** Making existing systems richer instead of adding new modules.
 
-|| # | What | Status | Verified |
+| # | What | Status | Verified |
 |---|------|--------|----------|
-|| 1 | Bestiary tests (65 new) + bugfixes + travel encounters | ✅ 2026-07-23 | 65 tests, all pass; `wyrd embody` travel has creature encounters |
-|| 2 | Shop/market system (32 new tests) — settlement economy shops, creature loot, buy/sell in embody mode | ✅ 2026-07-23 | 32 tests, all pass; `m` command in embody opens market |
-|| 3 | **Performance — resource map precomputation + pytest-xdist parallel execution** (722 tests in 87s vs 156s = 44% faster) | ✅ 2026-07-23 | 87s test suite, resource maps on World, xdist `--dist loadscope` |
+| 1 | Bestiary tests + bugfixes + travel encounters | ✅ 2026-07-23 | 65 tests, all pass; `wyrd embody` travel has creature encounters |
+| 2 | Shop/market system | ✅ 2026-07-23 | 32 tests, all pass; `m` command in embody opens market |
+| 3 | Performance — resource map precomputation + pytest-xdist | ✅ 2026-07-23 | 758 tests in 81s (vs 156s = 48% faster) |
+| 4 | **REST API v1 — 15 JSON endpoints + standalone server** | ✅ 2026-07-23 | 36 tests, all pass; `wyrd api --port 9090` |
 
-### Design Principles
+## Design Principles
 
 1. **Every output is beautiful.** ANSI color, careful layout, no debug spew.
 2. **Worlds feel real.** Generated geography constrains lore, not the other way around.
-3. **Composable.** Phase 1 doesn't need to know about Phase 4. Each layer builds on the previous.
-4. **Seed-deterministic.** Same seed = same world, always. Share seeds, not world files.
-
-## Milestones
-
-| # | What | Verifiable |
-|---|------|------------|
-| 1 ✅ | ASCII map renders terrain, water, forests, mountains, settlements | `wyrd generate --seed 42` outputs a beautiful map |
-| 2 ✅ | Lore engine names regions, cultures, and features | `wyrd describe --seed 42` shows lore |
-| 3 ✅ | Interactive terminal UI (scroll, zoom, inspect) | Navigate a generated world in the terminal |
-| 4 ✅ | Export to HTML and SVG | `wyrd export --seed 42` produces HTML; `wyrd export --seed 42 --format svg` produces SVG |
-| 5 ✅ | Narrative engine with character generation | Characters with backstories grounded in the world |
-| 6 ✅ | Chronicles engine — era-based world history | `wyrd chronicles --seed 42` shows a causally linked timeline |
-| 7 ✅ | Simulation engine — year-by-year world evolution (6/6 + Polish complete) | `wyrd run --seed 42 --years 500` evolves settlements, generates events, founding/abandonment/war |
-
-## Phase 7 — The Living World (complete ✅)
-Interactive simulation viewing and character-driven world evolution. The world doesn't just tick silently — you watch it grow, and the stories write themselves.
-
-| # | What | Verifiable |
-|---|------|------------|
-| 1 ✅ | Interactive curses sim viewer: watch the map evolve year by year | `wyrd view --seed 42 --years 300` shows real-time map evolution with pause/speed controls |
-| 2 ✅ | Named character integration in sim events | Sim events reference actual Narrative characters as leaders, generals, heroes when available; character selection is seed-deterministic and prefers occupation-relevant NPCs |
-| 3 ✅ | Character-driven founding events | New settlements are founded by named characters with backstory context; migration events tied to character backstories |
-| 4 ✅ | Era transitions in simulation | Simulation triggers era transitions every 50 years based on world conditions (population, abandonment, expansion); dynamic world modifiers |
-| 5 ✅ | Sim event consequences on narrative | NPCs die in plagues/wars and are reflected in narrative; quests from dead characters become inactive; new quests emerge from sim events |
-| 6 ✅ | Branching timeline visualization | `wyrd branch --seed 42 --years 300` shows alternative sim paths side-by-side with event/era comparisons |
-
-## Phase 8 — The Web Awakens (complete ✅)
-Bring wyrd out of the terminal and onto the web. Interactive map viewers, persistent world management, and LLM-powered storytelling.
-
-| # | What | Verifiable |
-|---|------|------------|
-| 1 ✅ | Web overview dashboard: serve world stats, map HTML, sim state in browser | `wyrd serve --seed 42` starts a web server; browser shows interactive world dashboard with stats, map, regions, and JSON API |
-| 2 ✅ | Sim-state-aware HTML map | `wyrd export --seed 42 --year 150` produces HTML showing evolved map with new settlements, ruins (⁂), population timeline, and event counts |
-| 3 ✅ | Conversational world agent | `wyrd ask "What's the most powerful city?"` uses LLM to answer from world data; deterministic fallback when no API key |
-| 4 ✅ | Multi-world management | `wyrd worlds` lists all generated worlds; `wyrd worlds --json` outputs structured metadata |
-| 5 ✅ | Magic system generation | `wyrd magic --seed 42` renders color-coded schools and traditions tied to world biomes and cultures |
-
-## Phase 9 — The Pantheon (complete ✅)
-Generative religion system. Every world gets a pantheon of named deities, organized into 1–2 religions, with holy sites grounded in actual settlements. TTRPG-ready deity stats, encounter levels for holy sites, and seed-deterministic generation.
-
-| # | What | Verifiable |
-|---|------|------------|
-| 1 ✅ | Deity generation with domains, alignment, symbols, holy animals | `wyrd pantheon --seed 42` shows named deities with descriptions, symbols, and assigned domains |
-| 2 ✅ | Religion organization (1–2 religions per world) | Pantheon generates 1–2 religions with distinct tenets, clergy titles, and holy days |
-| 3 ✅ | Holy sites tied to settlements | Each religion generates temples, shrines, monasteries, oracles, groves, and sanctuaries at existing settlements |
-| 4 ✅ | Region-to-religion mapping | Every world region is assigned a religion based on biome affinity and alignment |
-| 5 ✅ | Pantheon in TTRPG export | `wyrd export --seed 42 --format ttrpg` includes full pantheon section with deity stat blocks and encounter levels |
-| 6 ✅ | Serialization round-trip | Pantheon survives save/load; works with worlds that don't have one yet |
-| 7 ✅ | Religious conflict events in simulation | Deities and religious tensions influence sim events and era transitions |
-| 8 ✅ | Religious NPCs and quest hooks | Clergy characters with quests tied to holy sites and religious goals |
-| 9 ✅ | Religion-aware chronicle eras | Chronicle era types can be influenced by religious dominance shifts |
-
-## Phase 10 — Adventure Zones (complete ✅)
-Points of interest scatter across the world map — dungeons, caves, ruins, towers, groves, lairs, shrines, and mines — each with descriptions, inhabitants, difficulty ratings, treasure tiers, and quest hooks. Visible on the map with distinct markers. Integrated into TTRPG export.
-
-| # | What | Verifiable |
-|---|------|------------|
-| 1 ✅ | Dungeon zones placed on suitable terrain | `wyrd generate --seed 42` includes 8+ adventure zones on terrain-appropriate hexes |
-| 2 ✅ | Map rendering shows zone markers (D, C, R, T, G, L, S, M) | `wyrd zones --seed 42` shows zones on the map with coloured markers and legend |
-| 3 ✅ | Zone detail: descriptions, inhabitants, difficulty | `wyrd zones --seed 42 --id 0` shows full details for a single zone |
-| 4 ✅ | Quest hooks attached to every zone | Each zone has a unique quest hook its listing |
-| 5 ✅ | Treasure tiers scaled by difficulty | Harder zones contain more valuable treasure |
-| 6 ✅ | Seed-deterministic placement | Same seed → same zones in the same locations |
-| 7 ✅ | Zone rendering in HTML export | Adventure zones show on HTML map with tooltips |
-| 8 ✅ | Interactive zone inspection in explorer | `wyrd explore` can hover/click zones for details |
-| 9 ✅ | Zone serialization round-trip | Zones survive save/load |
-
-## Phase 11 — Faction System (complete ✅)
-Political, economic, and cultural entities with territories, leaders, power scores, reputation, goals, and inter-faction relationships. 12 faction types with distinct icons, colors, and leader titles.
-
-| # | What | Verifiable |
-|---|------|------------|
-| 1 ✅ | Faction generation with 12 types | `wyrd factions --seed 42` lists all factions with power bars and colored icons |
-| 2 ✅ | Inter-faction relationships | Auto-generated alliance/trade/rivalry/hostility between all faction pairs |
-| 3 ✅ | Faction detail view | `wyrd factions --seed 42 --id 0` shows name, type, leader, stats, goals, territory |
-| 4 ✅ | Seed-deterministic generation | Same seed → same factions, same relationships |
-| 5 ✅ | Faction serialization round-trip | Factions and relationships survive save/load |
-| 6 ✅ | Factions in explorer overlay | `wyrd explore --seed 42` → press `f` for factions |
-| 7 ✅ | Factions in HTML export | Collapsible faction section with relationship listings |
-
-## Phase 12 — Political Simulation (complete ✅)
-Factions rise and fall during year-by-year simulation. Wars erupt between rival factions, alliances form, power shifts, and faction strength affects settlement prosperity. Political events woven into `wyrd run` output with power bars and end-state faction summary.
-
-| # | What | Verifiable |
-|---|------|------------|
-| 1 ✅ | Faction power drift each sim year | Stats change based on faction type biases and territory count |
-| 2 ✅ | Faction wars between rival/hostile factions | `wyrd run --seed 42 --years 200` shows war events with casualties |
-| 3 ✅ | Faction alliances between peaceful factions | Alliance events appear in sim output |
-| 4 ✅ | Power shift and collapse events | Rare dramatic events with settlement effects |
-| 5 ✅ | Faction→settlement prosperity effects | Strong factions boost territory prosperity |
-| 6 ✅ | Political events in render output | War/alliance/power shift icons + Faction Power section at end |
-| 7 ✅ | Seed-deterministic political simulation | Same seed → identical wars and power scores |
-| 8 ✅ | 28 tests for deterministic state, events, drift | All pass, zero regressions |
-| 9 ✅ | Peace treaties ending wars with formal treaty events | ☮ icon, formal treaty language with terms and effects; distinct from alliances |
-| 10 ✅ | War exhaustion modifier affecting sim | FactionSnapshot.war_exhaustion tracks cumulative war duration; settlements in war-exhausted territory lose food stores and prosperity |
-
-## Phase 13 — Cataclysmic Events (complete ✅)
-Very rare simulation events that permanently alter terrain, destroy settlements, and create lasting landmarks. 7 cataclysm types, terrain mutation tables, settlement destruction, landmark system with named features, cascade events (earthquake→tsunami, volcanic→great_fire, etc.), refugee/exodus events, and full serialization.
-
-| # | What | Verifiable |
-|---|------|------------|
-| 1 ✅ | Cataclysm module (src/cataclysm.py) with 7 cataclysm types, terrain mutation, settlement destruction, landmark generation | `wyrd run --seed 42 --years 1000` shows cataclysm events with icons and descriptions |
-| 2 ✅ | Landmark system: named features persist through sim and survive serialization | Landmarks (crater ⊙, chasm ≋, ash waste ▒, etc.) appear on world map with unique chars |
-| 3 ✅ | Cascade events (15% chance): one cataclysm triggers another | earthquake→tsunami/great_fire, meteor_strike→great_fire/earthquake |
-| 4 ✅ | Terrain mutation: terrain changes permanently based on cataclysm type | Forests burn to grass, mountains shatter to hills, craters scar the earth |
-| 5 ✅ | Settlement destruction with death toll, refugee events | Settlements destroyed or devastated with population loss and exodus events |
-| 6 ✅ | Full integration: sim tick, sim events, render icons/colors | Cataclysm events visible in `wyrd run` output with distinct icons and colors |
-| 7 ✅ | 37 tests across core types, terrain mutation, settlement destruction, landmarks, cascades, integration, serialization, rendering | `python -m pytest tests/test_cataclysm.py -q` all pass |
-
-## Phase 14 — Trade & Economy (complete ✅)
-Settlements don't exist in isolation — they trade. Farming villages produce grain, mining towns produce ore, forest hamlets produce timber. Trade routes form between complementary economies. Prosperity flows along these routes, and when they're disrupted, economies suffer.
-
-| # | What | Verifiable |
-|---|------|------------|
-| 1 ✅ | EconomyType enum and settlement economy assignment based on local terrain | `wyrd run --seed 42 --years 100` shows economy types in settlement listings |
-| 2 ✅ | Trade route generation between complementary economies (farming↔mining, etc.) | Trade routes visible in sim detailed output with goods volume |
-| 3 ✅ | Trade route prosperity modifiers | Settlements with trade routes have higher prosperity |
-| 4 ✅ | Route disruption events (war, cataclysm, abandonment) | Trade collapse events appear when routes break |
-| 5 ✅ | New settlement economy-based events (trade boom, collapse, new route) | distinct economy event types in sim output |
-| 6 ✅ | Economy display in sim detailed view | Economy icons and trade route count in settlement listings |
-| 7 ✅ | Serialization: economy data survives save/load | Economy types and trade routes persist through serialization |
-| 8 ✅ | Tests for determinism, route generation, economy assignment, disruption | 32 tests in test_economy.py |
-
-## Phase 15 — The Weirding (UX transformation — next major)
-
-The CLI is a dev tool's face. wyrd wants a *human* face — a single unified curses interface where you don't need to remember 20 subcommands.
-
-**Vision:** `wyrd` with no subcommand drops into a curses TUI. From there, everything is reachable — world selection, generate, explore, simulate, chronicles, export. The subcommands stay for scripting, but the default experience is a single discoverable gateway.
-
-| # | What | Verifiable |
-|---|------|------------|
-| 1 ✅ | Gateway TUI — world selection screen showing recent worlds, generate new, load from file | `wyrd` (no args) opens a world picker with recent worlds, a Generate New option, and Load File | 2026-07-23 |
-| 2 ✅ | Integrated navigation — consistent keybinds across all views | Tab/numbers switch sections; `q` quits; `?` shows help — works everywhere | 2026-07-23 |
-| 3 ✅ | Meld explorer + viewer into one seamless experience | Explore a world, then press 'v' for sim-mode: scroll, zoom, inspect while the world evolves in place | 2026-07-23 |
-| 4 ✅ | Inline help panel — shows all keybinds, contextual | Press `?` from anywhere and see available actions for the current view | 2026-07-23 |
-| 5 ✅ | World persists in session — generate once, then explore/sim/export without re-passing `--seed` | Navigate between views without re-typing flags | 2026-07-23 |
-|| 6 ✅ | Beautiful splash screen with wyrd ASCII art on launch | A taste of what wyrd can do before you even pick a world | 2026-07-23 |
-
-## Phase 16 — Trade Route Map Visualization (trade route network on the world map)
-
-Economy connections become visible on the ASCII world map. `wyrd economy --routes --map` renders terrain with route overlay lines. Gateway TUI gains `t` key for trade route view.
-
-| # | What | Verifiable |
-|---|------|------------|
-| 1 ✅ | `render_trade_route_map()` in render.py — Bresenham line drawing, economy icons, route dots, water avoidance | `wyrd economy --seed 42 --routes --map` (after `wyrd run --seed 42 --years 100`) shows terrain+route overlay |
-| 2 ✅ | `--map` flag on `wyrd economy --routes` CLI command | `wyrd economy --seed 42 --routes --map` renders route map instead of text listing |
-| 3 ✅ | Gateway TUI integration — press `t` for trade route view | `wyrd` → select world → `t` runs sim and shows route map |
-| 4 ✅ | Road/infrastructure — persistent routes become roads (`━` solid lines) | Routes lasting 50+ sim years render as `━` instead of `·`; road volume bonus, road construction events, road prosperity bonus for connected settlements | 2026-07-23 |
-|| 5 ✅ | Economic specialization — settlements with 100+ years of same economy get titles | "Breadbasket of the Realm", "The Iron City" etc. shown in route listings | 2026-07-23 |
-|| 6 ✅ | HTML export of trade routes | Economy map section in `wyrd export --seed 42` HTML output | 2026-07-23 |
-
-## Phase 17 — Living Worlds (complete ✅)
-
-**Thesis:** wyrd has deep systems but they're hidden behind CLI commands that dump text. The sim runs, you watch events scroll by. The map sits still. This phase makes the world *feel* alive — animated, interactive, playable.
-
-Three pillars:
-
-### 1. Animated simulation maps
-
-The map shouldn't sit still while the sim ticks. Tiles should animate — borders pulse, settlements grow/shrink, trade routes light up, cataclysm scars spread. Not scrolling log dumps. *Watch the world change.*
-
-Context: `wyrd view` currently redraws the whole map every year. We want smooth transitions — terrain mutations animate, population changes show as visual grow/shrink, roads form tile by tile.
-
-### 2. TUI overhaul (Bubbletea-inspired)
-
-The curses TUI works but it's messy and hard to navigate. Bubbletea (Go) has the right aesthetic — clean, modal, discoverable — but we're in Python.
-
-Options:
-- **Textual** (Python, Bubbletea-inspired, reactive widgets) — natural fit, big lift to port
-- **Better curses** — cleaner layout, modal panels, tighter keybinds, status bar, persistent minimap
-- **Hybrid** — keep curses backend but re-architect views as composable components
-
-Target feel: `wyrd` drops you into a world that feels *present*, not a menu tree.
-
-### 3. Embodied play mode
-
-`wyrd as <name>` or `wyrd embody --seed 42` — you don't just watch the world, you *live in it* as a character.
-
-- Choose or generate a character grounded in the world (culture, region, occupation)
-- The sim runs around you: news arrives from distant lands, your settlement changes, events find you
-- You can travel, make small decisions that affect your character's arc
-- A "life sim" inside the world sim — not Dwarf Fortress deity-mode, but a grounded roleplaying experience
-
-Eventual stretch: your character's descendants inherit through generations.
-
-### Checklist
-
-| # | What | Verifiable |
-|---|------|------------|
-| 1 ✅ | Live map animation during simulation | `wyrd tui --seed 42` → Space — settlement tiles show green ↑ (growth), red ↓ (decline), gold ✦ (founding), dim ✗ (abandonment) with 1.5s auto-fade; animation legend appears during overlay | 2026-07-23 |
-|| 2 ✅ | Textual-based TUI (or equivalent Python framework) | `wyrd` drops into a polished, navigable interface with tabs, help, status bar, modal overlays (sim-aware: `wyrd tui --seed 42` launches Textual viewer with sim controls, event log, live stats, year-diff; press `r` to reset/rewind sim) — 2026-07-23 |
-| 3 ✅ | Embodied character play mode (MVP) | `wyrd embody --seed 42 --name "Rikard"` — play as a character with location, travel, news, aging, and year-by-year advancement; auto-save/resume via `wyrd-{seed}-char.json`; legacy tracking with Life Ledger on death — 2026-07-23 |
-| 4 ✅ | Event-driven notifications with branching (2026-07-23) | Sim events arrive as interactive notifications with choice prompts — 7 scenario types: stranger, plague, war, merchant, discovery, religious, exodus — 95 tests |
-| 5 ✅ | Year-diff view | After any sim advance, show a diff: what changed, what grew, what fell (press `d` in viewer) — 2026-07-23 |
-|| 6 ✅ | Multi-generational play | On death, continue as an heir with inherited gold, inventory, surname, and settlement; parent deeds tracked in child's epilogue — 2026-07-23 |
+3. **Composable.** Each layer builds on the previous.
+4. **Seed-deterministic.** Same seed = same world, always.
