@@ -44,6 +44,7 @@ CP = {
     "badge_c": 12,
     "badge_s": 13,
     "badge_m": 14,
+    "badge_p": 15,  # Player/saved character
 }
 
 
@@ -81,6 +82,7 @@ def _init_colors():
     curses.init_pair(CP["badge_c"], 226, -1)   # yellow
     curses.init_pair(CP["badge_s"], 196, -1)   # red
     curses.init_pair(CP["badge_m"], 99, -1)    # magenta
+    curses.init_pair(CP["badge_p"], 220, -1)   # gold — player/saved character
 
 
 def _draw(stdscr, y, x, text, cp, bold=False):
@@ -141,6 +143,7 @@ def scan_worlds(search_dir: str = ".") -> list[dict]:
             "has_narrative": "narrative" in data and data["narrative"] is not None,
             "has_chronicles": "chronicles" in data and data["chronicles"] is not None,
             "has_magic": "magic" in data and data["magic"] is not None,
+            "has_save": os.path.exists(f"wyrd-{seed}-char.json"),
         })
     return results
 
@@ -169,6 +172,7 @@ GATEWAY_HELP = [
     "    l                  Load world from JSON file",
     "    e                  Explore selected world (interactive map)",
     "    v                  View sim evolution (watch world grow)",
+    "    p                  Play — embodied mode (live as a character)",
     "    d                  Describe / show lore for world",
     "    c                  Show chronicles (history)",
     "    s                  Run simulation (year-by-year text)",
@@ -361,6 +365,8 @@ def _gateway_loop(stdscr):
                 bx = w - 14
                 if _has_sim_file(w_info["seed"]):
                     _draw(stdscr, y, bx, "S", CP["badge_s"], bold=True); bx += 2
+                if w_info["has_save"]:
+                    _draw(stdscr, y, bx, "P", CP["badge_p"], bold=True); bx += 2
                 if w_info["has_magic"]:
                     _draw(stdscr, y, bx, "M", CP["badge_m"], bold=True); bx += 2
                 if w_info["has_chronicles"]:
@@ -390,7 +396,7 @@ def _gateway_loop(stdscr):
 
         # Build context-sensitive key hints (right-aligned)
         if worlds:
-            hints = " [↑↓/k j] sel  [g] gen  [l] load  [e] explore  [v] view  [d] desc  [s] sim  [t] routes"
+            hints = " [↑↓/k j] sel  [g] gen  [l] load  [e] explore  [v] view  [p] play  [d] desc  [s] sim  [t] routes"
         else:
             hints = " [g] generate  [l] load"
         hints += "  [?] help  [q] quit"
@@ -623,11 +629,11 @@ def _gateway_loop(stdscr):
                 try:
                     world = load_world(worlds[selected_idx]["path"])
                 except Exception:
-                    status_msg = "\u274c Could not load world"
+                    status_msg = "❌ Could not load world"
                     status_time = time_module.monotonic()
                     continue
             if world is None:
-                status_msg = "\u274c No world loaded"
+                status_msg = "❌ No world loaded"
                 status_time = time_module.monotonic()
                 continue
             world_in_session = world
@@ -646,6 +652,33 @@ def _gateway_loop(stdscr):
             print(render_trade_route_map(world, routes, result.settlements,
                                          title=f"wyrd {world.seed} — Trade Routes (Year {result.year})"))
             input(f"\n── Press Enter to return to wyrd gateway...")
+            stdscr = curses.initscr()
+            curses.start_color()
+            curses.use_default_colors()
+            _init_colors()
+            stdscr.keypad(True)
+            curses.curs_set(0)
+
+        elif key == ord("p"):
+            """Play/embody — launch embodied play mode for the selected world."""
+            world = world_in_session
+            if world is None and worlds and 0 <= selected_idx < len(worlds):
+                try:
+                    world = load_world(worlds[selected_idx]["path"])
+                except Exception:
+                    status_msg = "❌ Could not load world"
+                    status_time = time_module.monotonic()
+                    continue
+            if world is None:
+                status_msg = "❌ No world loaded"
+                status_time = time_module.monotonic()
+                continue
+            world_in_session = world
+            curses.endwin()
+            from .embody import embody_play
+            embody_play(world, years=100, chaos=0.3, load_save=True)
+            print("\n── Press Enter to return to wyrd gateway...")
+            input()
             stdscr = curses.initscr()
             curses.start_color()
             curses.use_default_colors()
