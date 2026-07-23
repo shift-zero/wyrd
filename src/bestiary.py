@@ -525,6 +525,7 @@ def generate_bestiary(world: 'World') -> list[Creature]:
     """
     rng = random.Random(world.seed + 40000)
     creatures = []
+    seen_names_global: set[str] = set()
 
     habitats = _get_habitats(world)
     if not habitats:
@@ -534,18 +535,22 @@ def generate_bestiary(world: 'World') -> list[Creature]:
     num_creatures_per_habitat = max(2, 6 // len(habitats))
 
     for habitat in habitats:
-        seen_names = set()
+        seen_names: set[str] = set()
         attempts = 0
         while len([c for c in creatures if c.habitat == habitat]) < num_creatures_per_habitat and attempts < 20:
             attempts += 1
             creature = _build_creature(world, habitat, rng)
-            if creature.name not in seen_names:
+            if creature.name not in seen_names and creature.name not in seen_names_global:
                 seen_names.add(creature.name)
+                seen_names_global.add(creature.name)
                 creatures.append(creature)
 
     # Add faction-attuned creatures
     faction_creatures = _assign_faction_creatures(world, rng)
-    creatures.extend(faction_creatures)
+    for fc in faction_creatures:
+        if fc.name not in seen_names_global:
+            seen_names_global.add(fc.name)
+            creatures.append(fc)
 
     # Add a few rare/unique creatures
     for _ in range(rng.randint(1, 3)):
@@ -555,6 +560,13 @@ def generate_bestiary(world: 'World') -> list[Creature]:
         rare.is_unique = True
         # Generate a distinctive name for unique creatures
         rare.name = f"{rng.choice(CREATURE_ADJECTIVES)} {rare.name} of {rng.choice(CREATURE_PREFIXES)}{rng.choice(['-', ' '])}{rng.choice(['Woe', 'Bane', 'Dread', 'Sorrow', 'Ruin'])}" if rng.random() < 0.5 else rare.name
+        # Ensure unique creature name is globally unique
+        base_name = rare.name
+        counter = 1
+        while rare.name in seen_names_global:
+            rare.name = f"{base_name} {chr(64 + counter)}"  # A, B, C...
+            counter += 1
+        seen_names_global.add(rare.name)
         creatures.append(rare)
 
     return creatures

@@ -1024,6 +1024,8 @@ def render_creature_detail(creature) -> str:
         for loot in creature.loot:
             lines.append(f"    {_color(226)}♦{ANSI_RESET} {loot}")
 
+    return "\n".join(lines)
+
 
 # ── Trade Route Map ────────────────────────────────────────────────────
 

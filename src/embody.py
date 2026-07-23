@@ -919,6 +919,187 @@ def _prompt(char: PlayerCharacter, world: World,
     return True  # Continue playing
 
 
+# ── Travel Creature Encounters ──────────────────────────────────────────
+
+
+def _pick_creature_for_biome(world: World, biome: str) -> Optional["Creature"]:
+    """Pick a creature from the world's bestiary matching a biome.
+
+    Falls back to any creature if no biome match found.
+    Returns None if bestiary is empty.
+    """
+    from .bestiary import Creature
+    bestiary = getattr(world, 'bestiary', None)
+    if not bestiary:
+        return None
+    candidates = [c for c in bestiary if c.habitat == biome and c.habitat != "various"]
+    if not candidates:
+        # Fallback: creatures from any habitat that aren't exclusive
+        candidates = [c for c in bestiary if c.habitat != "various"]
+    if not candidates:
+        candidates = bestiary
+    return random.choice(candidates) if candidates else None
+
+
+def _resolve_travel_encounter(outcome: int, creature: "Creature",
+                               char: PlayerCharacter,
+                               rng: random.Random) -> str:
+    """Resolve a creature encounter option and apply consequences.
+
+    Args:
+        outcome: 0 = fight, 1 = flee, 2 = negotiate
+        creature: The encountered creature
+        char: The player character
+        rng: Random state
+
+    Returns:
+        A description string of what happened.
+    """
+    from .bestiary import Creature
+    tier = creature.tier
+    tier_factor = tier / 3.0  # 0.33 for tier 1, 1.0 for tier 3, 1.67 for tier 5
+
+    if outcome == 0:  # Fight
+        # Base survival chance: 70%, reduced by tier
+        survive_chance = max(0.2, 0.7 - (tier - 1) * 0.1)
+        if rng.random() < survive_chance:
+            # Victory!
+            gold_reward = rng.randint(5, 15) * tier
+            health_cost = -rng.randint(5, 15) * int(tier_factor)
+            item = None
+            if rng.random() < 0.3:
+                item = rng.choice([
+                    "a claw talisman", "creature hide", "a fang necklace",
+                    "a bone charm", "a vial of venom", "a rare pelt",
+                ])
+            char.gold += gold_reward
+            char.total_gold_earned += gold_reward
+            char.health = max(0, min(100, char.health + health_cost))
+            if item:
+                char.inventory.append(item)
+            _record_deed(char, f"Defeated a {creature.name} in combat")
+            _record_legacy_event(char, f"Survived an encounter with {creature.name}")
+            parts = [f"You draw your weapon and face the {creature.name}!"]
+            parts.append(f"After a fierce struggle, you emerge victorious!")
+            parts.append(f"You find {gold_reward} gold on the beast's remains.")
+            if health_cost:
+                parts.append(f"You are wounded ({health_cost} HP).")
+            if item:
+                parts.append(f"You recover {item} as a trophy.")
+            return "\n".join(parts)
+        else:
+            # Defeat
+            dmg = -rng.randint(15, 30) * int(max(1, tier_factor))
+            char.health = max(0, min(100, char.health + dmg))
+            gold_loss = rng.randint(10, 30) * tier
+            char.gold = max(0, char.gold - gold_loss)
+            char.total_gold_spent += gold_loss
+            _record_legacy_event(char, f"Barely survived an attack by {creature.name}")
+            parts = [f"You draw your weapon and face the {creature.name}!"]
+            parts.append(f"The creature is too strong! You are badly wounded.")
+            if gold_loss > 0:
+                parts.append(f"You lose {gold_loss} gold fleeing.")
+            parts.append(f"You retreat, bloodied and battered.")
+            return "\n".join(parts)
+
+    elif outcome == 1:  # Flee
+        flee_chance = max(0.3, 0.8 - (tier - 1) * 0.1)
+        if rng.random() < flee_chance:
+            return f"You slip away into the undergrowth. The {creature.name} loses your trail."
+        else:
+            dmg = -rng.randint(5, 15) * int(tier_factor)
+            char.health = max(0, min(100, char.health + dmg))
+            _record_legacy_event(char, f"Escaped from a {creature.name}")
+            return (f"You try to flee but the {creature.name} catches you! "
+                    f"You fend it off and escape, wounded ({abs(dmg)} HP lost).")
+
+    else:  # Negotiate / Make noise / Distract
+        if creature.behavior in ("docile", "curious", "defensive"):
+            return (f"The {creature.name} regards you with cautious interest, "
+                    f"then turns and disappears into the wild. A tense moment passes.")
+        elif creature.behavior in ("cunning", "patient"):
+            # Might trick you
+            if rng.random() < 0.5:
+                gold_loss = rng.randint(5, 20)
+                char.gold = max(0, char.gold - gold_loss)
+                char.total_gold_spent += gold_loss
+                return (f"The {creature.name} feigns disinterest, then "
+                        f"circles back and steals {gold_loss} gold from your pack!")
+            return (f"The {creature.name} watches you from a distance, "
+                    f"then vanishes into the shadows.")
+        else:
+            # Aggressive creatures don't negotiate
+            dmg = -rng.randint(5, 15) * int(tier_factor)
+            char.health = max(0, min(100, char.health + dmg))
+            _record_legacy_event(char, f"Survived a {creature.name} ambush")
+            return (f"The {creature.name} has no interest in negotiation! "
+                    f"It attacks, catching you off guard ({abs(dmg)} HP lost).")
+
+
+def _find_biome_for_settlement(world: World, settlement_name: str) -> str:
+    """Find the biome for a given settlement name."""
+    for region in world.regions:
+        for s in region.settlements:
+            if s.name.lower() == settlement_name.lower():
+                return region.biome
+    return "temperate"
+
+
+def _maybe_travel_encounter(char: PlayerCharacter,
+                            world: World) -> bool:
+    """Check for a creature encounter during travel. ~30% chance.
+
+    If an encounter occurs, it prompts the player with choices and
+    resolves the outcome. Returns True if encounter happened.
+    """
+    # 30% base chance
+    if random.random() > 0.30:
+        return False
+
+    # Find a creature matching the region biome
+    biome = _find_biome_for_settlement(world, char.settlement)
+    creature = _pick_creature_for_biome(world, biome)
+    if creature is None:
+        return False
+
+    # Use a dedicated RNG for deterministic-ish outcomes
+    import random as rnd
+    rng = rnd.Random(hash((char.name, char.year, creature.name)) & 0xFFFFFFFF)
+
+    print(f"\n  {_color(196)}{'═' * 40}{ANSI_RESET}")
+    print(f"  {ANSI_BOLD}{_color(196)}⚠ ENCOUNTER!{ANSI_RESET}")
+    unique_mark = f" {_color(226)}★{ANSI_RESET}" if creature.is_unique else ""
+    print(f"  A {ANSI_BOLD}{_color(172)}{creature.name}{ANSI_RESET}{unique_mark} "
+          f"bars your path!")
+    print(f"  {ANSI_DIM}{creature.description[:100]}{ANSI_RESET}")
+    print(f"  {ANSI_DIM}Tier {creature.tier} · {creature.behavior.replace('_', ' ')} · "
+          f"{creature.size}{ANSI_RESET}")
+    print(f"  {_color(196)}{'═' * 40}{ANSI_RESET}")
+
+    try:
+        raw = input(f"  {_color(226)}►{ANSI_RESET} [1] Fight  [2] Flee  [3] Distract: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        raw = "2"  # Default: flee
+
+    if raw not in ("1", "2", "3"):
+        print(f"  {ANSI_DIM}You hesitate. The creature attacks!{ANSI_RESET}")
+        raw = "1"  # Default: fight
+
+    outcome_idx = int(raw) - 1
+    result = _resolve_travel_encounter(outcome_idx, creature, char, rng)
+    print(f"  {result}")
+
+    # Check for death
+    if char.health <= 0:
+        char.alive = False
+        print(f"\n  {ANSI_BOLD}{_color(196)}The {creature.name}'s attack proves fatal.{ANSI_RESET}")
+
+    # Travel takes a year regardless
+    char.year += 1
+    return True
+
+
 def _handle_travel(char: PlayerCharacter, world: World) -> None:
     """Handle travel to another settlement."""
     options = _render_travel_options(char, world)
@@ -952,14 +1133,22 @@ def _handle_travel(char: PlayerCharacter, world: World) -> None:
     dest_name = dest.split(" (")[0].strip()
 
     print(f"  🚶 You travel to {ANSI_BOLD}{dest_name}{ANSI_RESET}...")
+
+    # ── Creature encounter during travel ──────────────────────────────
+    encounter_happened = _maybe_travel_encounter(char, world)
+
     char.settlement = dest_name
     # Track visited settlement
     if dest_name not in char.settlements_visited:
         char.settlements_visited.append(dest_name)
         if len(char.settlements_visited) >= 3:
             _record_deed(char, f"Visited {len(char.settlements_visited)} settlements")
-    char.year += 1  # Travel takes a year
-    print(f"  You arrive safely.")
+    if not encounter_happened:
+        char.year += 1  # Travel takes a year
+        print(f"  You arrive safely.")
+    else:
+        # Encounter already consumed the year
+        print(f"  {ANSI_DIM}You eventually reach {ANSI_BOLD}{dest_name}{ANSI_RESET}{ANSI_DIM}.{ANSI_RESET}")
 
 
 def _advance_year(char: PlayerCharacter, world: World,
