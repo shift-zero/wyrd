@@ -22,7 +22,12 @@ from .world import World
 from .generate import generate_world
 from .serialize import load_world
 
-# ── Color palette ─────────────────────────────────────────────────────
+ANSI_RE = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
+
+
+def _strip_ansi(text: str) -> str:
+    """Strip ANSI escape sequences from text."""
+    return ANSI_RE.sub('', text)
 
 CP = {
     "title": 1,
@@ -233,10 +238,14 @@ def _launch_terminal_view(stdscr, title: str, render_fn, *args, **kwargs):
 
 
 def _launch_curses_view(stdscr, title: str, view_fn, *args, **kwargs):
-    """Launch a curses sub-view: end gateway curses, run view, restart curses."""
+    """Launch a curses sub-view: end gateway curses, run view, restart curses.
+
+    The view function is expected to call its own curses.wrapper() internally.
+    We just end the gateway's curses session, let the view run, then restart.
+    """
     curses.endwin()
     try:
-        curses.wrapper(view_fn, *args, **kwargs)
+        view_fn(*args, **kwargs)
     except Exception:
         pass
     # Restart curses for the gateway
@@ -489,8 +498,9 @@ def _gateway_loop(stdscr):
                 continue
             world_in_session = world
             from .render import render_lore
+            lore_text = _strip_ansi(render_lore(world))
             draw_help_panel(stdscr, ["wyrd — World Lore  (press any key to close)", ""] +
-                            [f"  {l}" for l in render_lore(world).split("\n")])
+                            [f"  {l}" for l in lore_text.split("\n")])
             stdscr.refresh()
             stdscr.getch()
 
@@ -512,7 +522,7 @@ def _gateway_loop(stdscr):
             from .render import render_chronicles
             if not world.chronicles:
                 world.chronicles = generate_chronicles(world, world.narrative)
-            chron_text = render_chronicles(world)
+            chron_text = _strip_ansi(render_chronicles(world))
             lines = ["wyrd — Chronicles  (press any key to close)", ""]
             for l in chron_text.split("\n"):
                 lines.append(f"  {l}")
@@ -545,6 +555,8 @@ def _gateway_loop(stdscr):
             print(render_sim_detailed(result, world))
             input("\n\u2014\u2014 Simulation Complete \u2014\u2014 Press Enter to return to wyrd gateway...")
             stdscr = curses.initscr()
+            curses.start_color()
+            curses.use_default_colors()
             _init_colors()
             stdscr.keypad(True)
             curses.curs_set(0)
@@ -601,6 +613,8 @@ def _gateway_loop(stdscr):
                                          title=f"wyrd {world.seed} — Trade Routes (Year {result.year})"))
             input(f"\n── Press Enter to return to wyrd gateway...")
             stdscr = curses.initscr()
+            curses.start_color()
+            curses.use_default_colors()
             _init_colors()
             stdscr.keypad(True)
             curses.curs_set(0)
