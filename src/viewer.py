@@ -304,13 +304,18 @@ def _draw_stats(stdscr, state: SimState, speed: float = 2.0):
     active = state.num_settlements
     abandoned = state.num_abandoned
     pop = state.total_population
+    # Count active trade routes
+    routes = getattr(state, 'trade_routes', None) or []
+    active_routes = sum(1 for r in routes if isinstance(r, dict) and r.get('is_active', True))
     # Speed bar: 8 chars, fills proportionally
     speed_pct = max(0.0, min(1.0, (speed - 0.125) / 511.875))
     filled = int(speed_pct * 8)
     speed_bar = "█" * filled + "░" * (8 - filled)
     text = (f" Settlements: {active} active"
             f"{f', {abandoned} abandoned' if abandoned else ''}"
-            f"  │  Pop: {pop:,}  │  {speed_bar}  {speed:.1f}x")
+            f"  │  Pop: {pop:,}"
+            f"  │  Routes: {active_routes}"
+            f"  │  {speed_bar}  {speed:.1f}x")
     _fill_line(stdscr, 1, _CP["info"])
     _draw(stdscr, 1, 0, text, _CP["info"])
 
