@@ -12,7 +12,13 @@ Usage:
 
 import curses
 import math
+import random
+import time as _time
 from .world import World, TERRAIN, ADVENTURE_ZONE_TYPES
+from .sim import (
+    initialize_sim_state, _simulate_tick, apply_sim_state_to_world,
+    SimState, SimEvent,
+)
 
 # ── Color palette (256-color) ─────────────────────────────────────────
 
@@ -223,7 +229,7 @@ def _draw_info_panel(stdscr, world: World, cursor_x: int, cursor_y: int,
 
     if not inspect_mode:
         # Simple mode: just show position
-        line = f" Position: ({cursor_x}, {cursor_y})  Press i to inspect tiles  "
+        line = f" Position: ({cursor_x}, {cursor_y})  Press i to inspect tiles, v for simulation  "
         try:
             stdscr.addstr(info_y, 0, " " * (max_x - 1), curses.color_pair(14))
             stdscr.addstr(info_y, 0, line[:max_x - 1], curses.color_pair(14))
@@ -284,7 +290,7 @@ def _draw_info_panel(stdscr, world: World, cursor_x: int, cursor_y: int,
     # Controls line (after info lines + 1 padding)
     ctrl_y = info_y + len(lines) + 1
     if ctrl_y < max_y:
-        ctrl = " [↑↓←→/WASD] pan  [+/-] zoom  [i] inspect toggle  [r] regions  [l] lore  [z] zones  [f] factions  [b] bestiary  [q] quit  [h] help"
+        ctrl = " [↑↓←→/WASD] pan  [+/-] zoom  [i] inspect toggle  [v] sim  [r] regions  [l] lore  [z] zones  [f] factions  [b] bestiary  [q] quit  [h] help"
         try:
             stdscr.addstr(ctrl_y, 0, " " * (max_x - 1), curses.color_pair(16))
             stdscr.addstr(ctrl_y, 0, ctrl[:max_x - 1], curses.color_pair(16))
@@ -314,6 +320,13 @@ def _draw_help(stdscr) -> None:
         "  General",
         "    h / ?     Toggle this help screen",
         "    q / ESC   Quit",
+        "",
+        "  Simulation (press 'v' in explore)",
+        "    v         Toggle simulation mode",
+        "    Space     Pause / resume simulation",
+        "    →         Step one year forward",
+        "    + / =     Speed up simulation",
+        "    - / _     Slow down simulation",
         "",
         "  Tip: INSPECT mode lets you move a cursor over tiles",
         "       and see elevation, moisture, settlements, and regions.",
@@ -654,6 +667,69 @@ def _draw_factions_overlay(stdscr, world: World) -> None:
             pass
 
 
+# ── Sim-mode helpers ──────────────────────────────────────────────────
+
+
+def _draw_sim_status(stdscr, world: World, state: SimState,
+                     year: int, max_years: int,
+                     paused: bool, speed: float) -> None:
+    """Draw the sim status line (line 1)."""
+    max_y, max_x = stdscr.getmaxyx()
+    if state:
+        active = state.num_settlements
+        abandoned = state.num_abandoned
+        pop = state.total_population
+        text = (f" Sim: Yr {year:,}/{max_years:,}"
+                f"  {'⏸ PAUSED' if paused else '▶ RUNNING'}"
+                f"  {speed:.1f}x/yr"
+                f"  │  {active} active{', ' + str(abandoned) + ' ruined' if abandoned else ''}"
+                f"  │  Pop: {pop:,}")
+    else:
+        text = f" Sim: Initializing..."[:max_x - 1]
+    _fill_line(stdscr, 1, HIGHLIGHT_BG)
+    try:
+        stdscr.addstr(1, 0, text[:max_x - 1],
+                      curses.color_pair(15) | curses.A_BOLD)
+    except curses.error:
+        pass
+
+
+def _draw_sim_events(stdscr, events: list,
+                     bottom_y: int, max_x: int) -> None:
+    """Draw recent sim events as a thin panel at the bottom."""
+    num_events = min(3, len(events))
+    if num_events == 0:
+        return
+    recent = events[-num_events:]
+    from .viewer import _EVENT_ICON, _ev_cp
+    for i, ev in enumerate(reversed(recent)):
+        y = bottom_y - 3 + i
+        if y < 0:
+            break
+        icon = _EVENT_ICON.get(ev.event_type, "•")
+        cp = _ev_cp(ev.event_type)
+        desc = ev.description[:max(10, max_x - 18)]
+        text = f" {icon} Y{ev.year} {desc}"
+        try:
+            stdscr.addstr(y, 0, text[:max_x - 1], curses.color_pair(cp))
+        except curses.error:
+            pass
+
+
+def _draw_sim_footer(stdscr, h: int, w: int) -> None:
+    """Draw the sim-mode footer with controls."""
+    controls = (
+        " [v] exit sim  [Space] pause/resume  [+/-] speed  "
+        "[→] step  [q] quit"
+    )[:max(0, w - 1)]
+    _fill_line(stdscr, h - 1, HELP_COLOR)
+    try:
+        stdscr.addstr(h - 1, 0, controls,
+                      curses.color_pair(HELP_COLOR))
+    except curses.error:
+        pass
+
+
 # ── Main Explorer ─────────────────────────────────────────────────────
 
 def _explore_curses(stdscr, world: World) -> None:
@@ -680,17 +756,68 @@ def _explore_curses(stdscr, world: World) -> None:
     show_bestiary = False
     running = True
 
+    # Sim-mode state
+    sim_mode = False
+    sim_state = None
+    sim_events = []
+    sim_paused = True
+    sim_speed = 3.0
+    sim_year = 0
+    sim_max_years = 200
+    sim_accum = 0.0
+    sim_last = 0.0
+    sim_rng = None
+    new_founds = set()
+
     while running:
         max_y, max_x = stdscr.getmaxyx()
         stdscr.clear()
 
+        # ── Sim tick ─────────────────────────────────────────────────
+        if sim_mode and not sim_paused and sim_year < sim_max_years:
+            now = _time.monotonic()
+            dt = now - sim_last
+            sim_last = now
+            sim_accum += dt * sim_speed
+            while sim_accum >= 1.0 and sim_year < sim_max_years:
+                sim_accum -= 1.0
+                sim_year += 1
+                tick_events = _simulate_tick(world, sim_state, sim_rng,
+                                             sim_year, 0.3)
+                sim_events.extend(tick_events)
+                new_founds = set()
+                for ev in tick_events:
+                    if ev.event_type == "founding":
+                        for sn in ev.affected_settlements:
+                            ss = sim_state.settlements.get(sn)
+                            if ss:
+                                new_founds.add((ss.x, ss.y))
+                # Apply sim state to world every tick for live map updates
+                apply_sim_state_to_world(world, sim_state)
+
+        # ── Calculate layout ────────────────────────────────────────
+        header_lines = 2 if sim_mode else 1
+        info_lines = 5 if inspect_mode else 1
+        if sim_mode:
+            map_area_h = max(1, max_y - header_lines - 6 - info_lines)
+        else:
+            map_area_h = max(1, max_y - header_lines - 2 - info_lines)
+
         # ── Draw map ────────────────────────────────────────────────
         _draw_header(stdscr, world, inspect_mode, zoom_level,
                      cursor_x, cursor_y)
+        if sim_mode:
+            _draw_sim_status(stdscr, world, sim_state, sim_year,
+                             sim_max_years, sim_paused, sim_speed)
+
         _draw_map(stdscr, world, offset_x, offset_y,
                   cursor_x, cursor_y, inspect_mode, zoom_level,
                   show_cursor=(inspect_mode or show_help or show_regions or show_lore or show_zones or show_factions or show_bestiary))
         _draw_info_panel(stdscr, world, cursor_x, cursor_y, inspect_mode)
+
+        # Sim events panel
+        if sim_mode:
+            _draw_sim_events(stdscr, sim_events, max_y - 2, max_x)
 
         # ── Overlays ────────────────────────────────────────────────
         if show_help:
@@ -705,6 +832,10 @@ def _explore_curses(stdscr, world: World) -> None:
             _draw_factions_overlay(stdscr, world)
         elif show_bestiary:
             _draw_bestiary_overlay(stdscr, world)
+
+        # Sim footer
+        if sim_mode:
+            _draw_sim_footer(stdscr, max_y, max_x)
 
         curses.doupdate()
 
@@ -751,6 +882,57 @@ def _explore_curses(stdscr, world: World) -> None:
                 # Clamp
                 cursor_x = max(0, min(world.width - 1, cursor_x))
                 cursor_y = max(0, min(world.height - 1, cursor_y))
+
+        elif key == ord("v"):
+            if not sim_mode:
+                # Enter sim-mode
+                sim_mode = True
+                sim_state = initialize_sim_state(world)
+                sim_rng = random.Random(world.seed + 1000000)
+                sim_events = []
+                sim_year = 0
+                sim_paused = True
+                sim_accum = 0.0
+                sim_last = _time.monotonic()
+                new_founds = set()
+            else:
+                # Exit sim-mode
+                sim_mode = False
+                sim_state = None
+                sim_events = []
+                new_founds = set()
+
+        elif sim_mode and key == ord(" "):
+            if sim_paused:
+                # Resume
+                sim_paused = False
+                sim_last = _time.monotonic()
+                sim_accum = 0.0
+            else:
+                sim_paused = True
+
+        elif sim_mode and key == curses.KEY_RIGHT:
+            # Step one year
+            if sim_year < sim_max_years:
+                sim_paused = True
+                sim_year += 1
+                tick_events = _simulate_tick(world, sim_state, sim_rng,
+                                             sim_year, 0.3)
+                sim_events.extend(tick_events)
+                new_founds = set()
+                for ev in tick_events:
+                    if ev.event_type == "founding":
+                        for sn in ev.affected_settlements:
+                            ss = sim_state.settlements.get(sn)
+                            if ss:
+                                new_founds.add((ss.x, ss.y))
+                apply_sim_state_to_world(world, sim_state)
+
+        elif sim_mode and (key == ord("+") or key == ord("=")):
+            sim_speed = min(sim_speed * 2, 64.0)
+
+        elif sim_mode and (key == ord("-") or key == ord("_")):
+            sim_speed = max(sim_speed / 2, 0.125)
 
         elif key == ord("+") or key == ord("="):
             zoom_level = min(5, zoom_level + 1)

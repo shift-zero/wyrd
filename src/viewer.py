@@ -184,7 +184,7 @@ def _draw_header(stdscr, seed, year, total, paused, speed, w):
     fmt += "⏸ PAUSED" if paused else "▶ RUNNING"
     fmt += f"  {speed:.1f}x/yr"
     _draw(stdscr, 0, 0, fmt, _CP["header"], bold=True)
-    hint = " [Space]pause [+/-]speed [→]step [p]chart [q]quit "
+    hint = " [Space]pause [+/-]speed [→]step [p]chart [?]help [q]quit "
     _draw(stdscr, 0, max(0, w - len(hint) - 1), hint, _CP["dim"])
 
 
@@ -223,7 +223,7 @@ def _draw_events(stdscr, events: list, max_events: int, start_y: int, w: int):
 def _draw_footer(stdscr, h, w):
     controls = (
         " [Space] pause/resume  [+/-] speed  [→] step  "
-        "[p] pop chart  [q] quit"
+        "[p] pop chart  [?] help  [q] quit"
     )
     _fill_line(stdscr, h - 1, _CP["dim"])
     _draw(stdscr, h - 1, 0, controls[:w - 1], _CP["dim"])
@@ -302,12 +302,69 @@ def _draw_chart(stdscr, state: SimState, h, w):
     _draw(stdscr, sy + ch, sx, " Press [p] to close ", _CP["dim"])
 
 
+# ── Help overlay ─────────────────────────────────────────────────────
+
+
+VIEWER_HELP = [
+    "wyrd — Simulation Viewer Help  (press any key to close)",
+    "",
+    "  Controls",
+    "    Space           Pause / resume simulation",
+    "    →              Step one year forward",
+    "    + / =          Speed up simulation",
+    "    - / _          Slow down simulation",
+    "    p              Toggle population chart overlay",
+    "",
+    "  General",
+    "    h / ?          Toggle this help screen",
+    "    q / ESC        Quit viewer",
+    "",
+    "  Tip: Watch the map evolve as centuries pass.",
+    "       New settlements appear in green.",
+]
+
+
+def _draw_help_overlay(stdscr, h, w):
+    """Draw the help overlay centered on screen."""
+    # Calculate dimensions
+    box_h = len(VIEWER_HELP) + 2
+    box_w = max(len(l) for l in VIEWER_HELP) + 4
+    start_y = max(0, (h - box_h) // 2)
+    start_x = max(0, (w - box_w) // 2)
+
+    # Background
+    for y in range(box_h):
+        for x in range(box_w):
+            try:
+                if y in (0, box_h - 1) or x in (0, box_w - 1):
+                    stdscr.addch(start_y + y, start_x + x, " ",
+                                 curses.color_pair(_CP["header"]))
+                else:
+                    stdscr.addch(start_y + y, start_x + x, " ",
+                                 curses.color_pair(_CP["info"]))
+            except curses.error:
+                pass
+
+    # Text
+    for i, line in enumerate(VIEWER_HELP):
+        y = start_y + 1 + i
+        if y >= h:
+            break
+        if line.startswith("  ") and not line.startswith("    "):
+            cp = _CP["header"]
+            bold = True
+        else:
+            cp = _CP["info"]
+            bold = False
+        _draw(stdscr, y, start_x + 2, line, cp, bold=bold)
+
+
 # ── Input ────────────────────────────────────────────────────────────
 
 def _handle_key(key, state):
     """Process a keypress. Returns (action, value) tuple.
 
-    Actions: 'quit', 'toggle_pause', 'speed', 'step', 'toggle_chart'
+    Actions: 'quit', 'toggle_pause', 'speed', 'step', 'toggle_chart', 'help'
     """
     if key in (ord("q"), 27):
         return "quit", None
@@ -321,6 +378,8 @@ def _handle_key(key, state):
         return "step", None
     if key == ord("p"):
         return "toggle_chart", None
+    if key in (ord("?"), ord("h")):
+        return "help", None
     return None, None
 
 
@@ -344,6 +403,7 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
     paused = False
     speed = 2.0
     show_chart = False
+    show_help = False
     running = True
     last = time.monotonic()
     accum = 0.0
@@ -404,6 +464,8 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
 
         if show_chart:
             _draw_chart(stdscr, state, h, w)
+        if show_help:
+            _draw_help_overlay(stdscr, h, w)
 
         stdscr.refresh()
 
@@ -430,6 +492,8 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
                     events.extend(tick_events)
             elif act == "toggle_chart":
                 show_chart = not show_chart
+            elif act == "help":
+                show_help = not show_help
             key = stdscr.getch()
 
         if not paused:
