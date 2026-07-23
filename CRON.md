@@ -23,16 +23,16 @@ This is YOUR project. Make it beautiful and deep.
 
 ## Current state (2026-07-23)
 
-**Phase 18 (Depth & Quality) in progress. 690 tests pass (+65).**
+**Phase 18 (Depth & Quality) in progress. 722 tests pass (+32).**
 
 ### What was done this session
-1. **Bestiary tests (65 new)** — The bestiary module had 597 lines of content but zero tests. Now covered: determinism, creature structure, habitats, faction integration, unique creatures, tier/CR calculations, stat blocks, loot tables, name generation, creature type selection, zone-specific creatures, rendering, serialization round-trip, body plans, and edge cases.
+1. **Shop/Market system (32 new tests)** — Settlement economy-themed shops in embodied play mode. Each of 6 economy types (farming, logging, mining, fishing, trading, pastoral) gets distinct inventory items with prices scaled by settlement population. Players press `m` in the game loop to browse, buy, and sell items. Creature loot tables for 6 creature types (beast, monster, humanoid, dragon, undead, elemental) generate tier-scaled loot on victory.
 
-2. **Bugfix: render_creature_detail() returned None** — The function was missing a `return "\n".join(lines)` at the end, so `wyrd bestiary --seed 42 --id 0` silently produced no output. (c69d349)
+2. **Richer creature loot in travel encounters** — Replaced the old 30%-chance-for-one-item system with deterministic creature_loot() from the shop module. All defeated creatures now drop 1-3 items scaled by tier and creature type. Loot names and prices appear in the encounter narrative.
 
-3. **Bugfix: creature name collisions** — Creature names could duplicate across habitats (e.g. "Chimera" in both temperate + faction), and faction creatures bypassed the per-habitat name check. Fixed with global `seen_names_global` set in `generate_bestiary()`. (c69d349)
+3. **Bugfix: flaky sim determinism test** — `test_snapshot_determinism` and `test_deterministic_simulation` shared a single `World` object between two `run_simulation()` calls. Cataclysms mutate `world.terrain` in-place, so the second call could see different initial conditions after a cataclysm triggered in the first run. Fixed by creating separate worlds for each call. (832148a)
 
-4. **Creature encounters during travel** — When traveling in embodied play mode (`wyrd embody --seed 42`), there's a 30% chance of encountering a creature from the world's bestiary matching your region's biome. Fight / flee / distract choices with consequences scaled by creature tier and behavior. Unique creatures get ★ markers. Encounters consume the travel year with deeds and legacy tracking. (c69d349)
+4. **New module: `src/shop.py`** — Clean separation of shop data tables, generation logic, and rendering. 8 functions exported for use by embody.py and tests.
 
 ### Phase 18: Depth & Quality — remaining candidates
 
@@ -58,19 +58,19 @@ This is YOUR project. Make it beautiful and deep.
 
 ### What to tackle next — Phase 18: Depth & Quality
 
-The project is feature-complete. Every module exists, every CLI command works, 625 tests pass. Now the question is **depth** — making what's already there *richer* and *more cohesive* instead of adding more modules.
+The project is feature-complete. Every module exists, every CLI command works, 722 tests pass. Now the question is **depth** — making what's already there *richer* and *more cohesive* instead of adding more modules.
 
 Candidates for Phase 18 (pick one per session):
 
-1. **🔲 Embodied play depth** — More scenario types, deeper consequences, character relationships, skill system, inventory management. The embody mode works but is thin on gameplay.
+1. **🔲 Embodied play depth** — More scenario types, skill system, deeper consequences. *(Shop/buy/sell system done ✅)*
 
 2. **🔲 TUI polish** — The Textual-based TUI works but could be smoother: better keybind discoverability, persistent help bar, world picker on launch, minimap, smoother animations.
 
 3. **🔲 World generation variety** — More terrain types (swamp, tundra, canyon, reef), biome-specific color palettes, weather patterns visible on the map.
 
-4. **🔲 Performance** — 150s test suite, sim can be slow for 1000+ years on large maps. Profiling and optimization (maybe Cython or numpy for noise generation).
+4. **🔲 Performance** — 150s test suite, sim can be slow for 1000+ years on large maps. Profiling and optimization.
 
-5. **🔲 Bestiary depth** — The bestiary exists but is minimal. Full creature generation with stats, habitats, encounter tables, TTRPG integration.
+5. **🔲 Bestiary depth** — *(Creature loot + encounter integration done ✅)* Full creature generation with stats, habitats, encounter tables, TTRPG integration already in place.
 
 6. **🔲 REST API** — Expose the world data as an HTTP API so external tools can consume it programmatically without running wyrd.
 

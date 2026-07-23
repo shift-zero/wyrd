@@ -116,6 +116,7 @@ Year-by-year simulation in the Dwarf Fortress tradition. The world is no longer 
 | # | What | Status | Verified |
 |---|------|--------|----------|
 | 1 | Bestiary tests (65 new) + bugfixes + travel encounters | ✅ 2026-07-23 | 65 tests, all pass; `wyrd embody` travel has creature encounters |
+| 2 | Shop/market system (32 new tests) — settlement economy shops, creature loot, buy/sell in embody mode | ✅ 2026-07-23 | 32 tests, all pass; `m` command in embody opens market |
 
 ### Design Principles
 
