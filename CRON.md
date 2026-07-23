@@ -22,14 +22,15 @@ This is YOUR project. Make it beautiful and deep.
 
 ## Current state (2026-07-23)
 
-**458 tests pass across 21 test files.**
+**465 tests pass across all test files.**
 
 Phase 13 is fully shipped:
 - `src/cataclysm.py` — 651 lines, 7 cataclysm types, terrain mutation, settlement destruction, landmark generation, cascade events, epicentre selection
-- `tests/test_cataclysm.py` — 30 tests all passing, covers: core types, terrain mutation, settlement destruction, landmark creation, epicentre selection, cascade events, full execution, integration with sim, serialization
+- `tests/test_cataclysm.py` — 37 tests (30 original + 7 rendering) all passing, covers: core types, terrain mutation, settlement destruction, landmark creation, epicentre selection, cascade events, full execution, integration with sim, serialization, landmark rendering on world map
 - Full integration: sim.py imports and calls `_simulate_cataclysm_tick()` and `cataclysm_to_sim_event()` inside try/except blocks
 - Serialization: world.landmarks survive save/load via serialize.py
-- Rendering: cataclysm event icons and colors in sim.py render functions
+- Rendering: cataclysm event icons and colors in sim.py render functions; landmarks now appear on the world map via render_map() with their unique chars (≋ chasm, ⊙ crater, ▒ ash waste, etc.) at creation coordinates; dedicated `render_landmarks()` function for detailed view
+- Fix: removed broken "glass" terrain fallback in magical_cataclysm mutation table
 - Event-driven quests: cataclysm events generate quest hooks in `_apply_narrative_consequences()`
 
 Pre-existing known issue: sim.py war event character rendering checks for None already (lines 417-426), so the reported "crash" doesn't actually occur with current code.
