@@ -305,7 +305,7 @@ Eventual stretch: your character's descendants inherit through generations.
 |---|------|------------|
 | 1 🔲 | Live map animation during simulation | `wyrd run --seed 42 --years 100` renders map that animates tile changes, pop growth/shrink, trade route formation in real-time (partial: tiles flash on growth/shrink/founding/abandonment) — 2026-07-23 |
 | 2 🔲 | Textual-based TUI (or equivalent Python framework) | `wyrd` drops into a polished, navigable interface with tabs, help, status bar, modal overlays (foundation: `wyrd tui --seed 42` launches Textual viewer app) — 2026-07-23 |
-| 3 🔲 | Embodied character play mode | `wyrd embody --seed 42 --name "Rikard"` lets you play as a character with location, inventory, news, travel, and decisions |
+| 3 🟡 | Embodied character play mode (MVP) | `wyrd embody --seed 42 --name "Rikard"` — play as a character with location, travel, news, aging, and year-by-year advancement — 2026-07-23 |
 | 4 🔲 | Event-driven notifications with branching | Sim events arrive as interactive notifications with choice prompts ("A stranger arrives at your door. Let them in? y/n") |
 | 5 ✅ | Year-diff view | After any sim advance, show a diff: what changed, what grew, what fell (press `d` in viewer) — 2026-07-23 |
 | 6 🔲 | Multi-generational play | Your character lives, dies, has children who inherit the world state |
