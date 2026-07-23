@@ -73,7 +73,7 @@ TERRAIN_MUTATIONS = {
         "hills":      [("grass", 60), ("hills", 40)],
         "grass":      [("grass", 40), ("sand", 30), ("forest", 30)],
         "forest":     [("grass", 40), ("hills", 30), ("forest", 30)],
-        "sand":       [("sand", 50), ("glass" if "glass" in TERRAIN else "grass", 50)],
+        "sand":       [("sand", 40), ("grass", 30), ("shallow", 30)],
     },
     "great_plague": {
         # Plague doesn't change terrain, but may change forest slightly
