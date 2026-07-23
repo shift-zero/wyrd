@@ -1001,7 +1001,13 @@ def _gateway_loop(stdscr):
             mode_str = " No world selected"
 
         # Build context-sensitive key hints (right-aligned)
+        # Calculate actual sort direction per key
+        if sort_key == "population":
+            actual_descending = not sort_reverse  # population inverts
+        else:
+            actual_descending = sort_reverse
         sort_hint = f"  [Tab] sort:{sort_key}"
+        sort_hint += " ↑" if not actual_descending else " ↓"
         if worlds:
             hints = " [↑↓/k j] sel  [g] gen  [l] load  [e] explore  [v] view  [p] play  [G] gazetteer"
         else:
@@ -1032,17 +1038,23 @@ def _gateway_loop(stdscr):
             show_help = True
 
         elif key == 9:  # Tab: cycle sort key
-            # Tab: cycle sort key
             sort_keys = ["seed", "population", "name"]
             try:
                 idx = sort_keys.index(sort_key)
                 sort_key = sort_keys[(idx + 1) % len(sort_keys)]
             except ValueError:
                 sort_key = "seed"
-            sort_reverse = False
+            sort_reverse = False  # Natural order for each key
             update_sort = True
             selected_idx = 0
             status_msg = f"Sort: {sort_key}"
+            status_time = time_module.monotonic()
+
+        elif key == curses.KEY_BTAB:  # Shift+Tab: toggle sort direction
+            sort_reverse = not sort_reverse
+            update_sort = True
+            direction = "descending" if sort_reverse else "ascending"
+            status_msg = f"Sort reverse: {direction}"
             status_time = time_module.monotonic()
 
         elif key == ord("r"):
