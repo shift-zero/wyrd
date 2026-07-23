@@ -18,8 +18,8 @@ import random
 import sys
 import time as time_module
 from typing import Optional
-
 from .world import World
+from .render import ANSI_RESET, ANSI_BOLD, ANSI_DIM, _color
 from .embody import (
     PlayerCharacter, _OCCUPATIONS,
     _generate_character, _find_settlement_in_world,
@@ -568,6 +568,8 @@ def _tui_main(stdscr, world: World,
     show_help = False
     show_travel = False
     show_market = False
+    show_epilogue = False
+    epilogue_mode = False  # 'heir_choice' | 'heir_born' | 'quit'
     travel_options: list[str] = []
     log_scroll = 0
     status_msg = ""
@@ -581,7 +583,7 @@ def _tui_main(stdscr, world: World,
     welcome = f"✦ You are {char.name}, a {char.profession} in {char.settlement}."
     log_lines.append(welcome)
 
-    while running and char.alive and char.year < years:
+    while running and char.year < years:
         h, w = stdscr.getmaxyx()
         if h < 12 or w < 40:
             _draw(stdscr, 0, 0, "Terminal too small! Need at least 40x12.", _CP["error"])
@@ -643,6 +645,13 @@ def _tui_main(stdscr, world: World,
         elif show_help:
             _draw_help_overlay(stdscr)
 
+        # 3b. Epilogue overlay (covers full screen)
+        if show_epilogue:
+            _draw_epilogue_overlay(stdscr, char)
+            if epilogue_mode == 'heir_born':
+                _draw(stdscr, h - 3, max(2, w // 2 - 15),
+                      "Press any key to continue as your heir...", _CP["accent"], bold=True)
+
         # 4. Status message bar
         if status_msg and time_module.monotonic() - status_time < 3.0:
             _draw(stdscr, header_y + 1, 1, status_msg[:w - 2], _CP["accent"],
@@ -659,6 +668,25 @@ def _tui_main(stdscr, world: World,
             continue
 
         # Handle key by mode
+        if show_epilogue:
+            if epilogue_mode == 'heir_choice':
+                if key in ('y', 'Y'):
+                    epilogue_mode = 'heir_born'
+                elif key in ('n', 'N', 'q', 'Q', '\\x1b'):
+                    running = False
+            elif epilogue_mode == 'heir_born':
+                # Generate heir and restart
+                heir = _generate_heir_in_tui(char, world)
+                if heir:
+                    # Save and restart cleanly
+                    save_character(heir, world.seed)
+                    curses.endwin()
+                    embody_tui_play(world, name=heir.name,
+                                    years=years, chaos=chaos, load_save=True)
+                else:
+                    running = False
+                continue
+
         if in_choice:
             if key in ("1", "2", "3"):
                 opt_idx = int(key) - 1
@@ -876,6 +904,8 @@ def _tui_main(stdscr, world: World,
                 if char.health <= 0:
                     char.alive = False
                     log_lines.append(f"☠ {char.name} has died.")
+                    show_epilogue = True
+                    epilogue_mode = 'heir_choice'
 
                 # Keep scrolling to latest
                 log_scroll = max(0, len(log_lines) - (h - 4))
@@ -894,6 +924,8 @@ def _tui_main(stdscr, world: World,
                 if char.health <= 0:
                     char.alive = False
                     log_lines.append(f"☠ {char.name} has died.")
+                    show_epilogue = True
+                    epilogue_mode = 'heir_choice'
 
                 log_scroll = max(0, len(log_lines) - (h - 4))
 
@@ -927,73 +959,180 @@ def _tui_main(stdscr, world: World,
                 log_scroll = min(max_scroll, log_scroll + (h - 6))
 
     # ── Epilogue ────────────────────────────────────────────────────────
+    # TUI already handled death/ heir within the curses loop above.
+    # Here we just do clean cleanup and final output.
     curses.endwin()
 
     if not char.alive:
         print(_render_epilogue(char))
+        # Remove save on death (heir was created separately if chosen)
+        import os as _os
         path_ = f"wyrd-{world.seed}-char.json"
-        if os.path.exists(path_):
-            os.remove(path_)
-        print(f"\n  The wyrd spins on...")
-        try:
-            continue_str = input(
-                f"  Continue as an heir? (y/n): ").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            continue_str = "n"
-        if continue_str != "n":
-            # Generate heir
-            rng_heir = random.Random(world.seed + 6000000 + char.year)
-            first_names = ["Aldric", "Beorn", "Cedric", "Elara", "Freya",
-                           "Gareth", "Hakon", "Ivar", "Kara", "Leif",
-                           "Mira", "Nora", "Orin", "Runa", "Sigurd",
-                           "Tova", "Ulf", "Vera", "Astrid", "Brynn"]
-            surname = char.name.split()[-1] if " " in char.name else "sson"
-            heir_name = f"{rng_heir.choice(first_names)} {surname}"
-            heir_gold = max(20, char.gold // 2)
-            heir_inventory = [
-                item for item in char.inventory
-                if item not in ("a cryptic note", "an old map")
-            ][:3]
-            heir = PlayerCharacter(
-                name=heir_name,
-                settlement=char.settlement,
-                region=char.region,
-                profession=_OCCUPATIONS[rng_heir.randint(0, len(_OCCUPATIONS) - 1)],
-                gold=heir_gold,
-                health=100,
-                age=rng_heir.randint(16, 25),
-                year=char.year,
-                inventory=heir_inventory,
-                parent_name=char.name,
-            )
-            heir.settlements_visited = [s for s in char.settlements_visited if s]
-            heir.skill_xp = {
-                s: max(0, char.skill_xp.get(s, 0) * 2 // 3)
-                for s in ("combat", "trade", "persuasion", "survival", "crafting")
-            }
-            from .embody import SKILL_NAMES
-            for s in SKILL_NAMES:
-                heir.skills[s] = max(1, _skill_level_from_xp(heir.skill_xp.get(s, 0)))
-            heir.reputation = {
-                s: max(-10, min(10, v // 2))
-                for s, v in char.reputation.items()
-            } if char.reputation else {}
-            _record_legacy_event(heir, f"Born as heir of {char.name}")
-            save_character(heir, world.seed)
-            print(f"\n  {heir_name}, a {heir.profession}, carries on the line.")
-            print(f"  Child of {char.name}.")
-            print(f"  💾 Saved. Run 'wyrd embody --seed {world.seed} --tui' to continue.")
-            curses.endwin()
-            embody_tui_play(world, name=heir_name, years=years,
-                           chaos=chaos, load_save=True)
+        if _os.path.exists(path_):
+            _os.remove(path_)
+        print(f"\n  {ANSI_DIM}The wyrd remembers.{ANSI_RESET}")
     else:
         _auto_save(char, world)
         print(f"\n  {char.name} lived to age {char.age} and witnessed {char.year} years.")
-        print(f"  💾 Character saved — run 'wyrd embody --seed {world.seed} --tui' to resume.")
+        print(f"  💾  Character saved — run 'wyrd embody --seed {world.seed} --tui' to resume.")
 
-    active = state.num_settlements
-    pop = state.total_population
+    active = state.num_settlements if state else 0
+    pop = state.total_population if state else 0
     print(f"\n  World at Year {char.year}: {active} settlements, {pop:,} souls")
+
+
+def _draw_epilogue_overlay(stdscr, char: PlayerCharacter):
+    """Render the death epilogue as a full-screen overlay within curses."""
+    h, w = stdscr.getmaxyx()
+
+    # Build epilogue lines (plain text, no ANSI codes)
+    lines = []
+    lines.append(f"═══ {char.name} has died ═══")
+    lines.append("")
+    lines.append("Life Ledger")
+    lines.append("─" * min(50, w - 4))
+    lines.append(f"Age at death:     {char.age}")
+    years_active = char.year - max(0, char.age - 18) if char.age > 18 else char.year
+    lines.append(f"Years adventuring: {years_active}")
+    lines.append(f"Gold accumulated: {char.total_gold_earned}")
+    lines.append(f"Gold spent:       {char.total_gold_spent}")
+    lines.append(f"Final wealth:     {char.gold}")
+    lines.append(f"Places lived:     {len(char.settlements_visited) or 1}")
+    if char.settlements_visited:
+        visited_str = " ".join(char.settlements_visited[:5])
+        if len(char.settlements_visited) > 5:
+            visited_str += "…"
+        lines.append(f"  {visited_str}")
+
+    if char.deeds:
+        lines.append("")
+        lines.append("Notable Deeds")
+        for deed in char.deeds:
+            lines.append(f"  ⚜ {deed}")
+
+    if char.legacy_events:
+        lines.append("")
+        lines.append("They Witnessed")
+        for ev in char.legacy_events[-5:]:
+            lines.append(f"  📜 {ev}")
+
+    lines.append("")
+    import random as _rnd
+    last_words = [
+        '"I have seen wonders beyond counting…"',
+        '"Tell them I died with my boots on."',
+        '"The world endures. So shall we all."',
+        '"My story ends, but the wyrd spins on."',
+        '"I regret nothing."',
+        '"Gold… was it worth it?"',
+        '"Bury me in the highlands, where the wind sings."',
+        '"I would have liked to see one more spring."',
+    ]
+    rng_w = _rnd.Random(str(char))
+    lines.append(f"{rng_w.choice(last_words)}")
+
+    if char.parent_name:
+        lines.append("")
+        lines.append(f"Child of {char.parent_name}")
+
+    # Full-screen dim background
+    for dy in range(h):
+        for dx in range(w):
+            try:
+                stdscr.addch(dy, dx, " ", curses.A_DIM)
+            except curses.error:
+                pass
+
+    box_h = min(len(lines) + 4, h - 2)
+    box_w = min(max(len(l) for l in lines) + 4, w - 2)
+    start_y = max(0, (h - box_h) // 2)
+    start_x = max(0, (w - box_w) // 2)
+
+    # Box border
+    for yy in range(box_h):
+        for xx in range(box_w):
+            try:
+                if yy == 0 or yy == box_h - 1 or xx == 0 or xx == box_w - 1:
+                    stdscr.addch(start_y + yy, start_x + xx, " ",
+                                 curses.color_pair(_CP["border"]))
+                else:
+                    stdscr.addch(start_y + yy, start_x + xx, " ",
+                                 curses.color_pair(_CP["normal"]))
+            except curses.error:
+                pass
+
+    # Render lines
+    y_offset = 0
+    for line in lines:
+        yy = start_y + 2 + y_offset
+        if yy >= h - 2:
+            break
+        if line.startswith("═══"):
+            _draw(stdscr, yy, start_x + 2, line, _CP["error"], bold=True)
+        elif line == "":
+            pass
+        elif line.startswith("Life Ledger") or line.startswith("Notable") or line.startswith("They Witnessed") or line.startswith("Child"):
+            _draw(stdscr, yy, start_x + 2, line, _CP["title"], bold=True)
+        elif line.startswith("─"):
+            _draw(stdscr, yy, start_x + 2, line, _CP["dim"])
+        elif line.startswith('"'):
+            _draw(stdscr, yy, start_x + 2, line, _CP["dim"])
+        else:
+            _draw(stdscr, yy, start_x + 2, line, _CP["normal"])
+        y_offset += 1
+
+    # Prompt at bottom
+    _draw(stdscr, start_y + box_h - 2, start_x + 2,
+          "Continue as an heir?  [y] Yes  [n] No", _CP["accent"], bold=True)
+    stdscr.refresh()
+
+
+def _generate_heir_in_tui(char: PlayerCharacter, world: World) -> PlayerCharacter | None:
+    """Generate an heir within the TUI context."""
+    import random as _rnd
+    rng_heir = _rnd.Random(world.seed + 6000000 + char.year)
+    first_names = ["Aldric", "Beorn", "Cedric", "Elara", "Freya",
+                   "Gareth", "Hakon", "Ivar", "Kara", "Leif",
+                   "Mira", "Nora", "Orin", "Runa", "Sigurd",
+                   "Tova", "Ulf", "Vera", "Astrid", "Brynn"]
+    surname = char.name.split()[-1] if " " in char.name else "sson"
+    heir_name = f"{rng_heir.choice(first_names)} {surname}"
+    heir_gold = max(20, char.gold // 2)
+    heir_inventory = [
+        item for item in char.inventory
+        if item not in ("a cryptic note", "an old map")
+    ][:3]
+    try:
+        heir = PlayerCharacter(
+            name=heir_name,
+            settlement=char.settlement,
+            region=char.region,
+            profession=_OCCUPATIONS[rng_heir.randint(
+                0, len(_OCCUPATIONS) - 1)],
+            gold=heir_gold,
+            health=100,
+            age=rng_heir.randint(16, 25),
+            year=char.year,
+            inventory=heir_inventory,
+            parent_name=char.name,
+        )
+    except Exception:
+        return None
+    heir.settlements_visited = [s for s in char.settlements_visited if s]
+    heir.skill_xp = {
+        s: max(0, char.skill_xp.get(s, 0) * 2 // 3)
+        for s in ("combat", "trade", "persuasion", "survival", "crafting")
+    }
+    from .embody import SKILL_NAMES
+    for s in SKILL_NAMES:
+        heir.skills[s] = max(
+            1, _skill_level_from_xp(heir.skill_xp.get(s, 0)))
+    heir.reputation = {
+        s: max(-10, min(10, v // 2))
+        for s, v in char.reputation.items()
+    } if char.reputation else {}
+    _record_legacy_event(heir, f"Born as heir of {char.name}")
+    return heir
 
 
 def _add_events_to_log(log_lines: list, new_events: list, char: PlayerCharacter):
