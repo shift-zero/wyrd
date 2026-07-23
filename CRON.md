@@ -21,22 +21,32 @@ This is YOUR project. Make it beautiful and deep.
 
 ---
 
-## Current state (2026-07-27)
+## Current state (2026-07-24)
 
-**Phase 19 — Embody mode TUI complete.** The print/input embody mode now has a proper curses TUI (`embody_tui.py`, 1146 lines) with stats sidebar, scrollable event log, action bar, and overlay dialogs for choices, travel, market, and death epilogue.
+### Phase 19+ — Deeper Seasonal Palette + Heir Confirmation + Mobile Feedback
 
-### Phase 19 — Heir TUI integration + mobile support + route legend (this session)
+Completed this session:
 
-1. **Heir TUI integration** — Death epilogue is now rendered as a full-screen overlay within curses instead of dropping to terminal. Press `y` to continue as heir or `n` to quit, all within the TUI. Heir generation and restart happen cleanly inside curses.
-   - `_draw_epilogue_overlay()` — full-screen Life Ledger overlay with curses colors
-   - `_generate_heir_in_tui()` — extracted heir generation helper
-   - Old terminal prompt code removed (~100 lines)
+1. **Deeper seasonal palette in viewer** — Temperature factor computed per-tile from latitude + elevation + seasonal baseline. Three temperature-zone effects:
+   - Winter snow accumulation: tiles with temp_factor < 0.2 (high elevation, polar) render as snow overlay instead of normal terrain
+   - Autumn warm zone: forest on low-elevation warm tiles turns deep crimson (color 124)
+   - Spring warm zone: grass on equatorial/warm tiles gets brilliant lime green (color 46)
+   - 8 new color pairs (61-68) for temperature-zone variant rendering
+   - Precomputed temp cache per frame for performance
 
-2. **Trade route legend** — Viewer stats bar now shows "Routes: N" with the count of active trade routes, next to population and speed indicators.
+2. **Heir confirmation overlay** — When dying in embody TUI, pressing `y` now shows a full preview overlay with:
+   - Heir name, profession, age, gold, location
+   - Skill bars for all 5 skills with inherited levels
+   - Inherited items list
+   - Press `y` again to confirm, `n` to go back
+   - Uses new `heir_confirm` epilogue_mode state
 
-3. **Embody TUI mobile support** — Terminals narrower than 100 columns get a compact sidebar (name, health, gold, age, season, location only). Full sidebar with skills, deeds, visited, and reputation restored at ≥100 columns.
+3. **Mobile threshold feedback** — Brief status message when terminal crosses the 100-column boundary:
+   - "Compact mode — terminal 89 cols < 100" when shrinking
+   - "Full mode — terminal 108 cols ≥ 100" when expanding
+   - Last state tracked via function attribute (`embody_tui_play._last_compact`)
 
 ### What to tackle next
-- **Seasonal palette — deeper variation.** Snow accumulation on cold terrain, greening transitions in spring, dramatic autumn reds using temperature maps from latitude + elevation.
-- **Embody TUI heir epilogue polish** — add heir generation confirmation overlay (name, stats preview) before committing to heir restart.
-- **Embody TUI mobile threshold** — active resizing feedback when terminal crosses the 100-col boundary.
+- Explore alternative renderers (SDL, terminal graphic modes)
+- Trade route map in gateway — full visualization of route network
+- TTRPG export polish — add faction and zone sections to campaign JSON

@@ -156,9 +156,12 @@ The simulation engine (`sim.py`) currently ticks in whole years. This is a deep 
 | 3 ✅ | Help documentation — new section in viewer help overlay | Press ? in viewer to see Auto-Pause section |
 
 ### What to tackle next
-- **Seasonal palette — deeper variation.** Snow accumulation on cold terrain, greening transitions in spring, dramatic autumn reds using temperature maps from latitude + elevation. (Tracked in CRON.md)
-- **Embody TUI heir epilogue polish** — add heir generation confirmation overlay (name, stats preview) before committing to heir restart.
-- **Embody TUI mobile threshold** — active resizing feedback when terminal crosses the 100-col boundary.
+- All items complete — this is a maintenance/improvement area going forward.
+
+### Completed this session (2026-07-24)
+- **Deeper seasonal palette.** Temperature factor computed from latitude + elevation + month. Snow accumulation on cold winter tiles (temp < 0.2). Autumn warm forests turn deep crimson (color 124). Spring warm grasslands get brilliant lime (color 46). 8 new color pairs.
+- **Heir confirmation overlay.** Full-screen preview showing heir name, profession, age, gold, inherited skills with skill bars before committing.
+- **Mobile threshold feedback.** Status message on terminal resize crossing the 100-col boundary.
 
 ## Design Principles
 
