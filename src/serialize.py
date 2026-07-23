@@ -621,6 +621,8 @@ def sim_state_to_dict(state: 'SimState') -> dict:
                 "prosperity": s.prosperity,
                 "food_stores": s.food_stores,
                 "health": s.health,
+                "religion": s.religion,
+                "economy_type": s.economy_type,
             }
             for name, s in state.settlements.items()
         },
@@ -636,6 +638,7 @@ def sim_state_to_dict(state: 'SimState') -> dict:
         ],
         "world_modifiers": state.world_modifiers,
         "population_record": state.population_record,
+        "trade_routes": state.trade_routes,
     }
 
 

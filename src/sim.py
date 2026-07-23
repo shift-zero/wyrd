@@ -17,6 +17,7 @@ from typing import Optional
 from .world import World, Region, Settlement, TERRAIN
 from .faction_sim import initialize_faction_state, _simulate_political_tick
 from .cataclysm import _simulate_cataclysm_tick, cataclysm_to_sim_event
+from .economy import assign_economies, _simulate_economy_tick, _generate_trade_routes
 
 
 # ── Terrain Resource Values ───────────────────────────────────────────
@@ -171,6 +172,7 @@ class SettlementSnapshot:
     food_stores: float = 100.0
     health: float = 1.0  # 0.0 = plague-ridden, 1.0 = healthy
     religion: str | None = None  # Religion name from PantheonSystem
+    economy_type: str | None = None  # Economy type from economy module (Phase 14)
 
 
 @dataclass
@@ -197,6 +199,9 @@ class SimState:
     faction_state: dict = field(default_factory=dict)
     # Maps faction name -> FactionSnapshot from faction_sim module.
     # Tracks faction power, wars, alliances through simulation.
+    trade_routes: list = field(default_factory=list)
+    # TradeRoute dicts for Phase 14 economy system.
+    # Persisted as list of dicts for serialization.
     
     @property
     def total_population(self) -> int:
@@ -209,6 +214,12 @@ class SimState:
     @property
     def num_abandoned(self) -> int:
         return sum(1 for s in self.settlements.values() if not s.is_active)
+
+
+# ── Trade Route State (Phase 14) ─────────────────────────────────────
+
+# Global trade routes tracked across sim ticks.
+# Persisted as list of dicts in SimState for serialization.
 
 
 # ── Simulation Helpers ────────────────────────────────────────────────
@@ -740,7 +751,24 @@ def _simulate_tick(world: World, state: SimState, rng: random.Random,
                 ))
     except Exception:
         pass  # Cataclysm events are non-critical; don't crash sim
-    
+
+    # Economy tick — trade prosperity, route disruption, new routes
+    try:
+        from .economy import reconstruct_routes, serialize_routes
+        route_objects = reconstruct_routes(state.trade_routes)
+        route_objects, economy_events_raw = _simulate_economy_tick(
+            world, state, rng, year, route_objects, chaos_factor,
+        )
+        state.trade_routes = serialize_routes(route_objects)
+        for etype, desc, icon in economy_events_raw:
+            events.append(SimEvent(
+                year=year,
+                event_type=etype,
+                description=desc,
+            ))
+    except Exception:
+        pass  # Economy events are non-critical; don't crash sim
+
     return events
 
 
@@ -1270,7 +1298,17 @@ def simulate_years(world: World, state: SimState, num_years: int,
     rng = random.Random(sim_seed)
     
     start_year = state.year
-    
+
+    # Initialize economy (seed-deterministic)
+    try:
+        from .economy import serialize_routes
+        rng_for_economy = random.Random(sim_seed + 999)  # Dedicated RNG stream for economy
+        assign_economies(world, state, rng_for_economy)
+        routes = _generate_trade_routes(state, rng_for_economy, 0)
+        state.trade_routes = serialize_routes(routes)
+    except Exception:
+        pass  # Economy initialization is non-critical
+
     for y in range(1, num_years + 1):
         current_year = start_year + y
         state.year = current_year
@@ -1480,6 +1518,8 @@ def render_sim_detailed(result: SimResult, world) -> str:
             "great_plague": "☠", "tsunami": "🌊",
             "meteor_strike": "☄", "great_fire": "🔥",
             "magical_cataclysm": "⚡",
+            # Economy events (Phase 14)
+            "trade_disruption": "💰", "new_trade_route": "💰",
         }
         event_colors = {
             "plague": _color(196), "famine": _color(130), "war": _color(160),
@@ -1496,6 +1536,8 @@ def render_sim_detailed(result: SimResult, world) -> str:
             "great_plague": _color(90), "tsunami": _color(33),
             "meteor_strike": _color(160), "great_fire": _color(196),
             "magical_cataclysm": _color(99),
+            # Economy events (Phase 14)
+            "trade_disruption": _color(196), "new_trade_route": _color(28),
         }
         
         for ev in result.events[-50:]:  # Show last 50 events max
@@ -1527,6 +1569,7 @@ def render_sim_detailed(result: SimResult, world) -> str:
             f"pop {s.population}  "
             f"☕ {s.food_stores:.0f}   "
             f"{health_str} health"
+            + (f" {_color(220)}[{s.economy_type or '?'}]{ANSI_RESET}" if s.economy_type else "")
         )
     
     if len(active) > 10:
@@ -1571,6 +1614,40 @@ def render_sim_detailed(result: SimResult, world) -> str:
                 f"        {_color(240)}I:{fs.influence} W:{fs.wealth} "
                 f"M:{fs.military} S:{fs.stability}{ANSI_RESET}"
             )
+    
+
+    # ── Trade Routes at End of Simulation ──────────────────
+    if result.final_state.trade_routes and len(result.final_state.trade_routes) > 0:
+        lines.append("")
+        lines.append(f"{ANSI_BOLD}Trade Routes:{ANSI_RESET}")
+        active_routes = [r for r in result.final_state.trade_routes if r.get("is_active", True)]
+        if active_routes:
+            # Group by settlement for compact display
+            route_by_source: dict[str, list] = {}
+            for r in active_routes:
+                src = r.get("source", "?")
+                if src not in route_by_source:
+                    route_by_source[src] = []
+                route_by_source[src].append(r)
+            
+            # Show top 5 most connected settlements
+            sorted_sources = sorted(route_by_source.keys(),
+                                     key=lambda s: -len(route_by_source[s]))[:5]
+            for src_name in sorted_sources:
+                routes = route_by_source[src_name]
+                route_strs = []
+                for r in routes:
+                    dest = r.get("destination", "?")
+                    goods = r.get("goods", "goods")
+                    vol = r.get("volume", 0.5)
+                    route_strs.append(f"{dest} ({goods}, {vol:.0%})")
+                lines.append(
+                    f"    {_color(226)}•{ANSI_RESET} {ANSI_BOLD}{src_name}{ANSI_RESET} → {\", ".join(route_strs)}"
+                )
+            if sum(len(r) for r in route_by_source.values()) > len(sorted_sources) * 1:
+                lines.append(f"    {ANSI_DIM}... and {len(active_routes) - len(sorted_sources)} more route legs{ANSI_RESET}")
+        else:
+            lines.append(f"    {ANSI_DIM}No active trade routes{ANSI_RESET}")
     
     # Summary footer
     summary = result.summary
