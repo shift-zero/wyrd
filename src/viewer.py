@@ -46,6 +46,14 @@ _CP = {
     "win_grass": 53, "win_forest": 54, "win_hills": 55,
     "win_mountains": 56, "win_snow": 57, "win_river": 58,
     "trade_route": 59, "trade_dot": 60,
+    # Deep seasonal variants (Phase 19+) — temperature-aware overlays
+    # Winter cold zone (temp_factor < 0.3): frostier, more snow
+    "win_cold_grass": 61, "win_cold_forest": 62, "win_cold_hills": 63,
+    "win_cold_mountains": 64, "win_cold_sand": 65, "win_cold_snow": 66,
+    # Autumn warm zone (temp_factor > 0.6): deeper reds for forest
+    "aut_warm_forest": 67,
+    # Spring warm zone (temp_factor > 0.6): extra-bright greens
+    "spr_warm_grass": 68,
 }
 
 SEASONS = ["winter", "spring", "summer", "autumn"]  # N+Earth seasons
@@ -61,8 +69,15 @@ def _season_name(month: int) -> str:
     else:
         return "autumn"
 
-def _season_cp(terrain_key: str, month: int | None) -> int:
-    """Get color pair for terrain, adjusted for season if month is known."""
+def _season_cp(terrain_key: str, month: int | None,
+               temp_factor: float | None = None) -> int:
+    """Get color pair for terrain, adjusted for season if month is known.
+    
+    If temp_factor is provided, uses temperature-aware variant pairs:
+      - Winter: cold tiles (temp < 0.3) get frostier colors
+      - Autumn: warm tiles (temp > 0.6) get deeper reds (forest)
+      - Spring: warm tiles (temp > 0.6) get extra-bright greens
+    """
     if month is None:
         return _CP.get(terrain_key, 4)
     season = _season_name(month)
@@ -70,6 +85,72 @@ def _season_cp(terrain_key: str, month: int | None) -> int:
     if key in _CP:
         return _CP[key]
     return _CP.get(terrain_key, 4)
+
+
+def _temp_factor(world: 'World', y: int, x: int, month: int | None = None) -> float:
+    """Return temperature factor 0.0 (cold) to 1.0 (hot) for a tile.
+    
+    Computed from latitude (y-position) and elevation.
+    - Equatorial band (middle rows) is warmest
+    - Higher elevation = colder
+    - Seasonal offset shifts the baseline
+    """
+    if month is None:
+        month = 0
+    # Latitude: 0.0 at top = coldest, 1.0 at middle = warmest, back to 0.0 at bottom
+    lat = y / max(world.height - 1, 1)
+    lat_temp = 1.0 - 2.0 * abs(lat - 0.5)  # 1.0 at equator, 0.0 at poles
+    
+    # Elevation: normalized 0.0 (sea) to ~1.0 (peak), higher = colder
+    elev = world.elevation[y][x] if (y < len(world.elevation) 
+                                      and x < len(world.elevation[0])) else 0.0
+    # Clamp elevation to [0, 1] range — values should already be normalized
+    elev_factor = max(0.0, 1.0 - elev)  # 1.0 at sea level, 0.0 at max elevation
+    
+    # Combine: latitude dominates, elevation modifies
+    temp = lat_temp * 0.65 + elev_factor * 0.35
+    
+    # Seasonal baseline shift
+    season = _season_name(month)
+    if season == "winter":
+        temp -= 0.25
+    elif season == "summer":
+        temp += 0.15
+    elif season == "spring":
+        temp += 0.05
+    elif season == "autumn":
+        temp -= 0.05
+    
+    return max(0.0, min(1.0, temp))
+
+
+def _season_deep_cp(terrain_key: str, month: int | None,
+                    temp_factor: float) -> int:
+    """Temperature-aware seasonal color pair — deeper variation.
+    
+    Returns extended temperature-zone variant when available, otherwise
+    falls back to the base seasonal color.
+    """
+    if month is None:
+        return _CP.get(terrain_key, 4)
+    
+    season = _season_name(month)
+    
+    # Winter cold zone: frostier colors for cold tiles
+    if season == "winter" and temp_factor < 0.3:
+        cold_key = f"win_cold_{terrain_key}"
+        if cold_key in _CP:
+            return _CP[cold_key]
+    
+    # Autumn warm zone: deeper reds for forest on warm tiles
+    if season == "autumn" and temp_factor > 0.6 and terrain_key == "forest":
+        return _CP.get("aut_warm_forest", _CP.get("aut_forest", 4))
+    
+    # Spring warm zone: extra-bright greens for grass on warm tiles
+    if season == "spring" and temp_factor > 0.6 and terrain_key == "grass":
+        return _CP.get("spr_warm_grass", _CP.get("spr_grass", 4))
+    
+    return _season_cp(terrain_key, month)
 
 _EVENT_ICON = {
     "plague": "☠", "famine": "🌾", "war": "⚔", "discovery": "✦",
@@ -180,6 +261,18 @@ def _init():
     # Trade route pairs (Phase 19)
     curses.init_pair(59, 220, -1)   # trade_route — gold
     curses.init_pair(60, 226, -1)   # trade_dot — bright gold
+    # ── Deep seasonal variants (temperature-aware) ──
+    # Winter cold zone: extra frosty for cold tiles
+    curses.init_pair(61, 65, -1)    # win_cold_grass — frosty muted green
+    curses.init_pair(62, 59, -1)    # win_cold_forest — dark frost (almost black)
+    curses.init_pair(63, 102, -1)   # win_cold_hills — cold grey-brown
+    curses.init_pair(64, 109, -1)   # win_cold_mountains — icy blue-grey
+    curses.init_pair(65, 188, -1)   # win_cold_sand — pale grey
+    curses.init_pair(66, 255, -1)   # win_cold_snow — brilliant white
+    # Autumn warm zone: deep reds for forest on warm tiles
+    curses.init_pair(67, 124, -1)   # aut_warm_forest — deep crimson red
+    # Spring warm zone: extra-bright greens for grass on warm tiles
+    curses.init_pair(68, 46, -1)    # spr_warm_grass — brilliant lime green
 
 
 def _cp(terrain_key: str) -> int:
@@ -233,9 +326,19 @@ def _render_map(stdscr, world: World, smap: dict,
     """Render terrain + settlements into the map area (starting at line 2).
     
     If month is provided, seasonal color variants are used for terrain.
+    Uses temperature-aware deep seasonal colors when month is known.
+    In winter, cold tiles (temp_factor < 0.2) show snow accumulation.
     Uses batched addstr() for same-color spans to reduce curses API calls."""
-
+    
     flash_tiles = flash_tiles or {}
+    # Precompute temp factors for the visible area only (lazy, first touch)
+    _temp_cache: dict[tuple[int, int], float] = {}
+    def _get_temp(y: int, x: int) -> float:
+        k = (y, x)
+        if k not in _temp_cache:
+            _temp_cache[k] = _temp_factor(world, y, x, month)
+        return _temp_cache[k]
+    
     for sy in range(mh):
         wy = sy  # no vertical offset in viewer — show top-left
         if wy >= world.height:
@@ -260,12 +363,18 @@ def _render_map(stdscr, world: World, smap: dict,
             else:
                 if wx < world.width and wy < world.height:
                     t = world.terrain[wy][wx]
+                    # Temperature-aware snow accumulation: cold winter tiles show snow
+                    if month is not None and _season_name(month) == "winter":
+                        tf = _get_temp(wy, wx)
+                        if tf < 0.2 and t not in ("deep_water", "shallow", "river"):
+                            t = "snow"
                     char = TERRAIN[t]["char"]
                     if key in flash_tiles:
                         frames = flash_tiles[key]
-                        c = _CP["accent"] if frames % 3 < 2 else (_cp(t) if month is None else _season_cp(t, month))
+                        c = _CP["accent"] if frames % 3 < 2 else (
+                            _cp(t) if month is None else _season_deep_cp(t, month, _get_temp(wy, wx)))
                     else:
-                        c = _cp(t) if month is None else _season_cp(t, month)
+                        c = _cp(t) if month is None else _season_deep_cp(t, month, _get_temp(wy, wx))
                 else:
                     char = " "
                     c = 4

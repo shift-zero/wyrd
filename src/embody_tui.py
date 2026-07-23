@@ -573,7 +573,8 @@ def _tui_main(stdscr, world: World,
     show_travel = False
     show_market = False
     show_epilogue = False
-    epilogue_mode = False  # 'heir_choice' | 'heir_born' | 'quit'
+    epilogue_mode = False  # 'heir_choice' | 'heir_confirm' | 'heir_born' | 'quit'
+    pending_heir: PlayerCharacter | None = None
     travel_options: list[str] = []
     log_scroll = 0
     status_msg = ""
@@ -615,6 +616,16 @@ def _tui_main(stdscr, world: World,
 
         # ── Sidebar ─────────────────────────────────────────────────────
         sidebar_compact = w < 100
+        # Mobile threshold feedback: brief flash indicator when crossing boundary
+        if not hasattr(embody_tui_play, '_last_compact'):
+            embody_tui_play._last_compact = sidebar_compact
+        if embody_tui_play._last_compact != sidebar_compact:
+            embody_tui_play._last_compact = sidebar_compact
+            if sidebar_compact:
+                status_msg = f"Compact mode — terminal {w} cols < 100"
+            else:
+                status_msg = f"Full mode — terminal {w} cols ≥ 100"
+            status_time = time_module.monotonic()
         _render_sidebar(stdscr, char, header_y + 2, 1,
                         sidebar_width - 1, h - 3,
                         compact=sidebar_compact)
@@ -653,7 +664,10 @@ def _tui_main(stdscr, world: World,
 
         # 3b. Epilogue overlay (covers full screen)
         if show_epilogue:
-            _draw_epilogue_overlay(stdscr, char)
+            if epilogue_mode == 'heir_confirm' and pending_heir:
+                _draw_heir_confirm_overlay(stdscr, pending_heir)
+            else:
+                _draw_epilogue_overlay(stdscr, char)
             if epilogue_mode == 'heir_born':
                 _draw(stdscr, h - 3, max(2, w // 2 - 15),
                       "Press any key to continue as your heir...", _CP["accent"], bold=True)
@@ -677,9 +691,20 @@ def _tui_main(stdscr, world: World,
         if show_epilogue:
             if epilogue_mode == 'heir_choice':
                 if key in ('y', 'Y'):
-                    epilogue_mode = 'heir_born'
+                    # Generate heir preview and show confirmation
+                    pending_heir = _generate_heir_in_tui(char, world)
+                    if pending_heir:
+                        epilogue_mode = 'heir_confirm'
+                    else:
+                        epilogue_mode = 'heir_born'
                 elif key in ('n', 'N', 'q', 'Q', '\\x1b'):
                     running = False
+            elif epilogue_mode == 'heir_confirm':
+                if key in ('y', 'Y'):
+                    epilogue_mode = 'heir_born'
+                elif key in ('n', 'N'):
+                    pending_heir = None
+                    epilogue_mode = 'heir_choice'
             elif epilogue_mode == 'heir_born':
                 # Generate heir and restart
                 heir = _generate_heir_in_tui(char, world)
@@ -1090,6 +1115,96 @@ def _draw_epilogue_overlay(stdscr, char: PlayerCharacter):
     # Prompt at bottom
     _draw(stdscr, start_y + box_h - 2, start_x + 2,
           "Continue as an heir?  [y] Yes  [n] No", _CP["accent"], bold=True)
+    stdscr.refresh()
+
+
+def _draw_heir_confirm_overlay(stdscr, heir: PlayerCharacter):
+    """Render a confirmation overlay showing heir stats before committing."""
+    h, w = stdscr.getmaxyx()
+    from .embody import SKILL_NAMES, _skill_level_from_xp
+
+    # Build preview lines
+    lines = []
+    lines.append(f"═══ Continue as Heir? ═══")
+    lines.append("")
+    lines.append(f"Name:       {heir.name}")
+    lines.append(f"Profession: {heir.profession.title()}")
+    lines.append(f"Age:        {heir.age}")
+    lines.append(f"Starting Gold: {heir.gold}")
+    lines.append(f"Location:   {heir.settlement}" + (f", {heir.region}" if heir.region else ""))
+    lines.append("")
+    lines.append("Inherited Skills")
+    lines.append("─" * min(40, w - 4))
+    for s in SKILL_NAMES:
+        lvl = heir.skills.get(s, 1)
+        xp_needed = max(0, _skill_level_from_xp(heir.skill_xp.get(s, 0) + 1)
+                        if heir.skill_xp.get(s, 0) else 0)
+        bar = "▓" * min(lvl, 10) + "░" * max(0, 10 - min(lvl, 10))
+        lines.append(f"  {s.title():12} Lv.{lvl}  {bar}")
+
+    if heir.inventory:
+        lines.append("")
+        lines.append(f"Inherited Items: {', '.join(heir.inventory[:4])}")
+        if len(heir.inventory) > 4:
+            lines[-1] += "…"
+
+    lines.append("")
+    lines.append("Child of the previous wyrd —")
+    lines.append("your legacy endures.")
+
+    # Full-screen dim background
+    for dy in range(h):
+        for dx in range(w):
+            try:
+                stdscr.addch(dy, dx, " ", curses.A_DIM)
+            except curses.error:
+                pass
+
+    box_h = min(len(lines) + 4, h - 2)
+    box_w = min(max(len(l) for l in lines) + 4, w - 2)
+    start_y = max(0, (h - box_h) // 2)
+    start_x = max(0, (w - box_w) // 2)
+
+    # Box border
+    for yy in range(box_h):
+        for xx in range(box_w):
+            try:
+                if yy == 0 or yy == box_h - 1 or xx == 0 or xx == box_w - 1:
+                    stdscr.addch(start_y + yy, start_x + xx, " ",
+                                 curses.color_pair(_CP["border"]))
+                else:
+                    stdscr.addch(start_y + yy, start_x + xx, " ",
+                                 curses.color_pair(_CP["normal"]))
+            except curses.error:
+                pass
+
+    # Render lines
+    y_offset = 0
+    for line in lines:
+        yy = start_y + 2 + y_offset
+        if yy >= h - 2:
+            break
+        if line.startswith("═══"):
+            _draw(stdscr, yy, start_x + 2, line, _CP["accent"], bold=True)
+        elif line.startswith("Inherited") or line.startswith("Child"):
+            _draw(stdscr, yy, start_x + 2, line, _CP["title"], bold=True)
+        elif line.startswith("─"):
+            _draw(stdscr, yy, start_x + 2, line, _CP["dim"])
+        elif line.strip().startswith("Name:") or line.strip().startswith("Profession"):
+            _draw(stdscr, yy, start_x + 2, line, _CP["normal"])
+        elif "Lv." in line:
+            _draw(stdscr, yy, start_x + 2, line, _CP["skill"])
+        elif "Items" in line:
+            _draw(stdscr, yy, start_x + 2, line, _CP["gold"])
+        elif line == "":
+            pass
+        else:
+            _draw(stdscr, yy, start_x + 2, line, _CP["dim"])
+        y_offset += 1
+
+    # Prompt at bottom
+    _draw(stdscr, start_y + box_h - 2, start_x + 2,
+          "Become this heir?  [y] Yes  [n] Back", _CP["accent"], bold=True)
     stdscr.refresh()
 
 
