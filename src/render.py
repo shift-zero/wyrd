@@ -1024,4 +1024,182 @@ def render_creature_detail(creature) -> str:
         for loot in creature.loot:
             lines.append(f"    {_color(226)}♦{ANSI_RESET} {loot}")
 
+
+# ── Trade Route Map ────────────────────────────────────────────────────
+
+_ROUTE_ECON_ICONS = {
+    "farming": "🌾", "logging": "🌲", "mining": "⛏",
+    "fishing": "🐟", "trading": "💰", "pastoral": "🐄",
+}
+_ROUTE_ECON_COLORS = {
+    "farming": 220, "logging": 28, "mining": 130,
+    "fishing": 33, "trading": 226, "pastoral": 40,
+}
+
+
+def _bresenham_line(x0: int, y0: int, x1: int, y1: int) -> list[tuple[int, int]]:
+    """Bresenham's line algorithm — returns list of (x, y) points on the line."""
+    points: list[tuple[int, int]] = []
+    dx = abs(x1 - x0)
+    dy = -abs(y1 - y0)
+    sx = 1 if x0 < x1 else -1
+    sy = 1 if y0 < y1 else -1
+    err = dx + dy
+    x, y = x0, y0
+    while True:
+        points.append((x, y))
+        if x == x1 and y == y1:
+            break
+        e2 = 2 * err
+        if e2 >= dy:
+            err += dy
+            x += sx
+        if e2 <= dx:
+            err += dx
+            y += sy
+    return points
+
+
+def render_trade_route_map(
+    world: 'World',
+    routes: list,
+    settlements: dict,
+    title: str = "",
+    show_settlements: bool = True,
+) -> str:
+    """Render the world map with trade route connections overlaid.
+
+    Route-connected settlements get economy-type icons; colored path dots
+    (·) are drawn between trading partners using Bresenham lines.
+    """
+    h, w = world.height, world.width
+
+    # Build settlement lookup: name → (x, y, economy_type)
+    s_info: dict[str, tuple[int, int, str]] = {}
+    for name, snap in settlements.items():
+        s_info[name] = (
+            snap.x, snap.y,
+            getattr(snap, 'economy_type', None) or "unknown",
+        )
+
+    # Collect route-connected settlement names
+    connected: set[str] = set()
+    for r in routes:
+        if getattr(r, 'is_active', True):
+            connected.add(getattr(r, 'source', ''))
+            connected.add(getattr(r, 'destination', ''))
+
+    # Build character + colour grid from terrain
+    grid_chars: list[list[str]] = []
+    grid_colors: list[list[int]] = []
+    for y in range(h):
+        rc: list[str] = []
+        rcl: list[int] = []
+        for x in range(w):
+            tk = world.terrain[y][x]
+            info = TERRAIN.get(tk, {"char": "?", "color": 240})
+            rc.append(info["char"])
+            rcl.append(info["color"])
+        grid_chars.append(rc)
+        grid_colors.append(rcl)
+
+    # Overlay settlements with economy icons for route-connected ones
+    settlement_map: dict[tuple[int, int], str] = {}
+    for region in world.regions:
+        for s in region.settlements:
+            settlement_map[(s.x, s.y)] = s.name
+            if show_settlements and 0 <= s.y < h and 0 <= s.x < w:
+                if s.name in connected and s.name in s_info:
+                    _, _, etype = s_info[s.name]
+                    icon = _ROUTE_ECON_ICONS.get(etype, "📦")
+                    grid_chars[s.y][s.x] = icon
+                    grid_colors[s.y][s.x] = _ROUTE_ECON_COLORS.get(etype, 226)
+                elif show_settlements:
+                    grid_chars[s.y][s.x] = s.char
+                    grid_colors[s.y][s.x] = 226
+
+    # Draw route lines (Bresenham dots, skipping settlements & water)
+    route_layer: dict[tuple[int, int], tuple[int, str]] = {}
+    for r in routes:
+        if not getattr(r, 'is_active', True):
+            continue
+        src = getattr(r, 'source', '')
+        dst = getattr(r, 'destination', '')
+        if src not in s_info or dst not in s_info:
+            continue
+        sx, sy, stype = s_info[src]
+        dx, dy, dtype = s_info[dst]
+        etype = stype if stype in _ROUTE_ECON_COLORS else (
+            dtype if dtype in _ROUTE_ECON_COLORS else "trading"
+        )
+        color = _ROUTE_ECON_COLORS.get(etype, 226)
+
+        for px, py in _bresenham_line(sx, sy, dx, dy):
+            # Don't overwrite settlement positions
+            if (px, py) in [(sx, sy), (dx, dy)]:
+                continue
+            # Don't draw over open water
+            if 0 <= py < h and 0 <= px < w:
+                tk = world.terrain[py][px]
+                if tk in ("deep_water", "shallow", "ocean"):
+                    continue
+                route_layer[(px, py)] = (color, "·")
+
+    # Apply route dots onto the grid (skipping settlements)
+    for (x, y), (clr, ch) in route_layer.items():
+        if 0 <= y < h and 0 <= x < w and (x, y) not in settlement_map:
+            grid_chars[y][x] = ch
+            grid_colors[y][x] = clr
+
+    # Render title + grid
+    title_str = title or f"wyrd — Trade Routes (seed {world.seed})"
+    lines: list[str] = [
+        f"{ANSI_BOLD}{title_str}{ANSI_RESET}",
+        f"{world.width}×{world.height} | {sum(1 for r in routes if getattr(r, 'is_active', True))} active routes\n",
+    ]
+    for y in range(h):
+        lines.append("".join(
+            f"{_color(grid_colors[y][x])}{grid_chars[y][x]}{ANSI_RESET}"
+            for x in range(w)
+        ))
+
+    lines.append("")
+    # Economy legend (only types present on the map)
+    seen_types: set[str] = set()
+    for r in routes:
+        for name in (getattr(r, 'source', ''), getattr(r, 'destination', '')):
+            if name in s_info:
+                et = s_info[name][2]
+                if et in _ROUTE_ECON_ICONS:
+                    seen_types.add(et)
+    if seen_types:
+        lines.append(f"{ANSI_BOLD}Economy Types:{ANSI_RESET}")
+        for etype in ["farming", "logging", "mining", "fishing", "trading", "pastoral"]:
+            if etype in seen_types:
+                lines.append(f"  {_color(_ROUTE_ECON_COLORS[etype])}{_ROUTE_ECON_ICONS[etype]}{ANSI_RESET}  {etype}")
+        lines.append(f"  {_color(226)}·{ANSI_RESET}  Trade route path")
+        lines.append("")
+
+    # Route listings (top 10)
+    active = [r for r in routes if getattr(r, 'is_active', True)]
+    if active:
+        lines.append(f"{ANSI_BOLD}Active Routes:{ANSI_RESET}")
+        for r in active[:10]:
+            src = getattr(r, 'source', '?')
+            dst = getattr(r, 'destination', '?')
+            st = s_info.get(src, ("?", "?", "?"))[2]
+            dt = s_info.get(dst, ("?", "?", "?"))[2]
+            si = _ROUTE_ECON_ICONS.get(st, "📦")
+            di = _ROUTE_ECON_ICONS.get(dt, "📦")
+            lines.append(
+                f"  {si} {ANSI_BOLD}{src}{ANSI_RESET} ↔ {di} {ANSI_BOLD}{dst}{ANSI_RESET}"
+            )
+            lines.append(
+                f"    {ANSI_DIM}{getattr(r, 'goods', 'goods')}  "
+                f"(vol: {getattr(r, 'volume', 0.5):.0%}, "
+                f"dist: {getattr(r, 'distance', 0):.0f}){ANSI_RESET}"
+            )
+        if len(active) > 10:
+            lines.append(f"  {ANSI_DIM}… and {len(active) - 10} more{ANSI_RESET}")
+
     return "\n".join(lines)

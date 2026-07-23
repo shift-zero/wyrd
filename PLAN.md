@@ -250,4 +250,17 @@ The CLI is a dev tool's face. wyrd wants a *human* face — a single unified cur
 | 3 ✅ | Meld explorer + viewer into one seamless experience | Explore a world, then press 'v' for sim-mode: scroll, zoom, inspect while the world evolves in place | 2026-07-23 |
 | 4 ✅ | Inline help panel — shows all keybinds, contextual | Press `?` from anywhere and see available actions for the current view | 2026-07-23 |
 | 5 ✅ | World persists in session — generate once, then explore/sim/export without re-passing `--seed` | Navigate between views without re-typing flags | 2026-07-23 |
-| 6 ✅ | Beautiful splash screen with wyrd ASCII art on launch | A taste of what wyrd can do before you even pick a world | 2026-07-23 |
+|| 6 ✅ | Beautiful splash screen with wyrd ASCII art on launch | A taste of what wyrd can do before you even pick a world | 2026-07-23 |
+
+## Phase 16 — Trade Route Map Visualization (trade route network on the world map)
+
+Economy connections become visible on the ASCII world map. `wyrd economy --routes --map` renders terrain with route overlay lines. Gateway TUI gains `t` key for trade route view.
+
+| # | What | Verifiable |
+|---|------|------------|
+| 1 ✅ | `render_trade_route_map()` in render.py — Bresenham line drawing, economy icons, route dots, water avoidance | `wyrd economy --seed 42 --routes --map` (after `wyrd run --seed 42 --years 100`) shows terrain+route overlay |
+| 2 ✅ | `--map` flag on `wyrd economy --routes` CLI command | `wyrd economy --seed 42 --routes --map` renders route map instead of text listing |
+| 3 ✅ | Gateway TUI integration — press `t` for trade route view | `wyrd` → select world → `t` runs sim and shows route map |
+| 4 🔲 | Road/infrastructure — persistent routes become roads (`━` solid lines) | Routes lasting 50+ sim years render as `━` instead of `·` |
+| 5 🔲 | Economic specialization — settlements with 100+ years of same economy get titles | "Breadbasket of the Realm", "The Iron City" etc. shown in route listings |
+| 6 🔲 | HTML export of trade routes | Economy map section in `wyrd export --seed 42` HTML output |

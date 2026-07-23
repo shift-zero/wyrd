@@ -291,6 +291,8 @@ def main():
     _add_load_arg(economy_cmd)
     economy_cmd.add_argument("--routes", action="store_true",
                              help="Show active trade routes")
+    economy_cmd.add_argument("--map", action="store_true",
+                             help="Show trade routes as map overlay (terrain + route lines)")
     economy_cmd.add_argument("--settlement", type=str, default=None,
                              help="Show economy detail for a specific settlement")
     economy_cmd.add_argument("--snapshot-year", type=int, default=None,
@@ -613,6 +615,13 @@ def main():
             else:
                 routes = reconstruct_routes(state.trade_routes)
                 active = [r for r in routes if r.is_active]
+
+                # ── Route map overlay ────────────────────────────────
+                if args.map and state:
+                    from .render import render_trade_route_map
+                    print(render_trade_route_map(world, active, state.settlements))
+                    return
+
                 if not active:
                     print(f"{ANSI_DIM}No active trade routes.{ANSI_RESET}")
                 else:

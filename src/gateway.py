@@ -167,6 +167,7 @@ GATEWAY_HELP = [
     "    c                  Show chronicles (history)",
     "    s                  Run simulation (year-by-year text)",
     "    x                  Export world to HTML",
+    "    t                  Show trade route map",
     "    r                  Refresh the world list",
     "",
     "  General",
@@ -345,7 +346,7 @@ def _gateway_loop(stdscr):
         # ── Footer ────────────────────────────────────────────────────
         footer_y = h - 2
         footer = (" [\u2191\u2193] select  [g] generate  [l] load  [e] explore  "
-                  "[v] view sim  [d] describe  [s] run  [?] help  [q] quit")
+                  "[v] view sim  [d] describe  [s] run  [t] routes  [?] help  [q] quit")
         _fill_line(stdscr, footer_y, CP["dim"])
         _draw(stdscr, footer_y, 0, footer[:w - 1], CP["dim"])
 
@@ -563,6 +564,40 @@ def _gateway_loop(stdscr):
                 f.write(html)
             status_msg = f"\U0001f310 Exported to {output}"
             status_time = time_module.monotonic()
+
+        elif key == ord("t"):
+            world = world_in_session
+            if world is None and worlds and 0 <= selected_idx < len(worlds):
+                try:
+                    world = load_world(worlds[selected_idx]["path"])
+                except Exception:
+                    status_msg = "\u274c Could not load world"
+                    status_time = time_module.monotonic()
+                    continue
+            if world is None:
+                status_msg = "\u274c No world loaded"
+                status_time = time_module.monotonic()
+                continue
+            world_in_session = world
+            curses.endwin()
+            # Run a quick sim to get trade routes
+            from .sim import run_simulation
+            from .serialize import save_sim_state
+            from .economy import reconstruct_routes
+            from .render import render_trade_route_map
+            sim_chars = world.narrative.characters if world.narrative else None
+            result = run_simulation(world, num_years=100, seed_offset=0,
+                                    chaos_factor=0.1, snapshot_interval=50,
+                                    characters=sim_chars)
+            save_sim_state(result, f"wyrd-{world.seed}-sim.json")
+            routes = reconstruct_routes(result.trade_routes)
+            print(render_trade_route_map(world, routes, result.settlements,
+                                         title=f"wyrd {world.seed} — Trade Routes (Year {result.year})"))
+            input(f"\n── Press Enter to return to wyrd gateway...")
+            stdscr = curses.initscr()
+            _init_colors()
+            stdscr.keypad(True)
+            curses.curs_set(0)
 
         if key == ord("q"):
             break
