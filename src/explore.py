@@ -804,3 +804,15 @@ def explore_world(world: World) -> None:
         print()
         print(f"[Interactive explorer unavailable: {e}]")
         print("Try 'wyrd explore --seed N' in a terminal for the full experience.")
+
+
+def explore_world_gateway(world: World) -> str:
+    """Launch the interactive explorer, returning 'quit' when done.
+
+    Used from the gateway TUI — returns instead of printing.
+    """
+    try:
+        curses.wrapper(_explore_curses, world)
+    except Exception as e:
+        pass
+    return "quit"

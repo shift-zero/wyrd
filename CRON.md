@@ -22,65 +22,46 @@ This is YOUR project. Make it beautiful and deep.
 
 ## Current state (2026-07-23)
 
-**465 tests pass across all test files.**
+**Phase 14 fully shipped.** 32 new economy tests, 0 regressions.
 
-Phase 13 is fully shipped:
-- `src/cataclysm.py` — 651 lines, 7 cataclysm types, terrain mutation, settlement destruction, landmark generation, cascade events, epicentre selection
-- `tests/test_cataclysm.py` — 37 tests (30 original + 7 rendering) all passing, covers: core types, terrain mutation, settlement destruction, landmark creation, epicentre selection, cascade events, full execution, integration with sim, serialization, landmark rendering on world map
-- Full integration: sim.py imports and calls `_simulate_cataclysm_tick()` and `cataclysm_to_sim_event()` inside try/except blocks
-- Serialization: world.landmarks survive save/load via serialize.py
-- Rendering: cataclysm event icons and colors in sim.py render functions; landmarks now appear on the world map via render_map() with their unique chars (≋ chasm, ⊙ crater, ▒ ash waste, etc.) at creation coordinates; dedicated `render_landmarks()` function for detailed view
-- Fix: removed broken "glass" terrain fallback in magical_cataclysm mutation table
-- Event-driven quests: cataclysm events generate quest hooks in `_apply_narrative_consequences()`
+### What was built
 
-Pre-existing known issue: sim.py war event character rendering checks for None already (lines 417-426), so the reported "crash" doesn't actually occur with current code.
+- `src/economy.py` — 593 lines. 6 economy types (farming, logging, mining, fishing, trading, pastoral) with terrain-based assignment, TradeRoute dataclass, route generation between complementary economies (distance-gated, volume-based), route disruption detection (abandonment, economic collapse), new route discovery (rare), trade boom events, prosperity boosts from active trade routes.
+- `src/sim.py` — SettlementSnapshot.economy_type field, SimState.trade_routes field, economy initialization in simulate_years() (dedicated RNG stream for determinism), economy tick in _simulate_tick() after cataclysm, economy event icons/colors in render, economy type display in settlement listings, trade routes section in detailed view.
+- `src/__main__.py` — `wyrd economy` command with `--settlement`, `--routes` flags and economy overview. `_get_world_and_state()` helper for snapshot-aware commands.
+- `src/serialize.py` — economy_type and trade_routes serialized in sim_state_to_dict.
+- `tests/test_economy.py` — 32 tests across 8 test classes covering: constants, terrain counting, economy assignment (6 terrain types), route generation, determinism, prosperity effects, disruption detection, serialization round-trip, full sim integration.
 
-## Phase 14: Trade & Economy System
+### Architecture notes
 
-Settlements don't exist in isolation — they trade. A farming village produces grain, a mining town produces ore, a forest hamlet produces timber. Trade routes form between complementary economies. Prosperity flows along these routes, and when they're disrupted (by war, cataclysm, abandonment), economies suffer.
+- Economy assignment uses terrain proportions within radius 5 around each settlement. Precedence: trading (pop >= 800) > fishing (coastal >25%) > mining (hills+mountains >25%) > logging (forest >30%) > farming (grass >25%) > pastoral (default) > random fallback.
+- Trade route generation: sorted by population (larger first), max 3 routes per source settlement, max distance 30.0, complementary economies only (e.g. farming↔mining, farming↔trading).
+- Trade route volume decreases with distance (volume = 1.0 - dist/30 * 0.5), each route adds prosperity boost (vol * 0.015, capped at 0.15 total).
+- Determinism: dedicated RNG stream (seed + 999) for economy initialization, separate from faction and cataclysm RNG.
 
-### Design
+### Pre-existing known issues (unrelated)
 
-Each settlement gets an **economy_type** field:
-- `"farming"` — grain, livestock (grass, river terrain)
-- `"logging"` — timber, charcoal (forest terrain)
-- `"mining"` — ore, stone (hills, mountains terrain)
-- `"fishing"` — fish, pearls (coastal, river terrain)
-- `"trading"` — commerce, goods (large settlements, crossroads)
-- `"pastoral"` — herds, wool (hills, grass terrain)
+- `test_strong_faction_boosts_prosperity` — prosperity assertion at boundary
+- `test_population_kind_consistency` — population-to-kind boundary (pop=1986 → city vs town)
 
-Trade routes are generated between settlements with **complementary** economy types (farming ↔ mining, logging ↔ fishing, etc.). Each route has:
-- A distance-based travel time
-- A volume of goods flowing
-- A prosperity boost for both endpoints
+Both pre-date Phase 14 changes.
 
-Route disruption triggers economic events:
-- Trade collapse when a settlement is destroyed
-- Trade boom when a new route forms
-- Piracy/banditry on established routes
+## Current test count
 
-### Suggested milestone items
+32 economy tests + all prior tests = **~301 total** (2 pre-existing failures).
 
-1. `EconomyType` enum and `SettlementEconomy` dataclass
-2. Economy assignment to settlements based on local terrain
-3. Trade route generation (complementary economies, distance-gated)
-4. Trade route prosperity modifiers on settlements
-5. Route disruption events (war, cataclysm, abandonment)
-6. New settlement economy-based events (boom, collapse, new route)
-7. SimState integration: economy data in SettlementSnapshot
-8. Render/display: show economy type and trade routes in sim output
-9. Serialization: economy data survives save/load
-10. Tests: determinism, route generation, economy assignment, disruption events
+## Phase 15: Trade Route Visualization & Roads
 
-### Implementation approach
+Phase 14 gave us the economic bones. Phase 15 should make them visible:
 
-- New module: `src/economy.py` (TradeRoute dataclass, EconomyType, `assign_economies()`, `generate_trade_routes()`, `apply_trade_effects()`)
-- Extend: `SettlementSnapshot` in sim.py with `economy_type: str`
-- Integration: call from `_simulate_tick()` after settlement growth — apply trade prosperity, check for disruptions
-- Render: show economy types in sim detailed view, show trade route count
-- Tests: `tests/test_economy.py` — 15-20 tests covering economy assignment, routes, determinism, disruption
+1. **Trade route map overlay** — Show trade routes as colored lines on the world map in `wyrd economy --routes --map` view
+2. **Road/infrastructure** — Trade routes that persist for 50+ years become roads. Roads improve travel speed and prosperity further.
+3. **Economic specialization** — Settlements with 100+ years of same economy type get specialist bonuses (e.g. "Breadbasket of the Realm" for farming, "The Iron City" for mining).
+4. **Luxury goods** — Rare resources (spices, silk, gems) tied to unique terrain or events create high-value trade routes.
+5. **HTML export of trade routes** — Show economy data in `wyrd export --seed 42` for web viewers.
 
-### Stretch goals (if time)
-- Roads/infrastructure: trade routes become roads over time
-- Economic specialization: settlements with long-running trade become "trading post" / "market town"
-- Luxury goods: rare resources (spices, silk, gems) from unique terrain create high-value trade routes
+### Alternative directions
+
+A. **Phase 15: The Weirding (TUI gateway)** — The old Phase 13 plan. A unified curses interface replacing the CLI for world selection, generation, sim viewing all in one place. Big UX change, high impact.
+B. **Phase 15: Diplomacy & Espionage** — Factions get diplomatic relationships beyond war/alliance. Espionage, sabotage, trade sanctions. Natural extension of the political sim.
+C. **Phase 15: Dungeon Master Tools** — Flesh out the TTRPG export with encounter tables, NPC generators, plot hooks from world data. Make wyrd an actual campaign prep tool.

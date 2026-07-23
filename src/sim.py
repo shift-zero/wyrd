@@ -1642,7 +1642,7 @@ def render_sim_detailed(result: SimResult, world) -> str:
                     vol = r.get("volume", 0.5)
                     route_strs.append(f"{dest} ({goods}, {vol:.0%})")
                 lines.append(
-                    f"    {_color(226)}•{ANSI_RESET} {ANSI_BOLD}{src_name}{ANSI_RESET} → {\", ".join(route_strs)}"
+                f"    {_color(226)}•{ANSI_RESET} {ANSI_BOLD}{src_name}{ANSI_RESET} → {', '.join(route_strs)}"
                 )
             if sum(len(r) for r in route_by_source.values()) > len(sorted_sources) * 1:
                 lines.append(f"    {ANSI_DIM}... and {len(active_routes) - len(sorted_sources)} more route legs{ANSI_RESET}")

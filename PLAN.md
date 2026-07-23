@@ -209,7 +209,6 @@ Factions rise and fall during year-by-year simulation. Wars erupt between rival 
 | 8 ✅ | 28 tests for deterministic state, events, drift | All pass, zero regressions |
 | 9 ✅ | Peace treaties ending wars with formal treaty events | ☮ icon, formal treaty language with terms and effects; distinct from alliances |
 | 10 ✅ | War exhaustion modifier affecting sim | FactionSnapshot.war_exhaustion tracks cumulative war duration; settlements in war-exhausted territory lose food stores and prosperity |
-| 11 ✅ | Catastrophic events (earthquakes, volcanos, plagues of legend) that reshape the map | 37 tests for terrain mutation, settlement destruction, landmark generation, cascade events, rendering |
 
 ## Phase 13 — Cataclysmic Events (complete ✅)
 Very rare simulation events that permanently alter terrain, destroy settlements, and create lasting landmarks. 7 cataclysm types, terrain mutation tables, settlement destruction, landmark system with named features, cascade events (earthquake→tsunami, volcanic→great_fire, etc.), refugee/exodus events, and full serialization.
@@ -224,19 +223,19 @@ Very rare simulation events that permanently alter terrain, destroy settlements,
 | 6 ✅ | Full integration: sim tick, sim events, render icons/colors | Cataclysm events visible in `wyrd run` output with distinct icons and colors |
 | 7 ✅ | 37 tests across core types, terrain mutation, settlement destruction, landmarks, cascades, integration, serialization, rendering | `python -m pytest tests/test_cataclysm.py -q` all pass |
 
-## Phase 14 — Trade & Economy (current)
+## Phase 14 — Trade & Economy (complete ✅)
 Settlements don't exist in isolation — they trade. Farming villages produce grain, mining towns produce ore, forest hamlets produce timber. Trade routes form between complementary economies. Prosperity flows along these routes, and when they're disrupted, economies suffer.
 
 | # | What | Verifiable |
 |---|------|------------|
-| 1 🔲 | EconomyType enum and settlement economy assignment based on local terrain | `wyrd run --seed 42 --years 100` shows economy types in settlement listings |
-| 2 🔲 | Trade route generation between complementary economies (farming↔mining, etc.) | Trade routes visible in sim detailed output with goods volume |
-| 3 🔲 | Trade route prosperity modifiers | Settlements with trade routes have higher prosperity |
-| 4 🔲 | Route disruption events (war, cataclysm, abandonment) | Trade collapse events appear when routes break |
-| 5 🔲 | New settlement economy-based events (trade boom, collapse, new route) | distinct economy event types in sim output |
-| 6 🔲 | Economy display in sim detailed view | Economy icons and trade route count in settlement listings |
-| 7 🔲 | Serialization: economy data survives save/load | Economy types and trade routes persist through serialization |
-| 8 🔲 | Tests for determinism, route generation, economy assignment, disruption | 15+ tests in test_economy.py |
+| 1 ✅ | EconomyType enum and settlement economy assignment based on local terrain | `wyrd run --seed 42 --years 100` shows economy types in settlement listings |
+| 2 ✅ | Trade route generation between complementary economies (farming↔mining, etc.) | Trade routes visible in sim detailed output with goods volume |
+| 3 ✅ | Trade route prosperity modifiers | Settlements with trade routes have higher prosperity |
+| 4 ✅ | Route disruption events (war, cataclysm, abandonment) | Trade collapse events appear when routes break |
+| 5 ✅ | New settlement economy-based events (trade boom, collapse, new route) | distinct economy event types in sim output |
+| 6 ✅ | Economy display in sim detailed view | Economy icons and trade route count in settlement listings |
+| 7 ✅ | Serialization: economy data survives save/load | Economy types and trade routes persist through serialization |
+| 8 ✅ | Tests for determinism, route generation, economy assignment, disruption | 32 tests in test_economy.py |
 
 ## Phase 15 — The Weirding (UX transformation — next major)
 
@@ -246,9 +245,9 @@ The CLI is a dev tool's face. wyrd wants a *human* face — a single unified cur
 
 | # | What | Verifiable |
 |---|------|------------|
-| 1 🔲 | Gateway TUI — world selection screen showing recent worlds, generate new, load from file | `wyrd` (no args) opens a world picker with recent worlds, a "Generate New" option, and "Load File" |
+| 1 ✅ | Gateway TUI — world selection screen showing recent worlds, generate new, load from file | `wyrd` (no args) opens a world picker with recent worlds, a Generate New option, and Load File | 2026-07-23 |
 | 2 🔲 | Integrated navigation — consistent keybinds across all views | Tab/numbers switch sections; `q` quits; `?` shows help — works everywhere |
 | 3 🔲 | Meld explorer + viewer into one seamless experience | Explore a world, then press a key to start simulation and watch it change in place — no relaunch |
-| 4 🔲 | Inline help panel — shows all keybinds, contextual | Press `?` from anywhere and see available actions for the current view |
-| 5 🔲 | World persists in session — generate once, then explore/sim/export without re-passing `--seed` | Navigate between views without re-typing flags |
-| 6 🔲 | Beautiful splash screen with wyrd ASCII art on launch | A taste of what wyrd can do before you even pick a world |
+| 4 ✅ | Inline help panel — shows all keybinds, contextual | Press `?` from anywhere and see available actions for the current view | 2026-07-23 |
+| 5 ✅ | World persists in session — generate once, then explore/sim/export without re-passing `--seed` | Navigate between views without re-typing flags | 2026-07-23 |
+| 6 ✅ | Beautiful splash screen with wyrd ASCII art on launch | A taste of what wyrd can do before you even pick a world | 2026-07-23 |

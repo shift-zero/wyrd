@@ -135,7 +135,7 @@ def main():
         prog="wyrd",
         description="Generative fantasy sandbox — build worlds in the terminal."
     )
-    sub = parser.add_subparsers(dest="command", required=True)
+    sub = parser.add_subparsers(dest="command")
 
     # ── generate ───────────────────────────────────────────────────
     gen = sub.add_parser("generate", help="Generate a new world")
@@ -350,6 +350,12 @@ def main():
                              help="Output as JSON for scripting")
 
     args = parser.parse_args()
+
+    # ── No subcommand → launch gateway TUI ─────────────────────────
+    if args.command is None:
+        from .gateway import gateway_main
+        gateway_main()
+        return
 
     # ── generate ───────────────────────────────────────────────────
     if args.command == "generate":
