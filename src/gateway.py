@@ -1164,7 +1164,22 @@ def _gateway_loop(stdscr):
             _draw(stdscr, list_start_y, 0, title, CP["title"], bold=True)
             list_start_y += 1
             _fill_line(stdscr, list_start_y, CP["dim"])
-            _draw(stdscr, list_start_y, 2, " Seed     Size     Population     Settlements     Features", CP["dim"])
+            # Build header with sort direction arrows inline
+            # Adjust spacing so column alignment stays consistent
+            if sort_key == "seed" or sort_key == "name":
+                seed_label = "Seed↑" if not sort_reverse else "Seed↓"
+                seed_pad = 4  # one fewer space to compensate for extra arrow char
+            else:
+                seed_label = "Seed"
+                seed_pad = 5
+            if sort_key == "population":
+                pop_label = "Population↑" if sort_reverse else "Population↓"
+                pop_pad = 4
+            else:
+                pop_label = "Population"
+                pop_pad = 5
+            header = f" {seed_label}{' '*seed_pad}Size{pop_pad*' '}{pop_label}     Settlements     Features"
+            _draw(stdscr, list_start_y, 2, header, CP["dim"])
             list_start_y += 1
 
             max_visible = h - list_start_y - 3  # Reserve 2 lines for msg + 1 for status bar
@@ -1285,7 +1300,23 @@ def _gateway_loop(stdscr):
             continue
 
         if key == ord("q") or key == 27:
-            running = False
+            # Confirm-on-quit safeguard
+            confirm_msg = "Quit wyrd? Press q again to confirm, any other key to cancel."
+            confirm_x = max(0, (w - len(confirm_msg)) // 2)
+            confirm_y = h // 2
+            # Draw a compact confirmation popup
+            popup_w = len(confirm_msg) + 4
+            popup_x = max(0, (w - popup_w) // 2)
+            for py in range(confirm_y - 1, confirm_y + 2):
+                if 0 <= py < h:
+                    _fill_line(stdscr, py, CP["border"])
+                    _draw(stdscr, py, popup_x, " " * popup_w, CP["normal"])
+            _draw(stdscr, confirm_y, confirm_x, confirm_msg, CP["warning"], bold=True)
+            curses.doupdate()
+            confirm_key = stdscr.getch()
+            if confirm_key == ord("q"):
+                running = False
+            # else: continue without quitting
 
         elif key == ord("?") or key == ord("h"):
             show_help = True
