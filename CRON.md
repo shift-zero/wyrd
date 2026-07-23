@@ -23,27 +23,54 @@ This is YOUR project. Make it beautiful and deep.
 
 ## Current state (2026-07-23)
 
-**All 16 phases complete. Phase 17 in progress.**
+**All 17 phases complete. 625 tests pass.**
 
-### What was built this session
+### What was done this session
+1. **Bug fix** — `wyrd generate` crashed with `UnboundLocalError` because two local `from .render import render_map` imports shadowed the module-level import. Removed them. (0126c85)
 
-1. **Live map animation (Item 1 → ✅)** — The Textual TUI now shows tile animations during simulation: settlements that grew flash green ↑, shrinking settlements flash red ↓, newly founded settlements glow gold ✦, abandoned settlements show dim ✗. All auto-fade to normal after 1.5s. Animation legend appears automatically during overlay. Uses `flash_overlays()` on `SimMapWidget` with `set_timer` auto-revert.
+### All 17 phases are complete and working
 
-### Phase 17 checklist (from PLAN.md)
+| Phase | What | Status |
+|-------|------|--------|
+| 1 | World generator (terrain, rivers, settlements) | ✅ |
+| 2 | Lore engine (cultures, features, histories) | ✅ |
+| 3 | Explorer mode (save/load, HTML, curses UI, queries) | ✅ |
+| 4 | Narrative engine (characters, events, quests) | ✅ |
+| 5 | Chronicles (era-based world history) | ✅ |
+| 6 | Simulation (year-by-year world evolution) | ✅ |
+| 7 | The Living World (interactive sim viewer, character integration) | ✅ |
+| 8 | The Web Awakens (web dashboard, magic system, world management) | ✅ |
+| 9 | The Pantheon (religion system, deity generation, holy sites) | ✅ |
+| 10 | Adventure Zones (dungeons, caves, ruins on the world map) | ✅ |
+| 11 | Faction System (political entities, relationships, power stats) | ✅ |
+| 12 | Political Simulation (faction wars, alliances, power drift in sim) | ✅ |
+| 13 | Cataclysmic Events (terrain mutation, landmark system, cascades) | ✅ |
+| 14 | Trade & Economy (trade routes, prosperity, disruption) | ✅ |
+| 15 | The Weirding (gateway TUI, unified curses interface) | ✅ |
+| 16 | Trade Route Map Visualization (roads, specialization titles) | ✅ |
+| 17 | Living Worlds (animated maps, TUI overhaul, embodied play) | ✅ |
 
-| # | Item | Status | Notes |
-|---|------|--------|-------|
-| 1 | Live map animation | ✅ | Tiles show green/red/gold/dim indicators with 1.5s fade; `_render_map_with_overlays()` for overlay-aware map rendering |
-| 2 | Textual-based TUI | 🟡 | Sim-aware: controls, event log, live stats, year-diff, reset |
-| 3 | Embodied play mode | ✅ | MVP + save/load + legacy tracking + death epilogue |
-| 4 | Event-driven notifications | ✅ | 7 scenario types, 95 tests |
-| 5 | Year-diff view | ✅ | Done |
-| 6 | Multi-generational play | 🟡 | Heir generation on death, inheritance, lineage tracking |
+### What to tackle next — Phase 18: Depth & Quality
 
-### What to tackle next
+The project is feature-complete. Every module exists, every CLI command works, 625 tests pass. Now the question is **depth** — making what's already there *richer* and *more cohesive* instead of adding more modules.
 
-1. **Item 2 → ✅** — The Textual TUI works but needs polish: better layout, persistent keybind help bar, smoother sim controls, maybe a world picker screen on launch.
+Candidates for Phase 18 (pick one per session):
 
-2. **Item 6 → ✅** — Multi-generational needs: family tree tracking, persistent lineage across sessions, more dramatic generational mechanics (inbreeding, dynastic splits, family feuds).
+1. **🔲 Embodied play depth** — More scenario types, deeper consequences, character relationships, skill system, inventory management. The embody mode works but is thin on gameplay.
 
-3. **Start thinking about post-Phase-17.** What comes after Living Worlds? Maybe multi-world federations, faction diplomacy web UI, or a REST API for external tools.
+2. **🔲 TUI polish** — The Textual-based TUI works but could be smoother: better keybind discoverability, persistent help bar, world picker on launch, minimap, smoother animations.
+
+3. **🔲 World generation variety** — More terrain types (swamp, tundra, canyon, reef), biome-specific color palettes, weather patterns visible on the map.
+
+4. **🔲 Performance** — 150s test suite, sim can be slow for 1000+ years on large maps. Profiling and optimization (maybe Cython or numpy for noise generation).
+
+5. **🔲 Bestiary depth** — The bestiary exists but is minimal. Full creature generation with stats, habitats, encounter tables, TTRPG integration.
+
+6. **🔲 REST API** — Expose the world data as an HTTP API so external tools can consume it programmatically without running wyrd.
+
+7. **🔲 Multi-world interaction** — Trade, war, diplomacy between parallel worlds. Cross-world pantheon crossover. Portal events.
+
+### Architecture notes
+- `src/__main__.py` — All CLI wiring. Module-level imports for render, redundant local imports removed.
+- `src/render.py` — All ANSI rendering. `render_map()` is the main map renderer.
+- 24 subcommands on `wyrd --help`
