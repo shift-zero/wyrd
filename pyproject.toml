@@ -19,3 +19,8 @@ Repository = "https://github.com/shift-zero/wyrd"
 
 [project.scripts]
 wyrd = "src.__main__:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

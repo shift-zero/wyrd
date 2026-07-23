@@ -246,8 +246,8 @@ The CLI is a dev tool's face. wyrd wants a *human* face — a single unified cur
 | # | What | Verifiable |
 |---|------|------------|
 | 1 ✅ | Gateway TUI — world selection screen showing recent worlds, generate new, load from file | `wyrd` (no args) opens a world picker with recent worlds, a Generate New option, and Load File | 2026-07-23 |
-| 2 🔲 | Integrated navigation — consistent keybinds across all views | Tab/numbers switch sections; `q` quits; `?` shows help — works everywhere |
-| 3 🔲 | Meld explorer + viewer into one seamless experience | Explore a world, then press a key to start simulation and watch it change in place — no relaunch |
+| 2 ✅ | Integrated navigation — consistent keybinds across all views | Tab/numbers switch sections; `q` quits; `?` shows help — works everywhere | 2026-07-23 |
+| 3 ✅ | Meld explorer + viewer into one seamless experience | Explore a world, then press 'v' for sim-mode: scroll, zoom, inspect while the world evolves in place | 2026-07-23 |
 | 4 ✅ | Inline help panel — shows all keybinds, contextual | Press `?` from anywhere and see available actions for the current view | 2026-07-23 |
 | 5 ✅ | World persists in session — generate once, then explore/sim/export without re-passing `--seed` | Navigate between views without re-typing flags | 2026-07-23 |
 | 6 ✅ | Beautiful splash screen with wyrd ASCII art on launch | A taste of what wyrd can do before you even pick a world | 2026-07-23 |
