@@ -23,28 +23,20 @@ This is YOUR project. Make it beautiful and deep.
 
 ## Current state (2026-07-27)
 
-**Phase 19 — Embody mode TUI complete.** The print/input embody mode now has a proper curses TUI (`embody_tui.py`, 750 lines) with stats sidebar, scrollable event log, action bar, and overlay dialogs for choices, travel, and market.
+**Phase 19 — Embody mode TUI complete.** The print/input embody mode now has a proper curses TUI (`embody_tui.py`, 1146 lines) with stats sidebar, scrollable event log, action bar, and overlay dialogs for choices, travel, market, and death epilogue.
 
-### What was built this session (Phase 19 — Embody Mode TUI)
+### Phase 19 — Heir TUI integration + mobile support + route legend (this session)
 
-1. **Embodied Play TUI** — `src/embody_tui.py` (750 lines) provides a full curses TUI for embody mode:
-   - **Stats sidebar** — character name, profession, health bar (animated), gold, age, season/year, location, all 5 skills with progress bars, deeds, visited settlements, reputation
-   - **Event log** — scrollable right panel with color-coded event types (red for combat, green for prosperity, blue for discoveries) — scroll with ↑↓/PgUp/PgDn
-   - **Action bar** — persistent bottom bar showing all available keybinds
-   - **Choice overlays** — transparent overlay for interactive events (1/2/3 choices) with result feedback flowing into the event log
-   - **Travel overlay** — scrollable destination picker inside the TUI
-   - **Market overlay** — buy/sell interface within the TUI
-   - **Help overlay** — `?` key shows contextual help (same panel pattern as gateway)
-   - **Scrollable log** — up/down/page-up/page-down navigation
-   - **Heir system** — death shows epilogue, offers heir continuation (terminal fallback)
+1. **Heir TUI integration** — Death epilogue is now rendered as a full-screen overlay within curses instead of dropping to terminal. Press `y` to continue as heir or `n` to quit, all within the TUI. Heir generation and restart happen cleanly inside curses.
+   - `_draw_epilogue_overlay()` — full-screen Life Ledger overlay with curses colors
+   - `_generate_heir_in_tui()` — extracted heir generation helper
+   - Old terminal prompt code removed (~100 lines)
 
-2. **CLI integration** — `wyrd embody --seed 42 --tui` launches the TUI. Gateway defaults to TUI. Legacy `print()` mode still available without `--tui`.
+2. **Trade route legend** — Viewer stats bar now shows "Routes: N" with the count of active trade routes, next to population and speed indicators.
 
-3. **Gateway integration** — `p` key in gateway launches the TUI instead of print mode. Old `embody_play` is preserved for CLI users who don't want curses.
+3. **Embody TUI mobile support** — Terminals narrower than 100 columns get a compact sidebar (name, health, gold, age, season, location only). Full sidebar with skills, deeds, visited, and reputation restored at ≥100 columns.
 
 ### What to tackle next
-
 - **Seasonal palette — deeper variation.** Snow accumulation on cold terrain, greening transitions in spring, dramatic autumn reds using temperature maps from latitude + elevation.
-- **Heir TUI integration** — the heir prompt currently drops to terminal after character death in TUI mode. Could present options within curses.
-- **Embody TUI mobile support** — handle small terminal sizes more gracefully (collapse sidebar at <100 columns).
-- **Trade route legend** — small route count indicator in the viewer status bar.
+- **Embody TUI heir epilogue polish** — add heir generation confirmation overlay (name, stats preview) before committing to heir restart.
+- **Embody TUI mobile threshold** — active resizing feedback when terminal crosses the 100-col boundary.

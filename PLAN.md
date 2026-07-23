@@ -156,9 +156,9 @@ The simulation engine (`sim.py`) currently ticks in whole years. This is a deep 
 | 3 ✅ | Help documentation — new section in viewer help overlay | Press ? in viewer to see Auto-Pause section |
 
 ### What to tackle next
-- **Embody mode TUI** — 1943 lines of `print()` statements. A curses TUI with stats sidebar, event log, and action menu would match the rest of the tooling.
-- **Trade route animation** — Animate goods flowing along routes (a moving dot per route) in the viewer.
-- **Pause-on-step notification** — Show the auto-pause banner when the user manually steps (→) into a significant event.
+- **Seasonal palette — deeper variation.** Snow accumulation on cold terrain, greening transitions in spring, dramatic autumn reds using temperature maps from latitude + elevation. (Tracked in CRON.md)
+- **Embody TUI heir epilogue polish** — add heir generation confirmation overlay (name, stats preview) before committing to heir restart.
+- **Embody TUI mobile threshold** — active resizing feedback when terminal crosses the 100-col boundary.
 
 ## Design Principles
 
