@@ -22,7 +22,7 @@
 | 14 | Trade & Economy (trade routes, prosperity, disruption) | ✅ |
 | 15 | The Weirding (gateway TUI, unified curses interface) | ✅ |
 | 16 | Trade Route Map Visualization (roads, specialization titles) | ✅ |
-| 17 | Living Worlds (animated maps, TUI overhaul, embodied play) | 🟡 in progress |
+|| 17 | Living Worlds (animated maps, TUI overhaul, embodied play) | ✅ |
 
 ## Philosophy
 

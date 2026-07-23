@@ -265,7 +265,7 @@ Economy connections become visible on the ASCII world map. `wyrd economy --route
 || 5 ✅ | Economic specialization — settlements with 100+ years of same economy get titles | "Breadbasket of the Realm", "The Iron City" etc. shown in route listings | 2026-07-23 |
 || 6 ✅ | HTML export of trade routes | Economy map section in `wyrd export --seed 42` HTML output | 2026-07-23 |
 
-## Phase 17 — Living Worlds (Interactive UX)
+## Phase 17 — Living Worlds (complete ✅)
 
 **Thesis:** wyrd has deep systems but they're hidden behind CLI commands that dump text. The sim runs, you watch events scroll by. The map sits still. This phase makes the world *feel* alive — animated, interactive, playable.
 
@@ -304,8 +304,8 @@ Eventual stretch: your character's descendants inherit through generations.
 | # | What | Verifiable |
 |---|------|------------|
 | 1 ✅ | Live map animation during simulation | `wyrd tui --seed 42` → Space — settlement tiles show green ↑ (growth), red ↓ (decline), gold ✦ (founding), dim ✗ (abandonment) with 1.5s auto-fade; animation legend appears during overlay | 2026-07-23 |
-| 2 🟡 | Textual-based TUI (or equivalent Python framework) | `wyrd` drops into a polished, navigable interface with tabs, help, status bar, modal overlays (sim-aware: `wyrd tui --seed 42` launches Textual viewer with sim controls, event log, live stats, year-diff; press `r` to reset/rewind sim) — 2026-07-23 |
+|| 2 ✅ | Textual-based TUI (or equivalent Python framework) | `wyrd` drops into a polished, navigable interface with tabs, help, status bar, modal overlays (sim-aware: `wyrd tui --seed 42` launches Textual viewer with sim controls, event log, live stats, year-diff; press `r` to reset/rewind sim) — 2026-07-23 |
 | 3 ✅ | Embodied character play mode (MVP) | `wyrd embody --seed 42 --name "Rikard"` — play as a character with location, travel, news, aging, and year-by-year advancement; auto-save/resume via `wyrd-{seed}-char.json`; legacy tracking with Life Ledger on death — 2026-07-23 |
 | 4 ✅ | Event-driven notifications with branching (2026-07-23) | Sim events arrive as interactive notifications with choice prompts — 7 scenario types: stranger, plague, war, merchant, discovery, religious, exodus — 95 tests |
 | 5 ✅ | Year-diff view | After any sim advance, show a diff: what changed, what grew, what fell (press `d` in viewer) — 2026-07-23 |
-| 6 🟡 | Multi-generational play | On death, continue as an heir with inherited gold, inventory, surname, and settlement; parent deeds tracked in child's epilogue — 2026-07-23 |
+|| 6 ✅ | Multi-generational play | On death, continue as an heir with inherited gold, inventory, surname, and settlement; parent deeds tracked in child's epilogue — 2026-07-23 |
