@@ -263,6 +263,17 @@ def main():
     branch_cmd.add_argument("--offsets", type=int, nargs="+", default=[0, 1],
                             help="Seed offsets to compare (default: 0 1)")
 
+    # ── embody ──────────────────────────────────────────────────────
+    embody_cmd = sub.add_parser("embody",
+                                help="Play as a character in the world")
+    _add_load_arg(embody_cmd)
+    embody_cmd.add_argument("--name", type=str, default=None,
+                            help="Character name (generated if omitted)")
+    embody_cmd.add_argument("--years", type=int, default=100,
+                            help="Max years to simulate (default: 100)")
+    embody_cmd.add_argument("--chaos", type=float, default=0.3,
+                            help="Chaos factor 0.0-1.0 (default: 0.3)")
+
     # ── zones ───────────────────────────────────────────────────────
     zones_cmd = sub.add_parser("zones",
                                help="List adventure zones in a world")
@@ -515,6 +526,17 @@ def main():
             offsets=args.offsets,
         )
         print(render_branch_comparison(world, results))
+
+    # ── embody ──────────────────────────────────────────────────────
+    elif args.command == "embody":
+        world = _get_world(args)
+        from .embody import embody_play
+        embody_play(
+            world,
+            name=args.name,
+            years=args.years,
+            chaos=args.chaos,
+        )
 
     # ── zones ───────────────────────────────────────────────────────
     elif args.command == "zones":
