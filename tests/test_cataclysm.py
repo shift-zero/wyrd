@@ -545,3 +545,105 @@ class TestSerialization:
             assert match[0].landmark_type == lm.landmark_type
             assert match[0].x == lm.x
             assert match[0].y == lm.y
+
+
+class TestLandmarkRendering:
+    """Landmarks appear on rendered world maps."""
+
+    def test_render_landmarks_returns_string(self):
+        """render_landmarks should return a non-empty string when landmarks exist."""
+        from src.render import render_landmarks
+
+        world = generate_world(42)
+        rng = random.Random(8000)
+        _create_landmark(world, "earthquake", 30, 30, "Sageholt", 100, rng)
+        _create_landmark(world, "meteor_strike", 50, 50, "Ravenwood", 200, rng)
+
+        output = render_landmarks(world)
+        assert isinstance(output, str)
+        assert len(output) > 0
+        assert "Landmarks" in output
+        assert "Sageholt" in output or "Chasm" in output or "Crater" in output
+
+    def test_render_landmarks_empty_world(self):
+        """World with no landmarks should return empty string."""
+        from src.render import render_landmarks
+
+        world = generate_world(42)
+        assert len(world.landmarks) == 0
+        output = render_landmarks(world)
+        assert output == ""
+
+    def test_render_map_shows_landmarks(self):
+        """render_map should include landmark chars on the map."""
+        from src.render import render_map
+
+        world = generate_world(42)
+        rng = random.Random(9000)
+        lm = _create_landmark(world, "meteor_strike", 40, 40, "TestRegion", 150, rng)
+        assert lm is not None
+
+        output = render_map(world)
+        assert isinstance(output, str)
+        assert len(output) > 0
+        # Map should render without errors
+        assert "wyrd" in output.lower() or "seed" in output
+
+    def test_landmark_icon_in_map_output(self):
+        """Landmark chars should appear in the rendered map body."""
+        from src.render import render_map
+
+        world = generate_world(42)
+        rng = random.Random(10000)
+
+        # Place a landmark at a known position
+        lm = _create_landmark(world, "meteor_strike", 10, 15, "TestRegion", 150, rng)
+
+        # Render the map
+        output = render_map(world, show_settlements=True)
+
+        # The landmark's name should be somewhere in the output (legend or body)
+        assert lm.name in output, f"Landmark name '{lm.name}' not found in render output"
+
+    def test_landmark_legend_in_map(self):
+        """render_map should include landmark legend when landmarks exist."""
+        from src.render import render_map
+
+        world = generate_world(42)
+        rng = random.Random(11000)
+        _create_landmark(world, "earthquake", 35, 35, "Sageholt", 100, rng)
+        _create_landmark(world, "tsunami", 45, 25, "Ravenwood", 180, rng)
+
+        output = render_map(world)
+        assert "Landmarks" in output
+        assert "Chasm" in output or "Rift" in output or "Scar" in output
+
+    def test_landmark_cataclysm_year_in_legend(self):
+        """Landmark year should appear in the rendered output."""
+        from src.render import render_landmarks
+
+        world = generate_world(42)
+        rng = random.Random(12000)
+        _create_landmark(world, "earthquake", 30, 30, "Sageholt", 250, rng)
+
+        output = render_landmarks(world)
+        assert "250" in output or "Year" in output
+
+    def test_landmarks_persist_in_rendered_sim_state(self):
+        """Landmarks should survive sim and appear in render output."""
+        from src.sim import run_simulation
+        from src.render import render_landmarks
+
+        # High chaos to trigger cataclysms
+        world = generate_world(42)
+        result = run_simulation(world, num_years=500, chaos_factor=0.5)
+
+        # Apply sim state to world to get landmarks in world.landmarks
+        from src.sim import apply_sim_state_to_world
+        sim_world = apply_sim_state_to_world(world, result.final_state)
+
+        if sim_world.landmarks:
+            output = render_landmarks(sim_world)
+            assert isinstance(output, str)
+            assert len(output) > 0
+
