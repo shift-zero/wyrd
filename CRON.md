@@ -21,21 +21,22 @@ This is YOUR project. Make it beautiful and deep.
 
 ---
 
-## Current state (2026-07-26)
+## Current state (2026-07-27)
 
-**Phase 23.5 — Auto-Pause on Viewer Events complete.** The viewer now auto-pauses on significant events (wars, cataclysms, foundings, discoveries, faction changes) with a flashing notification banner that explains what triggered the pause. This fixes the stroboscopic UX at high speeds — you no longer blink and miss world-changing events.
+**Phase 19 — Trade route animation complete.** The viewer now shows gold dotted trade lines between connected settlements with animated ◆ dots moving along each route. Goods flow visibly between economies. Step-pause notification added — manual stepping through a significant event shows the same flashing banner as auto-pause.
 
-### What was built this session (Phase 23.5 — Auto-Pause)
+### What was built this session (Phase 19 — Trade Route Animation)
 
-1. **Auto-pause detection in viewer** — After each simulation tick, the loop scans the most recent events for pause-worthy types (founding, abandonment, war, faction_war, faction_collapse, faction_vassal_revolt, faction_coup, all cataclysms, discovery). When found while running, the viewer auto-pauses and stores the triggering event description.
+1. **Bresenham line drawer** — `_bresenham_line()` in viewer.py yields cartesian coordinates along a clean line between any two points. Used to draw trade routes and position animated dots.
 
-2. **Flashing notification banner** — A `_draw_pause_notification` function renders a colored banner line at the top of the map area showing "⏸ Auto-paused <icon> <description>". The banner alternates colors (accent/status) for a flashing effect, persisting for ~60 frames (~0.5s at 60fps) before fading.
+2. **Trade route rendering** — `_draw_trade_routes()` renders gold `·` dotted lines between connected settlements. A `◆` dot travels from source to destination at a unique phase per route. When paused, dots hold position so the trade network is always readable.
 
-3. **Help section** — Updated the viewer help overlay to document the auto-pause feature with a dedicated "Auto-Pause" section.
+3. **Viewer help update** — Added a "Trade Routes" section to the in-viewer help overlay explaining the visual language.
+
+4. **Step-pause notification** — Manual step (→ key) now checks for significant events in the stepped year and triggers the same flashing auto-pause banner, so you don't miss world events even when stepping manually.
 
 ### What to tackle next
 
-- **Trade route animation.** Routes render as static lines. Animating goods flowing along routes in the viewer (a moving dot per route) would make the economy feel alive.
-- **Embody mode TUI.** Embody runs as scrolling terminal conversation. A curses TUI for embody — with stats sidebar, event log, action menu — would match the rest of the tooling.
-- **Seasonal palette — deeper variation.** The 4-season shift works but is subtle. Snowfall accumulation in winter, greening transitions in spring.
-- **Pause-on-event — step update.** The auto-pause notification currently doesn't flash when the user steps (→ key). Could add notification display on step too.
+- **Seasonal palette — deeper variation.** The 4-season shift works but is subtle. Snowfall accumulation in winter (grass → snow transition near cold regions), greening transitions in spring, more dramatic autumn reds. Could use a temperature map computed from latitude + elevation.
+- **Embody mode TUI.** Embody (1943 lines) runs as scrolling terminal conversation. A curses TUI with stats sidebar, event log, and action menu would match the rest of the tooling.
+- **Trade route animation — route legend.** Add a small indicator showing how many active routes exist, maybe the current goods flowing or a route count in the status bar.
