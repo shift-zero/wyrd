@@ -344,9 +344,9 @@ def _draw_status_bar(stdscr, h, w, seed, year, total, paused, speed, month=None)
 
     # Right: context-sensitive key hints
     if paused:
-        hints = " [Space] resume  [→] step  [+/-] speed  [p] chart  [d] diff  [?] help  [q] quit"
+        hints = " [Space] resume  [→] step  [+/-] speed  [[] []] settle  [i] inspect  [p] chart  [d] diff  [?] help  [q] quit"
     else:
-        hints = " [Space] pause  [+/-] speed  [→] step  [p] chart  [d] diff  [?] help  [q] quit"
+        hints = " [Space] pause  [+/-] speed  [[] []] settle  [i] inspect  [p] chart  [d] diff  [?] help  [q] quit"
 
     _fill_line(stdscr, h - 1, _CP["dim"])
     _draw(stdscr, h - 1, 0, mode_str, _CP["accent"] if not paused else _CP["status"], bold=not paused)
@@ -621,6 +621,8 @@ VIEWER_HELP = [
     "    →              Step one year forward",
     "    + / =          Speed up simulation",
     "    - / _          Slow down simulation",
+    "    [ / ]          Cycle through settlements on map",
+    "    i              Inspect selected settlement (detail popup)",
     "    d              Toggle year-diff overlay",
     "    p              Toggle population chart overlay",
     "",
@@ -629,6 +631,7 @@ VIEWER_HELP = [
     "    q / ESC        Quit viewer",
     "",
     "  Tip: Watch the map evolve as centuries pass.",
+    "       Use [ and ] to highlight settlements, then press 'i'.",
     "       New settlements appear in green.",
     "       Press 'd' to see exactly what changed each year.",
 ]
@@ -692,7 +695,162 @@ def _handle_key(key, state):
         return "help", None
     if key == ord("d"):
         return "toggle_diff", None
+    if key == ord("i"):
+        return "inspect", None
+    if key == ord("["):
+        return "prev_settlement", None
+    if key == ord("]"):
+        return "next_settlement", None
     return None, None
+
+
+# ── Settlement detail popup ───────────────────────────────────────────
+
+
+def _build_settlement_list(state) -> list[dict]:
+    """Build a sorted list of active settlements with screen positions."""
+    settlements = []
+    for name, ss in state.settlements.items():
+        if ss.is_active:
+            settlements.append({
+                "name": name,
+                "x": ss.x,
+                "y": ss.y,
+                "population": ss.population,
+                "kind": ss.kind,
+                "prosperity": ss.prosperity,
+                "food_stores": ss.food_stores,
+                "health": ss.health,
+                "founded_year": ss.founded_year,
+                "region": ss.region,
+                "religion": ss.religion,
+                "economy_type": ss.economy_type,
+            })
+    settlements.sort(key=lambda s: s["x"] + s["y"] * 10000)  # row-major order
+    return settlements
+
+
+def _draw_settlement_cursor(stdscr, sel: dict, map_start_y: int):
+    """Draw a cursor marker around the selected settlement on the map."""
+    sy = map_start_y + sel["y"]
+    sx = sel["x"]
+    h, w = stdscr.getmaxyx()
+    if sy >= h or sx >= w or sy < 0 or sx < 0:
+        return
+    try:
+        # Draw a bright border around the settlement char
+        ch = stdscr.inch(sy, sx)
+        style = curses.color_pair(_CP["accent"]) | curses.A_REVERSE | curses.A_BOLD
+        # Get the original char
+        orig_char = chr(ch & 0xFF) if (ch & 0xFF) != 0 else "●"
+        stdscr.addstr(sy, sx, orig_char, style)
+    except curses.error:
+        pass
+
+
+_SETTLEMENT_HELP = [
+    "wyrd — Settlement Detail  (press any key to close)",
+    "",
+    "  Use [ and ] to cycle through settlements on the map.",
+    "  Press 'i' to inspect the highlighted settlement.",
+    "",
+]
+
+
+def _draw_settlement_popup(stdscr, sel: dict | None, h: int, w: int):
+    """Draw a settlement detail popup overlay."""
+    if sel is None:
+        return
+
+    lines = []
+    name_line = f" {sel['name']}"
+    lines.append(name_line)
+    lines.append("")
+    lines.append(f"  Type:       {sel['kind'].title()}")
+    lines.append(f"  Region:     {sel['region']}")
+    lines.append(f"  Population: {sel['population']:,}")
+    lines.append(f"  Position:   ({sel['x']}, {sel['y']})")
+    lines.append("")
+
+    # Prosperity bar
+    pros_pct = max(0.0, min(1.0, sel['prosperity']))
+    pros_filled = int(pros_pct * 10)
+    pros_bar = "█" * pros_filled + "░" * (10 - pros_filled)
+    pros_label = f"{pros_pct:.0%}"
+    lines.append(f"  Prosperity: {pros_bar} {pros_label}")
+
+    # Health bar
+    health_pct = max(0.0, min(1.0, sel['health']))
+    health_filled = int(health_pct * 10)
+    health_bar = "█" * health_filled + "░" * (10 - health_filled)
+    health_label = f"{health_pct:.0%}"
+    lines.append(f"  Health:     {health_bar} {health_label}")
+
+    # Food stores
+    food_pct = max(0.0, min(1.0, sel['food_stores'] / 100.0))
+    food_filled = int(food_pct * 10)
+    food_bar = "█" * food_filled + "░" * (10 - food_filled)
+    lines.append(f"  Food:       {food_bar} ({sel['food_stores']:.0f})")
+
+    lines.append("")
+    if sel.get('economy_type'):
+        etype = sel['economy_type'].replace('_', ' ').title()
+        lines.append(f"  Economy:    {etype}")
+    if sel.get('religion'):
+        lines.append(f"  Religion:   {sel['religion']}")
+    if sel.get('founded_year', 0) > 0:
+        lines.append(f"  Founded:    Year {sel['founded_year']}")
+    lines.append("")
+    lines.append(" [i] close ")
+
+    # Calculate box dimensions
+    box_h = len(lines) + 2
+    box_w = max(len(l) for l in lines) + 4
+    max_h = h - 2
+    max_w = w - 2
+    if box_h > max_h:
+        box_h = max_h
+    if box_w > max_w:
+        box_w = max_w
+
+    start_y = max(0, (h - box_h) // 2)
+    start_x = max(0, (w - box_w) // 2)
+
+    # Draw background box
+    for y in range(box_h):
+        for x in range(box_w):
+            try:
+                if y in (0, box_h - 1) or x in (0, box_w - 1):
+                    stdscr.addch(start_y + y, start_x + x, " ",
+                                 curses.color_pair(_CP["header"]))
+                else:
+                    stdscr.addch(start_y + y, start_x + x, " ",
+                                 curses.color_pair(_CP["info"]))
+            except curses.error:
+                pass
+
+    # Draw text
+    for i, line in enumerate(lines):
+        y = start_y + 1 + i
+        if y >= h:
+            break
+        if i == 0:
+            cp = _CP["header"]
+            bold_style = True
+        elif " close" in line:
+            cp = _CP["dim"]
+            bold_style = False
+        elif line.startswith("  Type") or line.startswith("  Region") or \
+             line.startswith("  Prosperity") or line.startswith("  Health") or \
+             line.startswith("  Food") or line.startswith("  Economy") or \
+             line.startswith("  Religion") or line.startswith("  Founded") or \
+             line.startswith("  Population") or line.startswith("  Position"):
+            cp = _CP["info"]
+            bold_style = False
+        else:
+            cp = _CP["info"]
+            bold_style = False
+        _draw(stdscr, y, start_x + 2, line[:max_w - 2], cp, bold=bold_style)
 
 
 # ── Speed labels ──────────────────────────────────────────────────────
@@ -748,6 +906,12 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
     # Tile animation state: (x,y) -> remaining frames
     flash_tiles: dict[tuple[int, int], int] = {}
     FLASH_DURATION = 12  # frames to flash
+
+    # Settlement cursor state
+    settlement_list: list[dict] = []
+    cursor_idx: int = 0
+    selected_settlement: dict | None = None
+    show_settlement_popup: bool = False
 
     # Cache terrain for fast map rendering
     terrain = [[TERRAIN[world.terrain[y][x]]["char"]
@@ -828,6 +992,13 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
         sim_world = apply_sim_state_to_world(world, state)
         smap = _build_smap(sim_world)
 
+        # Rebuild settlement list for cursor navigation
+        settlement_list = _build_settlement_list(state)
+        if settlement_list and cursor_idx >= len(settlement_list):
+            cursor_idx = 0
+        if not settlement_list:
+            cursor_idx = 0
+
         # ── Layout ──────────────────────────────────────────────────
         events_h = max(3, h - 7 - 2)  # header(1)+stats(1)+map+events+footer(1)
         map_h = max(1, h - 7 - events_h - 1)
@@ -839,11 +1010,17 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
         _draw_stats(stdscr, state, speed)
         _render_map(stdscr, sim_world, smap, map_h, w, new_founds, flash_tiles, cur_month)
 
+        # Draw settlement cursor if we have settlements
+        if settlement_list and cursor_idx < len(settlement_list) and not show_settlement_popup:
+            _draw_settlement_cursor(stdscr, settlement_list[cursor_idx], 2)
+
         ev_start = 2 + map_h
         _draw_events(stdscr, events, events_h, ev_start, w)
         _draw_status_bar(stdscr, h, w, world.seed, cur_year, years, paused, speed, cur_month)
 
         # Overlays (last = on top)
+        if show_settlement_popup and selected_settlement:
+            _draw_settlement_popup(stdscr, selected_settlement, h, w)
         if show_diff:
             _draw_diff(stdscr, last_diff, h, w)
         if show_chart:
@@ -911,6 +1088,26 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
                 show_diff = not show_diff
             elif act == "help":
                 show_help = not show_help
+            elif act == "inspect":
+                if settlement_list and cursor_idx < len(settlement_list):
+                    if show_settlement_popup and selected_settlement:
+                        # Close popup
+                        show_settlement_popup = False
+                        selected_settlement = None
+                    else:
+                        # Open popup for current cursor position
+                        selected_settlement = settlement_list[cursor_idx]
+                        show_settlement_popup = True
+            elif act == "next_settlement":
+                if settlement_list:
+                    show_settlement_popup = False
+                    selected_settlement = None
+                    cursor_idx = (cursor_idx + 1) % len(settlement_list)
+            elif act == "prev_settlement":
+                if settlement_list:
+                    show_settlement_popup = False
+                    selected_settlement = None
+                    cursor_idx = (cursor_idx - 1) % len(settlement_list)
             key = stdscr.getch()
 
         if not paused:
