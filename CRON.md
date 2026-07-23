@@ -23,14 +23,34 @@ This is YOUR project. Make it beautiful and deep.
 
 ## Current state (2026-07-23)
 
-**Phase 18 (Depth & Quality) in progress. 722 tests pass — 44% faster test suite (87s vs 156s).**
+**Phase 18 (Depth & Quality) in progress. 758 tests pass — 36 new API tests. REST API v1 complete.**
 
 ### What was done this session
-1. **Resource map precomputation** — `_precompute_resource_maps()` in sim.py generates carrying capacity, food, and wealth maps for every cell at sim initialization. `_calculate_carrying_capacity()` and `_resource_availability()` use cached O(1) lookups instead of looping over a 11×11 radius per call. Maps are invalidated when cataclysm mutates terrain. Isolated lookup speedup: 125x.
+1. **REST API v1 (15 endpoints)** — Added comprehensive JSON REST API to the existing web dashboard server:
+   - `GET /api/v1` — API root with endpoint documentation
+   - `GET /api/v1/worlds` — List worlds (paginated)
+   - `GET /api/v1/worlds/<seed>` — World summary (not full dump)
+   - `GET /api/v1/worlds/<seed>/regions` — Regions with settlements
+   - `GET /api/v1/worlds/<seed>/settlements` — All settlements (flattened)
+   - `GET /api/v1/worlds/<seed>/characters` — Narrative characters
+   - `GET /api/v1/worlds/<seed>/quests` — Narrative quests
+   - `GET /api/v1/worlds/<seed>/events` — Merged narrative + sim events (chronological)
+   - `GET /api/v1/worlds/<seed>/factions` — Factions + relationships
+   - `GET /api/v1/worlds/<seed>/zones` — Adventure zones
+   - `GET /api/v1/worlds/<seed>/pantheon` — Religion/pantheon data
+   - `GET /api/v1/worlds/<seed>/economy` — Economy/trade data
+   - `GET /api/v1/worlds/<seed>/magic` — Magic system
+   - `GET /api/v1/worlds/<seed>/simulation` — Simulation summary
+   - `GET /api/v1/worlds/<seed>/snapshots` — Available snapshot years
+   - `GET /api/v1/worlds/<seed>/terrain` — Full terrain grid with elevation, rivers, landmarks
 
-2. **pytest-xdist parallel test execution** — Installed `pytest-xdist>=3.6`, added to `pyproject.toml` dev deps. Fixed test_serve.py fixture dependencies so all 722 tests pass with `--dist loadscope`. Tests run in 87s (4 workers) vs 156s serial — 44% faster.
+2. **Pagination** — `?limit=N&offset=M` on all list endpoints. Limit clamped to [1, 100].
 
-3. **Updated .gitignore** — `_profile_*` files ignored.
+3. **Standalone API server** — `wyrd api` starts a JSON-only server on port 9090. Also `wyrd serve --rest-port 9091` starts a sidecar API server alongside the dashboard.
+
+4. **36 new API tests** — Response shape validation, pagination edge cases, error states (404 for missing worlds, 400 for invalid seeds, 404 for unknown resources/endpoints).
+
+5. **API served alongside dashboard** — The existing `wyrd serve` now serves v1 JSON at `/api/v1/*` in addition to the HTML dashboard and legacy `/api/*` endpoints.
 
 ### Test command
 ```bash
@@ -65,7 +85,7 @@ python -m pytest tests/ -q
 
 ### What to tackle next — Phase 18: Depth & Quality
 
-The project is feature-complete. Every module exists, every CLI command works, 722 tests pass. Now the question is **depth** — making what's already there *richer* and *more cohesive* instead of adding more modules.
+The project is feature-complete. Every module exists, every CLI command works, 758 tests pass. Now the question is **depth** — making what's already there *richer* and *more cohesive* instead of adding more modules.
 
 Candidates for Phase 18 (pick one per session):
 
@@ -75,15 +95,14 @@ Candidates for Phase 18 (pick one per session):
 
 3. **🔲 World generation variety** — More terrain types (swamp, tundra, canyon, reef), biome-specific color palettes, weather patterns visible on the map.
 
-4. **🟡 Performance — 87s test suite (was 156s).** Resource map precomputation + pytest-xdist parallel execution. Next: profile and optimize noise gen, sim loop per-tick overhead.
+4. **🟢 REST API — v1 complete with 15 endpoints and 36 tests.** Next: API auth? GraphQL? WebSocket streams?
 
 5. **🔲 Bestiary depth** — *(Creature loot + encounter integration done ✅)* Full creature generation with stats, habitats, encounter tables, TTRPG integration already in place.
 
-6. **🔲 REST API** — Expose the world data as an HTTP API so external tools can consume it programmatically without running wyrd.
-
-7. **🔲 Multi-world interaction** — Trade, war, diplomacy between parallel worlds. Cross-world pantheon crossover. Portal events.
+6. **🔲 Multi-world interaction** — Trade, war, diplomacy between parallel worlds. Cross-world pantheon crossover. Portal events.
 
 ### Architecture notes
-- `src/__main__.py` — All CLI wiring. Module-level imports for render, redundant local imports removed.
-- `src/render.py` — All ANSI rendering. `render_map()` is the main map renderer.
-- 24 subcommands on `wyrd --help`
+- `src/__main__.py` — All CLI wiring. 25 subcommands on `wyrd --help` (added `api`).
+- `src/serve.py` — All web serving. Now includes REST API v1 handlers, pagination helpers, `serve_api()` function.
+- `src/render.py` — All ANSI rendering.
+- 25 subcommands on `wyrd --help`
