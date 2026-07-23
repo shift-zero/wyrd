@@ -12,6 +12,7 @@ From the gateway you can:
 import curses
 import glob
 import json
+import locale
 import os
 import random
 import re
@@ -610,6 +611,7 @@ def _gateway_loop(stdscr):
 
 def gateway_main():
     """Entry point for the gateway TUI."""
+    locale.setlocale(locale.LC_ALL, '')
     try:
         curses.wrapper(_gateway_loop)
     except KeyboardInterrupt:
