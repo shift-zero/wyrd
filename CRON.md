@@ -21,19 +21,17 @@ This is YOUR project. Make it beautiful and deep.
 
 ---
 
-## Current state (2026-07-26)
+## Current state (2026-07-27)
 
-### Phase 19 polish — Gateway TUI bugfix
+### Phase 19 — TTRPG export completeness + Gateway sort UX
 
-Fixed a visual bug where status messages in the gateway were invisible — rendered at the same line as the persistent status bar (h-3) which always overwrote them.
+Two fixes this session:
 
-Changes:
-1. **Moved status message to h-2, status bar to h-1** — status messages (e.g. "✅ Generated wyrd #42") now appear briefly above the persistent status bar before fading.
-2. **Recovered vertical space** — updated `max_visible` from h-5 to h-3 and detail panel height from h-3 to h-1, giving the world list and mini-map more room.
-3. **All 799 tests pass.**
+1. **TTRPG export: Added proper Faction dataclass data.** The `_build_faction_relationships` helper only read from `world.lore.relationships` (old region dicts), missing the full `Faction` dataclass in `world.factions`. Replaced with `_build_factions_section` that extracts influence, wealth, military, stability, goals, leader info, power_score, reputation, territory from proper Faction objects. Also extracts `FactionRelationship` objects from `world.faction_relationships`. Falls back to legacy `world.lore.relationships` for backward compatibility. All 24 TTRPG export tests pass.
+
+2. **Gateway sort UX.** Added sort direction indicators (↑/↓ arrows) in the gateway status bar hint. Added Shift+Backtab (curses.KEY_BTAB) to toggle sort direction without resetting selection. Tab still cycles through sort keys (seed/population/name) and resets to natural order.
 
 ### What to tackle next
-- Explore alternative renderers (SDL, terminal graphic modes) — biggest open item
-- Trade route map in gateway — full visualization of route network (render_trade_route_map exists but is terminal-only; consider curses inline overlay on detail card mini-map)
-- TTRPG export polish — add faction and zone sections to campaign JSON (both already present; verify completeness against world data model)  
-- Look for remaining visual bugs: check viewer, explorer, and embody TUI for similar overlay issues
+- **Explore alternative renderers (SDL, terminal graphic modes)** — biggest open item mentioned in CRON.md. Sixel graphics or a GTK/Qt viewer would give real map rendering instead of ASCII characters.
+- **Gateway trade route overlay** — replace the current `t` key `endwin()`→print→`initscr()` cycle with a curses inline overlay showing trade routes on a map.
+- **Look for remaining visual bugs** — check viewer, explorer, and embody TUI for overlay/rendering issues similar to the gateway fix in the previous session.
