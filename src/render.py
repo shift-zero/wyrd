@@ -45,9 +45,20 @@ def render_map(world: World, show_settlements: bool = True) -> str:
             if settlement_char:
                 row_chars.append(f"{_color(226)}{ANSI_BOLD}{settlement_char}{ANSI_RESET}")
             else:
-                # Check for adventure zone at this position
-                zone_char = None
-                zone_color = None
+                # Check for landmark at this position (from cataclysms)
+                landmark_char = None
+                landmark_color = None
+                for lm in world.landmarks:
+                    if lm.x == x and lm.y == y:
+                        landmark_char = lm.char
+                        landmark_color = lm.color
+                        break
+                if landmark_char:
+                    row_chars.append(f"{_color(landmark_color)}{ANSI_BOLD}{landmark_char}{ANSI_RESET}")
+                else:
+                    # Check for adventure zone at this position
+                    zone_char = None
+                    zone_color = None
                 for z in world.adventure_zones:
                     if z.x == x and z.y == y:
                         zone_char = z.char
@@ -73,6 +84,28 @@ def render_map(world: World, show_settlements: bool = True) -> str:
             f"  {_color(info['color'])}{ANSI_BOLD}{info['char']}{ANSI_RESET}  {info['desc']}"
         )
 
+    # Landmark legend (from cataclysms)
+    if world.landmarks:
+        unique_types = sorted(set(lm.landmark_type for lm in world.landmarks))
+        landmark_legend = {
+            "crater": ("⊙", 130, "Crater"), "chasm": ("≋", 240, "Chasm"),
+            "ash_waste": ("▒", 243, "Ash waste"), "magma_field": ("◉", 202, "Magma field"),
+            "drowned_coast": ("≈", 33, "Drowned coast"), "sinkhole": ("◎", 94, "Sinkhole"),
+            "petrified_forest": ("♧", 240, "Petrified forest"), "rift": ("╳", 196, "Rift"),
+            "scar": ("┅", 250, "Scar"),
+        }
+        lines.append(f"\n{ANSI_BOLD}Landmarks:{ANSI_RESET}")
+        for lt in unique_types:
+            if lt in landmark_legend:
+                ch, clr, desc = landmark_legend[lt]
+                lines.append(f"  {_color(clr)}{ANSI_BOLD}{ch}{ANSI_RESET}  {desc}")
+        for lm in world.landmarks:
+            year_str = f" (Y{lm.cataclysm_year})" if lm.cataclysm_year else ""
+            lines.append(
+                f"    {_color(lm.color)}{lm.char}{ANSI_RESET}  "
+                f"{ANSI_BOLD}{lm.name}{ANSI_RESET}{year_str}"
+            )
+
     # Region list
     lines.append(f"\n{ANSI_BOLD}Regions:{ANSI_RESET}")
     for region in world.regions:
@@ -81,6 +114,41 @@ def render_map(world: World, show_settlements: bool = True) -> str:
         )
         lines.append(f"  {ANSI_BOLD}{region.name}{ANSI_RESET} — {settlements}")
 
+    return "\n".join(lines)
+
+
+def render_landmarks(world: World) -> str:
+    """Render a detailed view of all cataclysm-created landmarks."""
+    if not world.landmarks:
+        return ""
+
+    from .cataclysm import CATASTROPHE_TYPES
+    lines = []
+    lines.append(f"{ANSI_BOLD}═══════════════════════════════════════════{ANSI_RESET}")
+    lines.append(f"{ANSI_BOLD}  Landmarks — Marks of Catastrophe{ANSI_RESET}")
+    lines.append(f"{ANSI_BOLD}═══════════════════════════════════════════{ANSI_RESET}")
+
+    cataclysm_icons = {
+        "earthquake": "💢", "volcanic_eruption": "🌋", "great_plague": "☠",
+        "tsunami": "🌊", "meteor_strike": "☄", "great_fire": "🔥",
+        "magical_cataclysm": "⚡",
+    }
+
+    for i, lm in enumerate(world.landmarks):
+        icon = cataclysm_icons.get(lm.cataclysm_type, "◆")
+        year_str = f"Year {lm.cataclysm_year}" if lm.cataclysm_year else "Unknown year"
+        region_str = f" in {lm.region}" if lm.region else ""
+        lines.append("")
+        lines.append(
+            f"  {_color(lm.color)}{lm.char}{ANSI_RESET}  "
+            f"{ANSI_BOLD}{lm.name}{ANSI_RESET}  "
+            f"{ANSI_DIM}({icon} {lm.cataclysm_type}, {year_str}{region_str}){ANSI_RESET}"
+        )
+        lines.append(f"       {ANSI_DIM}{lm.description}{ANSI_RESET}")
+        lines.append(f"       {ANSI_DIM}at ({lm.x}, {lm.y}){ANSI_RESET}")
+
+    lines.append("")
+    lines.append(f"{ANSI_DIM}Total: {len(world.landmarks)} landmark{'s' if len(world.landmarks) != 1 else ''}{ANSI_RESET}")
     return "\n".join(lines)
 
 
