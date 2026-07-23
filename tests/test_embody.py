@@ -28,6 +28,9 @@ from src.embody import (
     _render_travel_options,
     _advance_year,
     _OCCUPATIONS,
+    _record_legacy_event,
+    _record_deed,
+    _render_epilogue,
 )
 from src.sim import initialize_sim_state
 
@@ -804,3 +807,159 @@ class TestScenarioFunctions:
         events = [SimEvent(year=10, event_type="exodus", description="Exodus", affected_settlements=["Town"])]
         result = _maybe_exodus_scenario(pc, None, random.Random(42), events)
         assert result is not None and result.event_type == "exodus"
+
+
+# ── Legacy Tracking & Multi-Generational Tests (Phase 17 Items 3 & 6) ──
+
+
+class TestLegacyTracking:
+    """Legacy event and deed tracking."""
+
+    def test_record_legacy_event(self):
+        """Record a legacy event with year prefix."""
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer", year=42)
+        _record_legacy_event(pc, "Found a treasure")
+        assert len(pc.legacy_events) == 1
+        assert pc.legacy_events[0] == "Y42: Found a treasure"
+
+    def test_record_multiple_events(self):
+        """Multiple legacy events accumulate."""
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer", year=5)
+        _record_legacy_event(pc, "First event")
+        _record_legacy_event(pc, "Second event")
+        assert len(pc.legacy_events) == 2
+
+    def test_record_deed(self):
+        """Record a deed."""
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        _record_deed(pc, "Fought in a war")
+        assert "Fought in a war" in pc.deeds
+
+    def test_no_duplicate_deeds(self):
+        """Same deed is not recorded twice."""
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        _record_deed(pc, "Fought in a war")
+        _record_deed(pc, "Fought in a war")
+        assert len(pc.deeds) == 1
+
+    def test_deed_uniqueness(self):
+        """Different deeds are all recorded."""
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        _record_deed(pc, "Fought in a war")
+        _record_deed(pc, "Helped the sick")
+        assert len(pc.deeds) == 2
+
+    def test_legacy_fields_in_to_dict(self):
+        """Legacy fields are serialized."""
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        pc.legacy_events.append("Y10: Fought bravely")
+        pc.deeds.append("Knighted")
+        pc.settlements_visited.append("Kronar")
+        pc.total_gold_earned = 500
+        pc.total_gold_spent = 200
+        d = pc.to_dict()
+        assert "legacy_events" in d
+        assert "deeds" in d
+        assert "settlements_visited" in d
+        assert "total_gold_earned" in d
+        assert "total_gold_spent" in d
+
+    def test_legacy_fields_survive_roundtrip(self):
+        """Legacy fields survive save/load round-trip."""
+        import os
+        from src.embody import save_character, load_character, _save_path
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer",
+                             year=10)
+        _record_deed(pc, "Fought in a war")
+        _record_legacy_event(pc, "War in Telvan")
+        pc.total_gold_earned = 500
+        pc.total_gold_spent = 100
+        pc.settlements_visited.append("Kronar")
+        try:
+            save_character(pc, 9999)
+            loaded = load_character(9999)
+            assert loaded is not None
+            assert len(loaded.deeds) == 1
+            assert len(loaded.legacy_events) == 1
+            assert loaded.total_gold_earned == 500
+            assert loaded.total_gold_spent == 100
+            assert len(loaded.settlements_visited) == 1
+        finally:
+            path = _save_path(9999)
+            if os.path.exists(path):
+                os.remove(path)
+
+
+class TestRenderEpilogue:
+    """Death epilogue rendering."""
+
+    def test_render_epilogue_basic(self):
+        """Epilogue renders with basic stats."""
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer",
+                             age=52, year=34, gold=250)
+        pc.total_gold_earned = 800
+        pc.total_gold_spent = 550
+        result = _render_epilogue(pc)
+        assert "Rikard" in result
+        assert "Life Ledger" in result
+        assert "800" in result  # Total gold earned
+        assert "250" in result  # Final wealth
+        assert "The wyrd remembers" in result
+
+    def test_epilogue_shows_deeds(self):
+        """Epilogue includes deeds."""
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        _record_deed(pc, "Fought in a war")
+        result = _render_epilogue(pc)
+        assert "Notable Deeds" in result
+        assert "Fought in a war" in result
+
+    def test_epilogue_shows_events(self):
+        """Epilogue includes witnessed events."""
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        _record_legacy_event(pc, "War in Telvan")
+        result = _render_epilogue(pc)
+        assert "They Witnessed" in result
+        assert "War in Telvan" in result
+
+    def test_epilogue_shows_parent(self):
+        """Epilogue shows parent name for multi-generational."""
+        pc = PlayerCharacter(name="Elara", settlement="Kronar",
+                             region="Telvan", profession="farmer",
+                             parent_name="Rikard")
+        result = _render_epilogue(pc)
+        assert "Child of" in result
+        assert "Rikard" in result
+
+    def test_epilogue_last_words(self):
+        """Epilogue includes last words."""
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        result = _render_epilogue(pc)
+        # Should have at least one quote character
+        assert '"' in result or '"' in result
+
+    def test_epilogue_visited_settlements(self):
+        """Epilogue shows visited settlements."""
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        pc.settlements_visited.extend(["Kronar", "Mistharbor", "Thornwall"])
+        result = _render_epilogue(pc)
+        assert "Places lived" in result
+
+    def test_epilogue_no_crash_empty(self):
+        """Epilogue doesn't crash with minimal character."""
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer", age=0, year=0)
+        result = _render_epilogue(pc)
+        assert result  # Should produce output

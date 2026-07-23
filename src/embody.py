@@ -44,6 +44,13 @@ class PlayerCharacter:
     alive: bool = True
     inventory: list[str] = field(default_factory=list)
     sim_year_advanced: int = 0  # Total sim years that have been ticked
+    # Life legacy tracking (Phase 17 Items 3 & 6)
+    legacy_events: list[str] = field(default_factory=list)  # Major life events
+    settlements_visited: list[str] = field(default_factory=list)  # Places lived/visited
+    total_gold_earned: int = 0
+    total_gold_spent: int = 0
+    deeds: list[str] = field(default_factory=list)  # Notable accomplishments
+    parent_name: str | None = None  # For multi-generational tracking
 
     def to_dict(self) -> dict:
         """Serialize to a JSON-compatible dict."""
@@ -59,6 +66,12 @@ class PlayerCharacter:
             "alive": self.alive,
             "inventory": self.inventory,
             "sim_year_advanced": self.sim_year_advanced,
+            "legacy_events": self.legacy_events,
+            "settlements_visited": self.settlements_visited,
+            "total_gold_earned": self.total_gold_earned,
+            "total_gold_spent": self.total_gold_spent,
+            "deeds": self.deeds,
+            "parent_name": self.parent_name,
         }
 
     @classmethod
@@ -743,6 +756,7 @@ def _handle_interactive_events(char: PlayerCharacter, world: World,
     """Check for interactive events and prompt the player for choices.
     
     Called after each year's sim tick. At most 2 scenarios per year.
+    Tracks gold, deeds, and legacy events.
     """
     choices = _get_interactive_events(char, world, rng, events)
     if not choices:
@@ -764,6 +778,12 @@ def _handle_interactive_events(char: PlayerCharacter, world: World,
         opt_idx = int(raw) - 1
         outcome, label = _resolve_choice(sc, opt_idx, char, world, rng)
 
+        # Track gold before applying
+        if outcome.gold_delta > 0:
+            char.total_gold_earned += outcome.gold_delta
+        elif outcome.gold_delta < 0:
+            char.total_gold_spent += abs(outcome.gold_delta)
+
         # Apply consequences
         char.gold += outcome.gold_delta
         char.health = max(0, min(100, char.health + outcome.health_delta))
@@ -772,6 +792,29 @@ def _handle_interactive_events(char: PlayerCharacter, world: World,
                 char.inventory.append(outcome.inventory_add)
         if outcome.travel_dest:
             char.settlement = outcome.travel_dest
+            if outcome.travel_dest not in char.settlements_visited:
+                char.settlements_visited.append(outcome.travel_dest)
+
+        # Record deeds for notable choices
+        if sc.event_type == "war" and opt_idx == 0:
+            _record_deed(char, "Fought in a war")
+        elif sc.event_type == "plague" and opt_idx == 0:
+            _record_deed(char, "Helped the sick during a plague")
+        elif sc.event_type == "discovery" and opt_idx == 0:
+            _record_deed(char, "Explored ancient ruins")
+        elif sc.event_type == "stranger" and opt_idx == 0:
+            _record_deed(char, "Showed kindness to a stranger")
+        elif sc.event_type == "exodus" and opt_idx == 0:
+            _record_deed(char, "Joined an exodus to new lands")
+        elif sc.event_type == "exodus" and opt_idx == 1:
+            _record_deed(char, "Stayed to rebuild after an exodus")
+        elif sc.event_type == "religious" and opt_idx == 0:
+            _record_deed(char, "Joined a religious procession")
+        elif sc.event_type == "merchant" and opt_idx == 0:
+            _record_deed(char, "Invested in trade")
+
+        # Record legacy event
+        _record_legacy_event(char, f"{label} — {outcome.description[:60]}")
 
         if outcome.health_delta < 0:
             color_fn = _color(196)
@@ -793,6 +836,11 @@ def _handle_interactive_events(char: PlayerCharacter, world: World,
 
         suffix = f"{gold_str}{health_str}" if gold_str or health_str else ""
         print(f"  {label}: {outcome.description}{suffix}")
+
+        # Check death from choice
+        if char.health <= 0:
+            char.alive = False
+            print(f"\n  {ANSI_BOLD}{_color(196)}Your wounds prove fatal.{ANSI_RESET}")
 
         if outcome.travel_dest:
             print(f"  🚶 You arrive in {_color(45)}{outcome.travel_dest}{ANSI_RESET}.")
@@ -855,6 +903,12 @@ def _prompt(char: PlayerCharacter, world: World,
         print(f"  Health: {char.health}/100")
         print(f"  Age: {char.age}")
         print(f"  Inventory: {', '.join(char.inventory) if char.inventory else 'nothing yet'}")
+        if char.deeds:
+            print(f"  Deeds: {', '.join(char.deeds[:3])}"
+                  f"{'…' if len(char.deeds) > 3 else ''}")
+        if char.settlements_visited:
+            print(f"  Places: {', '.join(char.settlements_visited[:5])}"
+                  f"{'…' if len(char.settlements_visited) > 5 else ''}")
     elif cmd == "t":
         _handle_travel(char, world)
     elif cmd == "n":
@@ -899,6 +953,11 @@ def _handle_travel(char: PlayerCharacter, world: World) -> None:
 
     print(f"  🚶 You travel to {ANSI_BOLD}{dest_name}{ANSI_RESET}...")
     char.settlement = dest_name
+    # Track visited settlement
+    if dest_name not in char.settlements_visited:
+        char.settlements_visited.append(dest_name)
+        if len(char.settlements_visited) >= 3:
+            _record_deed(char, f"Visited {len(char.settlements_visited)} settlements")
     char.year += 1  # Travel takes a year
     print(f"  You arrive safely.")
 
@@ -930,6 +989,18 @@ def _advance_year(char: PlayerCharacter, world: World,
 
     # Run one sim tick
     events = _simulate_tick(world, state, rng, char.year, chaos)
+
+    # Record notable events in legacy
+    for ev in events[-5:]:  # Check recent events
+        if ev.event_type in ("founding", "abandonment", "war", "faction_war",
+                             "earthquake", "volcanic_eruption", "great_plague",
+                             "tsunami", "meteor_strike", "great_fire", "magical_cataclysm",
+                             "faction_collapse", "discovery"):
+            if char.settlement in (ev.affected_settlements or []):
+                _record_legacy_event(char, f"{ev.event_type.replace('_', ' ')} in {char.settlement}")
+            elif char.region in (ev.affected_regions or []):
+                _record_legacy_event(char, f"{ev.event_type.replace('_', ' ')} in {char.region}")
+
     return events
 
 
@@ -979,6 +1050,73 @@ def _save_path_for_world(world: "World") -> str:
 def _auto_save(char: PlayerCharacter, world: "World") -> None:
     """Auto-save the character state."""
     save_character(char, world.seed)
+
+
+def _record_legacy_event(char: PlayerCharacter, event: str) -> None:
+    """Record a major life event with the current year."""
+    char.legacy_events.append(f"Y{char.year}: {event}")
+
+
+def _record_deed(char: PlayerCharacter, deed: str) -> None:
+    """Record a notable accomplishment."""
+    if deed not in char.deeds:
+        char.deeds.append(deed)
+
+
+def _render_epilogue(char: PlayerCharacter) -> str:
+    """Render a meaningful death epilogue with Life Ledger."""
+    lines = []
+    lines.append(f"\n  {ANSI_BOLD}{_color(196)}═══ {char.name} has died ═══{ANSI_RESET}")
+    lines.append("")
+    lines.append(f"  {ANSI_BOLD}Life Ledger{ANSI_RESET}")
+    lines.append(f"  {'─' * 50}")
+    lines.append(f"  Age at death:    {char.age}")
+    years_active = char.year - max(0, char.age - 18) if char.age > 18 else char.year
+    lines.append(f"  Years adventuring: {years_active}")
+    lines.append(f"  Gold accumulated: {char.total_gold_earned}")
+    lines.append(f"  Gold spent:       {char.total_gold_spent}")
+    lines.append(f"  Final wealth:     {char.gold}")
+    lines.append(f"  Places lived:     {len(char.settlements_visited) or 1}")
+    if char.settlements_visited:
+        lines.append(f"  {' '.join(char.settlements_visited[:5])}"
+                     f"{'…' if len(char.settlements_visited) > 5 else ''}")
+
+    if char.deeds:
+        lines.append("")
+        lines.append(f"  {ANSI_BOLD}Notable Deeds{ANSI_RESET}")
+        for deed in char.deeds:
+            lines.append(f"    ⚜ {deed}")
+
+    if char.legacy_events:
+        lines.append("")
+        lines.append(f"  {ANSI_BOLD}They Witnessed{ANSI_RESET}")
+        for ev in char.legacy_events[-5:]:  # Last 5 events
+            lines.append(f"    📜 {ev}")
+
+    lines.append("")
+    # Last words
+    last_words_list = [
+        "\"I have seen wonders beyond counting…\"",
+        "\"Tell them I died with my boots on.\"",
+        "\"The world endures. So shall we all.\"",
+        "\"My story ends, but the wyrd spins on.\"",
+        "\"I regret nothing.\"",
+        "\"Gold… was it worth it?\"",
+        "\"Bury me in the highlands, where the wind sings.\"",
+        "\"I would have liked to see one more spring.\"",
+    ]
+    import random as rnd_mod
+    rng = rnd_mod.Random(str(char))
+    lines.append(f"  {ANSI_DIM}{rng.choice(last_words_list)}{ANSI_RESET}")
+
+    if char.parent_name:
+        lines.append("")
+        lines.append(f"  {ANSI_DIM}Child of {char.parent_name}{ANSI_RESET}")
+
+    lines.append("")
+    lines.append(f"  {ANSI_BOLD}{_color(226)}The wyrd remembers.{ANSI_RESET}")
+    lines.append(f"  {'─' * 50}")
+    return "\n".join(lines)
 
 
 def _make_weather() -> str:
@@ -1059,16 +1197,74 @@ def embody_play(world: World,
             # Interactive event choices (Phase 17, Item 4)
             _handle_interactive_events(char, world, rng, events)
 
-    # Epilogue
+    # Epilogue — meaningful death with Life Ledger
     if not char.alive:
-        print(f"\n  {ANSI_BOLD}{_color(196)}═══ {char.name} has died ═══{ANSI_RESET}")
-        print(f"  Aged {char.age}, in {char.settlement}.")
-        print(f"  They lived through {char.year} years of the world's history.")
+        print(_render_epilogue(char))
         # Remove save on death
         path = _save_path(world.seed)
         if os.path.exists(path):
             os.remove(path)
             print(f"  {ANSI_DIM}🗑 Character save removed.{ANSI_RESET}")
+
+        # Multi-generational: offer to continue as an heir (Phase 17, Item 6)
+        print(f"\n  {_color(226)}The wyrd spins on...{ANSI_RESET}")
+        print(f"  {ANSI_DIM}Another thread remains to be woven.{ANSI_RESET}")
+        continue_str = input(
+            f"  {_color(226)}Continue as an heir?{ANSI_RESET} "
+            f"({ANSI_BOLD}y{ANSI_RESET}/n): ").strip().lower()
+        if continue_str != "n":
+            # Generate heir
+            rng_heir = random.Random(world.seed + 6000000 + char.year)
+            first_names = ["Aldric", "Beorn", "Cedric", "Elara", "Freya",
+                           "Gareth", "Hakon", "Ivar", "Kara", "Leif",
+                           "Mira", "Nora", "Orin", "Runa", "Sigurd",
+                           "Tova", "Ulf", "Vera", "Astrid", "Brynn"]
+            surname = char.name.split()[-1] if " " in char.name else "sson"
+            heir_name = f"{rng_heir.choice(first_names)} {surname}"
+
+            # Inherit partial wealth and inventory
+            heir_gold = max(20, char.gold // 2)
+            heir_inventory = [
+                item for item in char.inventory
+                if item not in ("a cryptic note", "an old map")  # Personal items lost
+            ][:3]  # Max 3 items inherited
+
+            heir = PlayerCharacter(
+                name=heir_name,
+                settlement=char.settlement,
+                region=char.region,
+                profession=_OCCUPATIONS[rng_heir.randint(0, len(_OCCUPATIONS) - 1)],
+                gold=heir_gold,
+                health=100,
+                age=rng_heir.randint(16, 25),
+                year=char.year,
+                inventory=heir_inventory,
+                parent_name=char.name,
+            )
+            # Heir inherits visited settlements knowledge
+            heir.settlements_visited = [s for s in char.settlements_visited if s]
+            # Record birth in legacy
+            _record_legacy_event(heir, f"Born as heir of {char.name}")
+            if char.deeds:
+                _record_legacy_event(heir, f"Inherits the legacy of {char.name}")
+
+            print(f"\n  {ANSI_BOLD}{_color(45)}═══ A New Chapter ═══{ANSI_RESET}")
+            print(f"  {ANSI_BOLD}{heir_name}{ANSI_RESET}, "
+                  f"a {ANSI_DIM}{heir.profession}{ANSI_RESET}, "
+                  f"carries on the line.")
+            print(f"  Child of {ANSI_BOLD}{char.name}{ANSI_RESET}.")
+            if heir_inventory:
+                print(f"  Inherited: {', '.join(heir_inventory)}")
+
+            # Save heir and continue
+            save_character(heir, world.seed)
+            print(f"  {ANSI_DIM}💾 Heir saved. Run 'wyrd embody --seed {world.seed}' to continue.{ANSI_RESET}")
+
+            # Recursive call with heir
+            embody_play(world, name=heir_name, years=years,
+                       chaos=chaos, load_save=True)
+        else:
+            print(f"\n  {ANSI_DIM}The line ends here. The world continues without you.{ANSI_RESET}")
     else:
         print(f"\n  {ANSI_DIM}Your journey ends... for now.{ANSI_RESET}")
         print(f"  {char.name} lived to age {char.age} "
