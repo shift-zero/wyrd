@@ -19,10 +19,12 @@ from .sim import (
     simulate_years,
     apply_sim_state_to_world, SimState, SimEvent,
 )
+from .economy import reconstruct_routes
 
-# ── Color pairs (1-58) ───────────────────────────────────────────────
+# ── Color pairs (1-60) ───────────────────────────────────────────────
 # Pairs 1-22: base terrain + UI
 # Pairs 23-58: seasonal terrain variants (4 seasons × 9 terrain types)
+# Pairs 59-60: trade routes
 
 _CP = {
     "deep_water": 1, "shallow": 2, "sand": 3, "grass": 4,
@@ -43,6 +45,7 @@ _CP = {
     "win_deep_water": 50, "win_shallow": 51, "win_sand": 52,
     "win_grass": 53, "win_forest": 54, "win_hills": 55,
     "win_mountains": 56, "win_snow": 57, "win_river": 58,
+    "trade_route": 59, "trade_dot": 60,
 }
 
 SEASONS = ["winter", "spring", "summer", "autumn"]  # N+Earth seasons
@@ -174,6 +177,9 @@ def _init():
     curses.init_pair(56, 145, -1)   # win_mountains — cold grey
     curses.init_pair(57, 255, -1)   # win_snow — brilliant white
     curses.init_pair(58, 38, -1)    # win_river — icy cyan
+    # Trade route pairs (Phase 19)
+    curses.init_pair(59, 220, -1)   # trade_route — gold
+    curses.init_pair(60, 226, -1)   # trade_dot — bright gold
 
 
 def _cp(terrain_key: str) -> int:
@@ -362,6 +368,98 @@ def _draw_pause_notification(stdscr, msg: str | None, frames_left: int, h: int, 
     cp = _CP["status"] if frames_left // 6 % 2 == 0 else _CP["accent"]
     _fill_line(stdscr, 2, _CP["header"])
     _draw(stdscr, 2, 2, text, cp, bold=True)
+
+
+# ── Trade route animation (Phase 19) ──────────────────────────────────
+
+
+def _bresenham_line(x0: int, y0: int, x1: int, y1: int):
+    """Yield (x, y) points along a line from (x0,y0) to (x1,y1)."""
+    dx = abs(x1 - x0)
+    dy = -abs(y1 - y0)
+    sx = 1 if x0 < x1 else -1
+    sy = 1 if y0 < y1 else -1
+    err = dx + dy
+    x, y = x0, y0
+    while True:
+        yield x, y
+        if x == x1 and y == y1:
+            break
+        e2 = 2 * err
+        if e2 >= dy:
+            err += dy
+            x += sx
+        if e2 <= dx:
+            err += dx
+            y += sy
+
+
+def _draw_trade_routes(stdscr, state: SimState, smap: dict,
+                       frame_count: int, map_h: int, w: int,
+                       paused: bool):
+    """Draw trade route lines with animated moving dots.
+
+    Active routes show a dotted line between settlements and a
+    moving ◆ dot that travels from source to destination.
+    Dots only animate when unpaused.
+    """
+    route_dicts = getattr(state, 'trade_routes', [])
+    if not route_dicts:
+        return
+
+    routes = reconstruct_routes(route_dicts)
+    settlements = state.settlements
+    route_cp = _CP["trade_route"]
+    dot_cp = _CP["trade_dot"]
+
+    for route in routes:
+        if not route.is_active:
+            continue
+
+        src_ss = settlements.get(route.source)
+        dst_ss = settlements.get(route.destination)
+        if not src_ss or not dst_ss:
+            continue
+
+        # Screen coordinates: map starts at row 2
+        x1, y1 = src_ss.x, 2 + src_ss.y
+        x2, y2 = dst_ss.x, 2 + dst_ss.y
+
+        # Skip if off-screen
+        if max(y1, y2) > 2 + map_h or min(y1, y2) < 2:
+            continue
+
+        # Get all points along the line
+        points = list(_bresenham_line(x1, y1, x2, y2))
+        if len(points) < 2:
+            continue
+
+        # Draw route line (faint dots along the path)
+        for px, py in points:
+            if (px, py) == (x1, y1) or (px, py) == (x2, y2):
+                continue  # Don't draw over settlement chars
+            try:
+                stdscr.addch(py, px, '·', curses.color_pair(route_cp) | curses.A_DIM)
+            except curses.error:
+                pass
+
+        # Animated dot position
+        # Use a stable hash for phase offset so each route has unique timing
+        phase = (hash(route.source + route.destination) & 0xFFFF) / 65536.0
+        if paused:
+            t = phase  # Static position when paused
+        else:
+            t = (frame_count * 0.03 + phase) % 1.0
+
+        dot_idx = int(t * (len(points) - 1))
+        dot_x, dot_y = points[dot_idx]
+
+        # Don't draw dot over settlement chars
+        if (dot_x, dot_y) != (x1, y1) and (dot_x, dot_y) != (x2, y2):
+            try:
+                stdscr.addch(dot_y, dot_x, '◆', curses.color_pair(dot_cp) | curses.A_BOLD)
+            except curses.error:
+                pass
 
 
 # ── Population chart overlay ─────────────────────────────────────────
@@ -683,6 +781,11 @@ VIEWER_HELP = [
     "    A flashing banner shows what triggered the pause.",
     "    Press Space to resume watching.",
     "",
+    "  Trade Routes",
+    "    Gold dotted lines show active trade between settlements.",
+    "    A moving ◆ indicates goods in transit.",
+    "    Routes form between complementary economies.",
+    "",
     "  Tip: Watch the map evolve as centuries pass.",
     "       Use [ and ] to highlight settlements, then press 'i'.",
     "       New settlements appear in green.",
@@ -952,6 +1055,7 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
     accum = 0.0
     new_founds: set = set()
     total_simmed = 0
+    frame_count = 0  # for trade route animation
 
     # Year-diff tracking
     prev_snapshot: dict | None = None
@@ -990,6 +1094,7 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
         if h < 10 or w < 50:
             time.sleep(0.5)
             continue
+        frame_count += 1
 
         # ── Advance sim (month-level ticks) ────────────────────────────
         if not paused and cur_year < years:
@@ -1107,6 +1212,9 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
         if paused:
             _draw_change_overlay(stdscr, state, last_diff, map_h)
 
+        # Draw trade route animation (Phase 19)
+        _draw_trade_routes(stdscr, state, smap, frame_count, map_h, w, paused)
+
         # Draw settlement cursor if we have settlements
         if settlement_list and cursor_idx < len(settlement_list) and not show_settlement_popup:
             _draw_settlement_cursor(stdscr, settlement_list[cursor_idx], 2)
@@ -1179,6 +1287,17 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
                             ss = state.settlements.get(name)
                             if ss:
                                 flash_tiles[(ss.x, ss.y)] = FLASH_DURATION
+
+                    # Show auto-pause banner on step if significant event occurred
+                    step_pause_msg = None
+                    for ev in reversed(events[-12:]):
+                        if ev.event_type in PAUSE_EVENT_TYPES:
+                            icon = _EVENT_ICON.get(ev.event_type, "●")
+                            step_pause_msg = f" ⏸ {icon} {ev.description[:70]}"
+                            break
+                    if step_pause_msg:
+                        auto_pause_msg = step_pause_msg
+                        auto_pause_frames = AUTO_PAUSE_SHOW_FRAMES
             elif act == "toggle_chart":
                 show_chart = not show_chart
             elif act == "toggle_diff":
