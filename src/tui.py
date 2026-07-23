@@ -206,7 +206,7 @@ class SimScreen(Screen):
     BINDINGS = [
         Binding("q", "app.quit", "Quit"),
         Binding("s", "toggle_settlements", "Settlements"),
-        Binding("r", "refresh", "Refresh"),
+        Binding("r", "reset", "Reset Sim"),
         Binding("space", "toggle_sim", "Run/Pause"),
         Binding("right", "step_year", "Step →"),
         Binding("plus", "speed_up", "Speed +"),
@@ -288,8 +288,36 @@ class SimScreen(Screen):
         map_widget.render_map(self.world)
 
     def action_refresh(self) -> None:
+        """Refresh the map display (re-draw from current state)."""
+        map_widget = self.query_one(SimMapWidget)
+        if self.sim_state is not None:
+            sim_world = apply_sim_state_to_world(self.world, self.sim_state)
+            map_widget.render_map(sim_world)
+        else:
+            map_widget.render_map(self.world)
+
+    def action_reset(self) -> None:
+        """Reset the simulation: rewind to year 0, clear events."""
+        # Stop sim if running
+        if self.sim_running:
+            self._pause_sim()
+        # Reset sim state
+        self.sim_state = initialize_sim_state(self.world)
+        self.sim_rng = random.Random(self.world.seed + 4000000)
+        self.sim_events = []
+        self.sim_year = 0
+        self._event_count = 0
+        self._prev_snapshot = None
+        self._last_diff = None
+        self._show_diff = False
+        # Clear event log
+        log = self.query_one(EventLogWidget)
+        log.clear_events()
+        log.write("[dim]Simulation reset. Press [bold]Space[/] to start again.[/]")
+        # Restore original world map
         map_widget = self.query_one(SimMapWidget)
         map_widget.render_map(self.world)
+        self._update_ui_state()
 
     def action_show_help(self) -> None:
         self.push_screen(HelpScreen())
@@ -533,7 +561,7 @@ class HelpScreen(Screen):
             "",
             "[bold]Map Controls[/]",
             "  [yellow]s[/]        Toggle settlement markers",
-            "  [yellow]r[/]        Refresh map",
+            "  [yellow]r[/]        Reset simulation (rewind to year 0)",
             "",
             "[bold]Simulation[/]",
             "  [yellow]Space[/]    Start / Pause simulation",

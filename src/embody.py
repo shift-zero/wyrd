@@ -11,6 +11,8 @@ Usage:
     wyrd embody --seed 42 --years 500
 """
 
+import json
+import os
 import random
 import sys
 from dataclasses import dataclass, field
@@ -41,6 +43,30 @@ class PlayerCharacter:
     year: int = 0
     alive: bool = True
     inventory: list[str] = field(default_factory=list)
+    sim_year_advanced: int = 0  # Total sim years that have been ticked
+
+    def to_dict(self) -> dict:
+        """Serialize to a JSON-compatible dict."""
+        return {
+            "name": self.name,
+            "settlement": self.settlement,
+            "region": self.region,
+            "profession": self.profession,
+            "gold": self.gold,
+            "health": self.health,
+            "age": self.age,
+            "year": self.year,
+            "alive": self.alive,
+            "inventory": self.inventory,
+            "sim_year_advanced": self.sim_year_advanced,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "PlayerCharacter":
+        """Deserialize from a dict."""
+        return cls(**{k: data.get(k, v)
+                       for k, v in cls.__dataclass_fields__.items()
+                       if k in data})  # type: ignore
 
 
 _OCCUPATIONS = [
@@ -374,6 +400,51 @@ def _advance_year(char: PlayerCharacter, world: World,
 # ── Entry Point ───────────────────────────────────────────────────────
 
 
+# ── Persistence ────────────────────────────────────────────────────
+
+
+def _save_path(seed: int) -> str:
+    """Get the character save file path for a given world seed."""
+    return f"wyrd-{seed}-char.json"
+
+
+def save_character(char: PlayerCharacter, seed: int) -> None:
+    """Save the player character to a JSON file."""
+    path = _save_path(seed)
+    data = {
+        "wyrd_version": "0.1.0",
+        "seed": seed,
+        "character": char.to_dict(),
+    }
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def load_character(seed: int) -> PlayerCharacter | None:
+    """Load a saved player character from a JSON file.
+    Returns None if no save exists.
+    """
+    path = _save_path(seed)
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        return PlayerCharacter.from_dict(data.get("character", {}))
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return None
+
+
+def _save_path_for_world(world: "World") -> str:
+    """Get character save path from a world object."""
+    return _save_path(world.seed)
+
+
+def _auto_save(char: PlayerCharacter, world: "World") -> None:
+    """Auto-save the character state."""
+    save_character(char, world.seed)
+
+
 def _make_weather() -> str:
     return random.choice([
         "The sky is clear.",
@@ -392,22 +463,42 @@ def _make_weather() -> str:
 def embody_play(world: World,
                 name: str | None = None,
                 years: int = 100,
-                chaos: float = 0.3) -> None:
+                chaos: float = 0.3,
+                load_save: bool = True) -> None:
     """Enter the embodied play mode for a world.
 
     Args:
         world: A generated world
-        name: Optional character name
+        name: Optional character name (ignored if loading a save)
         years: Max years to simulate
         chaos: Chaos factor for simulation
+        load_save: If True, try to load a saved character state
     """
     rng = random.Random(world.seed + 5000000)
 
-    # Generate the player character
-    char = _generate_character(world, rng, name=name)
+    # Try to load saved character state
+    char: PlayerCharacter | None = None
+    loaded = False
+    if load_save:
+        char = load_character(world.seed)
+        if char is not None:
+            loaded = True
+            print(f"  {ANSI_DIM}📂 Loaded saved character: {char.name} (Year {char.year}){ANSI_RESET}")
+
+    if char is None:
+        # Generate the player character
+        char = _generate_character(world, rng, name=name)
 
     # Initialize sim state
     state = initialize_sim_state(world)
+
+    # If loading from save, fast-forward sim to the character's year
+    if loaded and char.year > 0:
+        from .sim import simulate_years
+        simulate_years(world, state, rng, char.year, chaos)
+        # Re-apply sim state to world for accurate rendering
+        apply_sim_state_to_world(world, state)
+        print(f"  {ANSI_DIM}Catching up the world... Year {char.year} restored.{ANSI_RESET}")
 
     print(f"\n  {ANSI_BOLD}{_color(45)}wyrd — seed {world.seed}{ANSI_RESET}")
     print(_render_welcome(char, world, char.region))
@@ -424,6 +515,8 @@ def embody_play(world: World,
         if running and char.alive:
             new_events = _advance_year(char, world, state, rng, chaos)
             events.extend(new_events)
+            # Auto-save after each year
+            _auto_save(char, world)
             print(f"\n  {_color(45)}Year {char.year}{ANSI_RESET} — "
                   f"{_make_weather()}")
 
@@ -432,10 +525,16 @@ def embody_play(world: World,
         print(f"\n  {ANSI_BOLD}{_color(196)}═══ {char.name} has died ═══{ANSI_RESET}")
         print(f"  Aged {char.age}, in {char.settlement}.")
         print(f"  They lived through {char.year} years of the world's history.")
+        # Remove save on death
+        path = _save_path(world.seed)
+        if os.path.exists(path):
+            os.remove(path)
+            print(f"  {ANSI_DIM}🗑 Character save removed.{ANSI_RESET}")
     else:
         print(f"\n  {ANSI_DIM}Your journey ends... for now.{ANSI_RESET}")
         print(f"  {char.name} lived to age {char.age} "
               f"and witnessed {char.year} years.")
+        print(f"  {ANSI_DIM}💾 Character saved — run 'wyrd embody --seed {world.seed}' to resume.{ANSI_RESET}")
 
     # Show final summary
     active = state.num_settlements

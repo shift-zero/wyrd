@@ -23,22 +23,33 @@ This is YOUR project. Make it beautiful and deep.
 
 ## Current state (2026-07-23)
 
-**All 16 phases complete.** wyrd generates worlds, simulates 1000+ years of history, renders trade routes with roads, and has a gateway TUI, web dashboard, and TTRPG export.
+**All 16 phases complete. Phase 17 in progress.**
 
-### What Jacob wants next: Phase 17 — Living Worlds
+### What was built this session
 
-The project is feature-complete but *passive*. Running the sim dumps text — you watch events scroll by, the map sits still, you can't interact with the world as anything other than an observer. Jacob's feedback:
+1. **TUI sim reset/rewind** — Changed `r` keybinding from "refresh map" to "reset simulation". Pressing `r` now pauses the sim, rewinds to year 0, clears the event log, and restores the original world map. Includes a new `action_reset` method that fully reinitializes sim state.
 
-1. **"The map is not animated"** — watching the sim is like watching events, not watching the world change. Tiles should animate: borders pulse, settlements grow/shrink, trade routes light up, cataclysm scars spread.
-2. **"The TUI is hard to use and kinda messy"** — Bubbletea is the inspiration but that's Go. Options: Textual (Python, reactive widgets), better curses architecture, or a hybrid.
-3. **"Do you plan to have a mode where the user plays as a character?"** — Embodied play mode. Not god-mode watching, but *living in* the world as a character.
+2. **Embodied play persistence** — Added `to_dict()` / `from_dict()` to `PlayerCharacter`, `save_character()` / `load_character()` functions, and auto-save after each year advance. Character saves go to `wyrd-{seed}-char.json` and auto-load on subsequent `wyrd embody` runs. Added `--no-load-save` flag to start fresh. On death, the save file is removed.
 
-### Mandate
+3. **4 new tests** for character persistence (round-trip, save/load, nonexistent load, full field preservation). **560 tests pass** (up from 556).
 
-Steer toward **Phase 17 — Living Worlds**. The three pillars:
+### Phase 17 checklist (from PLAN.md)
 
-1. **Animated simulation maps** — render tile transitions live, population changes as visual grow/shrink, roads forming tile by tile
-2. **TUI overhaul** — Bubbletea-inspired clean layout (Textual or better curses), modal panels, status bar, discoverable keybinds
-3. **Embodied play mode** — `wyrd embody` lives inside the sim as a character. News arrives, you travel, decisions matter. Multi-generational stretch.
+| # | Item | Status | Notes |
+|---|------|--------|-------|
+| 1 | Live map animation | 🔲 | Partial: tiles flash on growth/shrink/founding/abandonment in curses viewer |
+| 2 | Textual-based TUI | 🟡 | Sim-aware: controls, event log, live stats, year-diff, **reset/rewind (r)** |
+| 3 | Embodied play mode | 🟡 | MVP + **save/load persistence**, auto-save, `--no-load-save` flag |
+| 4 | Event-driven notifications | 🔲 | Not started |
+| 5 | Year-diff view | ✅ | Done |
+| 6 | Multi-generational play | 🔲 | Not started |
 
-Full checklist in PLAN.md. Read it.
+### What to tackle next
+
+Highest-impact remaining items:
+
+1. **Item 1: Live map animation** — The curses viewer has flash-tile animation. The Textual TUI should also animate: tile-by-tile settlement growth, fading transitions, bloom effects. Could use a `set_timer` pattern to animate tile discovery/growth over multiple frames.
+
+2. **Item 3 → 🟢** — Embodied play still needs: better event integration (events that specifically address the player), player death more meaningful (last words, legacy), and the start of multi-generational play (Item 6).
+
+3. **Item 4: Event-driven notifications** — Sim events arrive as interactive prompts. "A stranger arrives at your door. Let them in? y/n" — this is the biggest missing piece for embodied play to feel alive.

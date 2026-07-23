@@ -333,3 +333,87 @@ class TestOccupations:
         rng = random.Random(42)
         char = _generate_character(world, rng)
         assert char.profession in _OCCUPATIONS
+
+
+class TestCharacterPersistence:
+    """Character save/load round-trip."""
+
+    def test_to_dict_round_trip(self):
+        """PlayerCharacter serializes and deserializes correctly."""
+        pc = PlayerCharacter(
+            name="Rikard Blackthorn",
+            settlement="Kronar", region="Telvan",
+            profession="blacksmith", gold=500, health=80,
+            age=32, year=42, alive=True,
+            inventory=["sword", "shield"],
+        )
+        data = pc.to_dict()
+        restored = PlayerCharacter.from_dict(data)
+        assert restored.name == pc.name
+        assert restored.settlement == pc.settlement
+        assert restored.region == pc.region
+        assert restored.profession == pc.profession
+        assert restored.gold == pc.gold
+        assert restored.health == pc.health
+        assert restored.age == pc.age
+        assert restored.year == pc.year
+        assert restored.alive == pc.alive
+        assert restored.inventory == pc.inventory
+
+    def test_save_and_load_character(self, tmp_path):
+        """save_character and load_character work correctly."""
+        from src.embody import save_character, load_character, _save_path
+        pc = PlayerCharacter(
+            name="Elara", settlement="Mistharbor",
+            region="Coast", profession="ranger",
+            gold=300, health=90, age=25, year=15,
+            inventory=["bow", "herbs"],
+        )
+        seed = 12345
+        save_character(pc, seed)
+        save_file = _save_path(seed)
+        assert os.path.exists(save_file)
+        loaded = load_character(seed)
+        assert loaded is not None
+        assert loaded.name == "Elara"
+        assert loaded.gold == 300
+        assert loaded.health == 90
+        assert loaded.year == 15
+        assert loaded.inventory == ["bow", "herbs"]
+        os.remove(save_file)
+
+    def test_load_nonexistent_returns_none(self):
+        """load_character returns None when no save exists."""
+        from src.embody import load_character
+        result = load_character(9999999)
+        assert result is None
+
+    def test_save_round_trip_preserves_all_fields(self):
+        """Full round-trip preserves all PlayerCharacter fields."""
+        from src.embody import save_character, load_character, _save_path
+        pc = PlayerCharacter(
+            name="Torin Stonehelm", settlement="Ironforge",
+            region="Mountains", profession="miner",
+            gold=850, health=45, age=62, year=124,
+            alive=True, inventory=["pickaxe", "lantern", "ore"],
+            sim_year_advanced=100,
+        )
+        try:
+            save_character(pc, 777)
+            loaded = load_character(777)
+            assert loaded is not None
+            assert loaded.name == pc.name
+            assert loaded.settlement == pc.settlement
+            assert loaded.region == pc.region
+            assert loaded.profession == pc.profession
+            assert loaded.gold == pc.gold
+            assert loaded.health == pc.health
+            assert loaded.age == pc.age
+            assert loaded.year == pc.year
+            assert loaded.alive == pc.alive
+            assert loaded.inventory == pc.inventory
+            assert loaded.sim_year_advanced == pc.sim_year_advanced
+        finally:
+            path = _save_path(777)
+            if os.path.exists(path):
+                os.remove(path)

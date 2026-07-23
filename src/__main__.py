@@ -273,6 +273,8 @@ def main():
                             help="Max years to simulate (default: 100)")
     embody_cmd.add_argument("--chaos", type=float, default=0.3,
                             help="Chaos factor 0.0-1.0 (default: 0.3)")
+    embody_cmd.add_argument("--no-load-save", action="store_true",
+                            help="Skip loading saved character state (start fresh)")
 
     # ── zones ───────────────────────────────────────────────────────
     zones_cmd = sub.add_parser("zones",
@@ -536,6 +538,7 @@ def main():
             name=args.name,
             years=args.years,
             chaos=args.chaos,
+            load_save=not args.no_load_save,
         )
 
     # ── zones ───────────────────────────────────────────────────────
