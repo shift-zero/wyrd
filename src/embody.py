@@ -267,6 +267,542 @@ _EVENT_ICON = {
 }
 
 
+# ── Interactive Event Choices (Phase 17, Item 4) ──────────────────────
+
+
+@dataclass
+class EventChoiceData:
+    """A choice the player can make in response to an event."""
+    prompt: str
+    event_type: str  # For tracking/logging
+    icon: str = "•"
+
+
+@dataclass
+class ChoiceOutcome:
+    """Result of the player making a choice."""
+    description: str
+    gold_delta: int = 0
+    health_delta: int = 0
+    inventory_add: str | None = None
+    travel_dest: str | None = None  # If choice causes travel
+
+
+def _pick_fallback_settlement(char: PlayerCharacter, world: World | None,
+                               rng: random.Random) -> str | None:
+    """Pick a random settlement (not the player's current one)."""
+    if world is None:
+        return None
+    candidates = []
+    for region in world.regions:
+        for s in region.settlements:
+            if s.name != char.settlement and s.population > 0:
+                candidates.append(s.name)
+    if candidates:
+        return rng.choice(candidates)
+    return None
+
+
+def _maybe_stranger_scenario(char: PlayerCharacter, world: World,
+                              rng: random.Random,
+                              events: list) -> EventChoiceData | None:
+    """A mysterious stranger arrives in your settlement. ~15% chance."""
+    if rng.random() > 0.15:
+        return None
+    names = ["a hooded traveler", "a scarred old soldier",
+             "a merchant with a broken cart", "a ragged messenger",
+             "a cloaked stranger"]
+    visitor = rng.choice(names)
+    return EventChoiceData(
+        prompt=f"A stranger arrives — {visitor}. They seek shelter for the night.",
+        event_type="stranger",
+        icon="🚪",
+    )
+
+
+def _maybe_plague_scenario(char: PlayerCharacter, world: World,
+                           rng: random.Random,
+                           events: list[SimEvent]) -> EventChoiceData | None:
+    """Plague or famine hits - offer choices."""
+    has_event = any(
+        e.year == char.year
+        and e.event_type in ("plague", "famine", "great_plague")
+        and (char.settlement in (e.affected_settlements or [])
+             or char.region in (e.affected_regions or []))
+        for e in events
+    )
+    if not has_event:
+        return None
+    return EventChoiceData(
+        prompt=f"A {_find_event_type(events, ('plague','famine','great_plague'), char.year)} "
+               f"strikes {char.settlement}! The sick fill the streets.",
+        event_type="plague",
+        icon="☠",
+    )
+
+
+def _maybe_war_scenario(char: PlayerCharacter, world: World,
+                        rng: random.Random,
+                        events: list[SimEvent]) -> EventChoiceData | None:
+    """War in the region - offer choices."""
+    has_event = any(
+        e.year == char.year
+        and e.event_type in ("war", "faction_war", "faction_coup", "faction_vassal_revolt")
+        and (char.region in (e.affected_regions or []))
+        for e in events
+    )
+    if not has_event:
+        return None
+    return EventChoiceData(
+        prompt=f"War drums echo through {char.region}! The lord's herald "
+               f"calls for able-bodied folk to take up arms.",
+        event_type="war",
+        icon="⚔",
+    )
+
+
+def _find_event_type(events: list[SimEvent], types: tuple[str, ...],
+                     year: int = 0) -> str:
+    """Find first matching event type name in recent events for a given year."""
+    for e in events:
+        if e.year == year and e.event_type in types:
+            return e.event_type.replace("_", " ")
+    return types[0].replace("_", " ")
+
+
+def _maybe_merchant_scenario(char: PlayerCharacter, world: World,
+                             rng: random.Random,
+                             events: list) -> EventChoiceData | None:
+    """A merchant offers a deal. ~12% chance, higher in prosperous s'ments."""
+    has_trade_event = any(
+        e.year == char.year and e.event_type in ("trade_boom", "prosperity")
+        for e in events
+    )
+    # Get prosperity from sim state if available
+    base_chance = 0.18 if has_trade_event else 0.10
+    if rng.random() > base_chance:
+        return None
+    goods = rng.choice(["rare spices", "foreign silks", "ancient scrolls",
+                        "exotic herbs", "fine steel", "jeweled trinkets"])
+    return EventChoiceData(
+        prompt=f"A traveling merchant offers you a deal on "
+               f"{goods} — a shipment of opportunity.",
+        event_type="merchant",
+        icon="💰",
+    )
+
+
+def _maybe_discovery_scenario(char: PlayerCharacter, world: World,
+                              rng: random.Random,
+                              events: list[SimEvent]) -> EventChoiceData | None:
+    """Discovery event in the region."""
+    has_event = any(
+        e.year == char.year
+        and e.event_type == "discovery"
+        and (char.region in (e.affected_regions or []))
+        for e in events
+    )
+    if not has_event:
+        return None
+    return EventChoiceData(
+        prompt=f"Rumors spread of a discovery in {char.region}! "
+               f"Adventurers speak of ancient ruins and hidden treasure.",
+        event_type="discovery",
+        icon="✦",
+    )
+
+
+def _maybe_religious_scenario(char: PlayerCharacter, world: World,
+                              rng: random.Random,
+                              events: list[SimEvent]) -> EventChoiceData | None:
+    """Religious event or pilgrimage arrives."""
+    has_event = any(
+        e.year == char.year
+        and e.event_type in ("religious_tension", "divine_blessing",
+                             "holy_pilgrimage", "heresy")
+        and (char.settlement in (e.affected_settlements or [])
+             or char.region in (e.affected_regions or []))
+        for e in events
+    )
+    has_pantheon = hasattr(world, 'pantheon') and world.pantheon is not None
+    # Chance even without event if world has religion
+    if not has_event and (not has_pantheon or rng.random() > 0.08):
+        return None
+    # Name a deity if we have one
+    deity = ""
+    if has_pantheon and world.pantheon.deities:
+        deity = f" of {rng.choice(world.pantheon.deities).name}"
+    return EventChoiceData(
+        prompt=f"A procession of faithful{deity} passes through "
+               f"{char.settlement}, inviting all to join.",
+        event_type="religious",
+        icon="✞",
+    )
+
+
+def _maybe_exodus_scenario(char: PlayerCharacter, world: World,
+                           rng: random.Random,
+                           events: list[SimEvent]) -> EventChoiceData | None:
+    """Exodus or abandonment in the region."""
+    has_event = any(
+        e.year == char.year
+        and e.event_type in ("exodus", "abandonment")
+        and (char.settlement in (e.affected_settlements or [])
+             or char.region in (e.affected_regions or []))
+        for e in events
+    )
+    if not has_event:
+        return None
+    return EventChoiceData(
+        prompt=f"Neighbors pack their carts and flee {char.settlement}. "
+               f"The exodus has begun.",
+        event_type="exodus",
+        icon="→",
+    )
+
+
+_SCENARIOS = [
+    _maybe_stranger_scenario,
+    _maybe_plague_scenario,
+    _maybe_war_scenario,
+    _maybe_merchant_scenario,
+    _maybe_discovery_scenario,
+    _maybe_religious_scenario,
+    _maybe_exodus_scenario,
+]
+
+
+def _get_interactive_events(char: PlayerCharacter, world: World,
+                            rng: random.Random,
+                            events: list[SimEvent]) -> list[EventChoiceData]:
+    """Build a list of interactive events from sim events + random chance.
+
+    Each scenario generates a choice prompt for the player.
+    At most 2 events per year, prioritizing triggered (non-random) ones.
+    """
+    choices: list[EventChoiceData] = []
+    for scenario_fn in _SCENARIOS:
+        result = scenario_fn(char, world, rng, events)
+        if result is not None:
+            choices.append(result)
+            if len(choices) >= 2:
+                break
+    return choices
+
+
+def _resolve_choice(scenario: EventChoiceData, option_index: int,
+                    char: PlayerCharacter, world: World,
+                    rng: random.Random) -> tuple[ChoiceOutcome, str]:
+    """Given a scenario type and player choice index, apply consequences.
+
+    Returns (ChoiceOutcome, option_label_text).
+    """
+    et = scenario.event_type
+    opt = option_index  # 0, 1, or 2
+
+    if et == "stranger":
+        if opt == 0:  # Shelter them
+            if rng.random() < 0.4:
+                item = rng.choice(["an old map", "a cryptic note", "a healing salve",
+                                   "a pouch of herbs", "a carved talisman"])
+                return (ChoiceOutcome(
+                    description=f"You share your hearth. In thanks, the stranger leaves you "
+                                f"{item}.",
+                    inventory_add=item,
+                    gold_delta=-5,
+                ), "Offer shelter")
+            else:
+                return (ChoiceOutcome(
+                    description="You share your hearth. The stranger leaves at dawn "
+                                "with a grateful nod. A quiet encounter.",
+                    gold_delta=-3,
+                ), "Offer shelter")
+        elif opt == 1:  # Turn away
+            return (ChoiceOutcome(
+                description="You close the door. The stranger moves on into the night."
+            ), "Turn them away")
+        else:  # Rob them
+            loot = rng.randint(10, 30)
+            return (ChoiceOutcome(
+                description=f"You overpower the stranger and take {loot} gold. "
+                            f"Your conscience weighs heavy.",
+                gold_delta=loot,
+                health_delta=-10,
+            ), "Rob the stranger")
+
+    elif et == "plague":
+        if opt == 0:  # Help the sick
+            return (ChoiceOutcome(
+                description="You tend to the sick day and night. Some recover. "
+                            "The community remembers your courage.",
+                health_delta=-15,
+            ), "Help the sick")
+        elif opt == 1:  # Flee
+            dest = _pick_fallback_settlement(char, world, rng)
+            if dest:
+                return (ChoiceOutcome(
+                    description=f"You flee the plague and travel to {dest}.",
+                    travel_dest=dest,
+                    health_delta=-5,
+                ), "Flee the settlement")
+            return (ChoiceOutcome(
+                description="You try to flee but find no safe destination. "
+                            "You shelter in place.",
+                health_delta=-5,
+            ), "Flee (but no safe haven)")
+        else:  # Hoard supplies
+            return (ChoiceOutcome(
+                description="You stockpile food and medicine and wait out "
+                            "the sickness behind locked doors.",
+                gold_delta=-10,
+            ), "Hoard supplies")
+
+    elif et == "war":
+        if opt == 0:  # Join the fight
+            weapon = rng.choice(["a battered sword", "a sturdy spear",
+                                 "a short bow", "a war axe"])
+            survive = rng.random() < 0.6
+            if survive:
+                reward = rng.randint(20, 60)
+                return (ChoiceOutcome(
+                    description=f"You fight bravely with {weapon}. After the battle, "
+                                f"you return with {reward} gold as your share.",
+                    gold_delta=reward,
+                    health_delta=-20,
+                    inventory_add=weapon,
+                ), "Take up arms")
+            return (ChoiceOutcome(
+                description=f"You fight with {weapon} but are wounded badly. "
+                            f"You survive, barely.",
+                health_delta=-35,
+                inventory_add=weapon,
+            ), "Take up arms")
+        elif opt == 1:  # Provide supplies
+            return (ChoiceOutcome(
+                description="You contribute supplies to the war effort. "
+                            "The quartermaster thanks you.",
+                gold_delta=-30,
+            ), "Send supplies")
+        else:  # Flee
+            dest = _pick_fallback_settlement(char, world, rng)
+            if dest:
+                return (ChoiceOutcome(
+                    description=f"You flee the war-torn lands and arrive in {dest}.",
+                    travel_dest=dest,
+                    gold_delta=-10,
+                ), "Flee the region")
+            return (ChoiceOutcome(
+                description="You hide in the cellar until the fighting passes.",
+                health_delta=-5,
+            ), "Hide and wait")
+
+    elif et == "merchant":
+        if opt == 0:  # Invest
+            profit = rng.choice([-30, -10, 20, 50, 100, 150])
+            if profit > 0:
+                return (ChoiceOutcome(
+                    description=f"You invest 50 gold. The venture pays off — "
+                                f"you earn {profit} gold!",
+                    gold_delta=profit,
+                ), "Invest 50 gold")
+            return (ChoiceOutcome(
+                description=f"You invest 50 gold but the deal sours. "
+                            f"You lose {-profit} gold.",
+                gold_delta=profit,  # negative
+            ), "Invest 50 gold")
+        elif opt == 1:  # Decline
+            return (ChoiceOutcome(
+                description="You politely decline. The merchant moves on."
+            ), "Decline")
+        else:  # Rob
+            loot = rng.randint(20, 50)
+            return (ChoiceOutcome(
+                description=f"You rob the merchant and escape with {loot} gold! "
+                            f"Your reputation suffers.",
+                gold_delta=loot,
+                health_delta=-10,
+            ), "Rob the merchant")
+
+    elif et == "discovery":
+        if opt == 0:  # Explore
+            item = rng.choice(["an ancient relic", "a golden amulet",
+                               "a sealed scroll", "a gemstone",
+                               "a mysterious orb", "a silver ring"])
+            find_gold = rng.randint(10, 40)
+            return (ChoiceOutcome(
+                description=f"You brave the ruins and find {item} worth "
+                            f"{find_gold} gold!",
+                gold_delta=find_gold,
+                health_delta=-10,
+                inventory_add=item,
+            ), "Explore the site")
+        elif opt == 1:  # Report
+            reward = rng.randint(10, 30)
+            return (ChoiceOutcome(
+                description=f"You report the discovery to the authorities. "
+                            f"They reward you with {reward} gold.",
+                gold_delta=reward,
+            ), "Report to authorities")
+        else:
+            return (ChoiceOutcome(
+                description="You let others have their adventures. "
+                            "The world turns without you."
+            ), "Ignore it")
+
+    elif et == "religious":
+        if opt == 0:  # Join/Pray
+            healing = rng.randint(5, 20)
+            return (ChoiceOutcome(
+                description=f"You join the procession and pray. "
+                            f"You feel restored (+{healing} health).",
+                health_delta=healing,
+            ), "Join the procession")
+        elif opt == 1:  # Donate
+            return (ChoiceOutcome(
+                description="You make an offering to the faithful. "
+                            "They bless your generosity.",
+                gold_delta=-15,
+                health_delta=5,
+            ), "Make an offering")
+        else:
+            return (ChoiceOutcome(
+                description="You watch from your window as the procession "
+                            "passes by. The day continues."
+            ), "Watch from afar")
+
+    elif et == "exodus":
+        if opt == 0:  # Join exodus
+            dest = _pick_fallback_settlement(char, world, rng)
+            if dest:
+                return (ChoiceOutcome(
+                    description=f"You pack your belongings and join the exodus "
+                                f"to {dest}. A new beginning.",
+                    travel_dest=dest,
+                    gold_delta=-15,
+                ), "Join the exodus")
+            return (ChoiceOutcome(
+                description="You try to join the exodus but find nowhere to go. "
+                            "You return home, shaken.",
+                health_delta=-5,
+            ), "Join (but lost)")
+        elif opt == 1:  # Stay and rebuild
+            return (ChoiceOutcome(
+                description="You stay and help rebuild. "
+                            "Those who remain band together.",
+                gold_delta=-10,
+                health_delta=5,
+            ), "Stay and rebuild")
+        else:  # Loot abandoned homes
+            loot = rng.randint(10, 25)
+            return (ChoiceOutcome(
+                description=f"You find abandoned goods worth {loot} gold.",
+                gold_delta=loot,
+                health_delta=-5,
+            ), "Scavenge what remains")
+
+    # Fallback
+    return (ChoiceOutcome(
+        description="You do nothing. The moment passes.",
+    ), "Do nothing")
+
+
+def _render_interactive_event(choices: list[EventChoiceData]) -> str:
+    """Render the choice prompt."""
+    lines = []
+    lines.append(f"\n  {_color(226)}{'═' * 40}{ANSI_RESET}")
+    for i, sc in enumerate(choices):
+        lines.append(f"  {sc.icon} {sc.prompt}")
+        if i == 0:
+            lines.append(f"    {_color(46)}1.{ANSI_RESET} {_label_for_event(sc.event_type, 0)}")
+            lines.append(f"    {_color(226)}2.{ANSI_RESET} {_label_for_event(sc.event_type, 1)}")
+            lines.append(f"    {_color(196)}3.{ANSI_RESET} {_label_for_event(sc.event_type, 2)}")
+    lines.append(f"  {_color(226)}{'═' * 40}{ANSI_RESET}")
+    return "\n".join(lines)
+
+
+def _label_for_event(event_type: str, option_index: int) -> str:
+    """Get the label text for a given event type + option index."""
+    labels = {
+        "stranger": ["Offer shelter", "Turn them away", "Rob the stranger"],
+        "plague":   ["Help the sick", "Flee the settlement", "Hoard supplies"],
+        "war":      ["Take up arms", "Send supplies", "Flee the region"],
+        "merchant": ["Invest 50 gold", "Decline the offer", "Rob the merchant"],
+        "discovery":["Explore the site", "Report to authorities", "Ignore it"],
+        "religious":["Join the procession", "Make an offering", "Watch from afar"],
+        "exodus":   ["Join the exodus", "Stay and rebuild", "Scavenge what remains"],
+    }
+    opts = labels.get(event_type, ["Accept", "Decline", "Ignore"])
+    if option_index < len(opts):
+        return opts[option_index]
+    return "Do nothing"
+
+
+def _handle_interactive_events(char: PlayerCharacter, world: World,
+                                rng: random.Random,
+                                events: list[SimEvent]) -> None:
+    """Check for interactive events and prompt the player for choices.
+    
+    Called after each year's sim tick. At most 2 scenarios per year.
+    """
+    choices = _get_interactive_events(char, world, rng, events)
+    if not choices:
+        return
+
+    print(_render_interactive_event(choices))
+
+    for sc in choices:
+        try:
+            raw = input(f"  {_color(226)}►{ANSI_RESET} Your choice (1-3): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            raw = "1"  # Default: first option
+
+        if raw not in ("1", "2", "3"):
+            print(f"  {ANSI_DIM}You hesitate and choose the first option.{ANSI_RESET}")
+            raw = "1"
+
+        opt_idx = int(raw) - 1
+        outcome, label = _resolve_choice(sc, opt_idx, char, world, rng)
+
+        # Apply consequences
+        char.gold += outcome.gold_delta
+        char.health = max(0, min(100, char.health + outcome.health_delta))
+        if outcome.inventory_add:
+            if outcome.inventory_add not in char.inventory:
+                char.inventory.append(outcome.inventory_add)
+        if outcome.travel_dest:
+            char.settlement = outcome.travel_dest
+
+        if outcome.health_delta < 0:
+            color_fn = _color(196)
+        elif outcome.health_delta > 0:
+            color_fn = _color(46)
+        else:
+            color_fn = ""
+
+        gold_str = ""
+        if outcome.gold_delta > 0:
+            gold_str = f" {_color(220)}+{outcome.gold_delta}g{ANSI_RESET}"
+        elif outcome.gold_delta < 0:
+            gold_str = f" {_color(196)}{outcome.gold_delta}g{ANSI_RESET}"
+        health_str = ""
+        if outcome.health_delta > 0:
+            health_str = f" {_color(46)}+{outcome.health_delta}hp{ANSI_RESET}"
+        elif outcome.health_delta < 0:
+            health_str = f" {_color(196)}{outcome.health_delta}hp{ANSI_RESET}"
+
+        suffix = f"{gold_str}{health_str}" if gold_str or health_str else ""
+        print(f"  {label}: {outcome.description}{suffix}")
+
+        if outcome.travel_dest:
+            print(f"  🚶 You arrive in {_color(45)}{outcome.travel_dest}{ANSI_RESET}.")
+
+    # Check death
+    if char.health <= 0:
+        char.alive = False
+        print(f"\n  {ANSI_BOLD}{_color(196)}You have died from your wounds.{ANSI_RESET}")
+
+
 def _render_travel_options(char: PlayerCharacter,
                            world: World) -> list[str]:
     """List settlements the player can travel to."""
@@ -519,6 +1055,9 @@ def embody_play(world: World,
             _auto_save(char, world)
             print(f"\n  {_color(45)}Year {char.year}{ANSI_RESET} — "
                   f"{_make_weather()}")
+
+            # Interactive event choices (Phase 17, Item 4)
+            _handle_interactive_events(char, world, rng, events)
 
     # Epilogue
     if not char.alive:

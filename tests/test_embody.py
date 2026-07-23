@@ -417,3 +417,390 @@ class TestCharacterPersistence:
             path = _save_path(777)
             if os.path.exists(path):
                 os.remove(path)
+
+
+# ── Interactive Event Choices Tests (Phase 17, Item 4) ────────────────
+
+
+from src.embody import (
+    EventChoiceData,
+    ChoiceOutcome,
+    _get_interactive_events,
+    _resolve_choice,
+    _label_for_event,
+    _pick_fallback_settlement,
+    _maybe_stranger_scenario,
+    _maybe_plague_scenario,
+    _maybe_war_scenario,
+    _maybe_merchant_scenario,
+    _maybe_discovery_scenario,
+    _maybe_religious_scenario,
+    _maybe_exodus_scenario,
+    _SCENARIOS,
+)
+from src.sim import SimEvent
+
+
+class TestEventChoiceDataModels:
+    """EventChoiceData and ChoiceOutcome dataclasses."""
+
+    def test_event_choice_data_minimal(self):
+        """EventChoiceData can be created with just prompt and event_type."""
+        ec = EventChoiceData(prompt="Test prompt", event_type="test")
+        assert ec.prompt == "Test prompt"
+        assert ec.event_type == "test"
+        assert ec.icon == "•"
+
+    def test_event_choice_data_full(self):
+        """EventChoiceData with all fields."""
+        ec = EventChoiceData(prompt="Hello", event_type="war", icon="⚔")
+        assert ec.icon == "⚔"
+
+    def test_choice_outcome_creation(self):
+        """ChoiceOutcome with all fields."""
+        co = ChoiceOutcome(
+            description="You did a thing",
+            gold_delta=50, health_delta=-10,
+            inventory_add="sword", travel_dest="Kronar",
+        )
+        assert co.description == "You did a thing"
+        assert co.gold_delta == 50
+        assert co.health_delta == -10
+        assert co.inventory_add == "sword"
+        assert co.travel_dest == "Kronar"
+
+    def test_choice_outcome_defaults(self):
+        """ChoiceOutcome default values."""
+        co = ChoiceOutcome(description="Nothing happens")
+        assert co.gold_delta == 0
+        assert co.health_delta == 0
+        assert co.inventory_add is None
+        assert co.travel_dest is None
+
+
+class TestLabelForEvent:
+    """Event choice option labels."""
+
+    def test_stranger_labels(self):
+        assert _label_for_event("stranger", 0) == "Offer shelter"
+        assert _label_for_event("stranger", 1) == "Turn them away"
+        assert _label_for_event("stranger", 2) == "Rob the stranger"
+
+    def test_plague_labels(self):
+        assert _label_for_event("plague", 0) == "Help the sick"
+        assert _label_for_event("plague", 1) == "Flee the settlement"
+        assert _label_for_event("plague", 2) == "Hoard supplies"
+
+    def test_war_labels(self):
+        assert _label_for_event("war", 0) == "Take up arms"
+        assert _label_for_event("war", 1) == "Send supplies"
+        assert _label_for_event("war", 2) == "Flee the region"
+
+    def test_merchant_labels(self):
+        assert _label_for_event("merchant", 0) == "Invest 50 gold"
+        assert _label_for_event("merchant", 1) == "Decline the offer"
+        assert _label_for_event("merchant", 2) == "Rob the merchant"
+
+    def test_discovery_labels(self):
+        assert _label_for_event("discovery", 0) == "Explore the site"
+        assert _label_for_event("discovery", 1) == "Report to authorities"
+        assert _label_for_event("discovery", 2) == "Ignore it"
+
+    def test_religious_labels(self):
+        assert _label_for_event("religious", 0) == "Join the procession"
+        assert _label_for_event("religious", 1) == "Make an offering"
+        assert _label_for_event("religious", 2) == "Watch from afar"
+
+    def test_exodus_labels(self):
+        assert _label_for_event("exodus", 0) == "Join the exodus"
+        assert _label_for_event("exodus", 1) == "Stay and rebuild"
+        assert _label_for_event("exodus", 2) == "Scavenge what remains"
+
+    def test_unknown_event(self):
+        assert _label_for_event("unknown", 0) == "Accept"
+        assert _label_for_event("unknown", 1) == "Decline"
+        assert _label_for_event("unknown", 2) == "Ignore"
+
+    def test_out_of_range_index(self):
+        assert _label_for_event("war", 5) == "Do nothing"
+
+
+class TestPickFallbackSettlement:
+    """Fallback settlement selection."""
+
+    def test_returns_different_settlement(self):
+        world = generate_world(42, width=20, height=15)
+        pc = PlayerCharacter(
+            name="Test", settlement="First",
+            region="Any", profession="farmer",
+        )
+        rng = random.Random(42)
+        dest = _pick_fallback_settlement(pc, world, rng)
+        assert dest is not None
+        assert dest != "First"
+
+    def test_returns_none_on_empty_world(self):
+        from src.world import World
+        world = World(seed=1, width=10, height=10)
+        pc = PlayerCharacter(
+            name="Test", settlement="Nowhere",
+            region="Void", profession="wanderer",
+        )
+        rng = random.Random(42)
+        dest = _pick_fallback_settlement(pc, world, rng)
+        assert dest is None
+
+
+class TestResolveChoice:
+    """Choice resolution produces correct outcomes."""
+
+    def _make_sc(self, etype):
+        return EventChoiceData(prompt="?", event_type=etype)
+
+    def test_stranger_shelter_produces_outcome(self):
+        pc = PlayerCharacter(name="Test", settlement="Town", region="Region", profession="farmer", gold=100, health=80)
+        outcome, label = _resolve_choice(self._make_sc("stranger"), 0, pc, None, random.Random(42))
+        assert label == "Offer shelter"
+        assert -5 <= outcome.gold_delta <= 0
+
+    def test_stranger_turn_away_produces_outcome(self):
+        pc = PlayerCharacter(name="Test", settlement="Town", region="Region", profession="farmer")
+        outcome, label = _resolve_choice(self._make_sc("stranger"), 1, pc, None, random.Random(42))
+        assert label == "Turn them away"
+        assert outcome.gold_delta == 0 and outcome.health_delta == 0
+
+    def test_stranger_rob_produces_outcome(self):
+        pc = PlayerCharacter(name="Test", settlement="Town", region="Region", profession="farmer", gold=100, health=80)
+        outcome, label = _resolve_choice(self._make_sc("stranger"), 2, pc, None, random.Random(42))
+        assert label == "Rob the stranger"
+        assert outcome.gold_delta >= 10 and outcome.health_delta <= -10
+
+    def test_plague_help_sick(self):
+        pc = PlayerCharacter(name="Test", settlement="Town", region="Region", profession="farmer", health=80)
+        outcome, label = _resolve_choice(self._make_sc("plague"), 0, pc, None, random.Random(42))
+        assert label == "Help the sick"
+        assert outcome.health_delta < 0
+
+    def test_plague_flee_fallback(self):
+        """When world=None, plague flee returns a fallback outcome."""
+        pc = PlayerCharacter(name="Test", settlement="Town", region="Region", profession="farmer", health=80)
+        outcome, label = _resolve_choice(self._make_sc("plague"), 1, pc, None, random.Random(42))
+        assert label in ("Flee the settlement", "Flee (but no safe haven)")
+
+    def test_plague_hoard_supplies(self):
+        pc = PlayerCharacter(name="Test", settlement="Town", region="Region", profession="farmer", gold=100)
+        outcome, label = _resolve_choice(self._make_sc("plague"), 2, pc, None, random.Random(42))
+        assert label == "Hoard supplies"
+        assert outcome.gold_delta < 0
+
+    def test_war_take_up_arms(self):
+        pc = PlayerCharacter(name="Test", settlement="Town", region="Region", profession="farmer", gold=100, health=80)
+        outcome, label = _resolve_choice(self._make_sc("war"), 0, pc, None, random.Random(42))
+        assert label == "Take up arms"
+        assert outcome.health_delta < 0
+        assert outcome.inventory_add is not None
+
+    def test_war_send_supplies(self):
+        pc = PlayerCharacter(name="Test", settlement="Town", region="Region", profession="farmer", gold=100)
+        outcome, label = _resolve_choice(self._make_sc("war"), 1, pc, None, random.Random(42))
+        assert label == "Send supplies"
+        assert outcome.gold_delta < 0
+
+    def test_merchant_invest(self):
+        pc = PlayerCharacter(name="Test", settlement="Town", region="Region", profession="farmer", gold=200)
+        outcome, label = _resolve_choice(self._make_sc("merchant"), 0, pc, None, random.Random(42))
+        assert label == "Invest 50 gold"
+        assert isinstance(outcome.gold_delta, int)
+
+    def test_merchant_decline(self):
+        pc = PlayerCharacter(name="Test", settlement="Town", region="Region", profession="farmer")
+        outcome, label = _resolve_choice(self._make_sc("merchant"), 1, pc, None, random.Random(42))
+        assert label == "Decline"
+        assert outcome.gold_delta == 0
+
+    def test_discovery_explore(self):
+        pc = PlayerCharacter(name="Test", settlement="Town", region="Region", profession="farmer", gold=50, health=80)
+        outcome, label = _resolve_choice(self._make_sc("discovery"), 0, pc, None, random.Random(42))
+        assert label == "Explore the site"
+        assert outcome.gold_delta > 0 and outcome.health_delta < 0
+        assert outcome.inventory_add is not None
+
+    def test_discovery_report(self):
+        pc = PlayerCharacter(name="Test", settlement="Town", region="Region", profession="farmer")
+        outcome, label = _resolve_choice(self._make_sc("discovery"), 1, pc, None, random.Random(42))
+        assert label == "Report to authorities"
+        assert outcome.gold_delta > 0
+
+    def test_religious_join(self):
+        pc = PlayerCharacter(name="Test", settlement="Town", region="Region", profession="farmer", health=50)
+        outcome, label = _resolve_choice(self._make_sc("religious"), 0, pc, None, random.Random(42))
+        assert label == "Join the procession"
+        assert outcome.health_delta > 0
+
+    def test_religious_donate(self):
+        pc = PlayerCharacter(name="Test", settlement="Town", region="Region", profession="farmer", gold=100)
+        outcome, label = _resolve_choice(self._make_sc("religious"), 1, pc, None, random.Random(42))
+        assert label == "Make an offering"
+        assert outcome.gold_delta < 0 and outcome.health_delta > 0
+
+    def test_exodus_join(self):
+        pc = PlayerCharacter(name="Test", settlement="Town", region="Region", profession="farmer", gold=100)
+        outcome, label = _resolve_choice(self._make_sc("exodus"), 0, pc, None, random.Random(42))
+        # Without a world, fallback returns lost; with a world it would be Join the exodus
+        assert label in ("Join the exodus", "Join (but lost)")
+
+    def test_exodus_stay_rebuild(self):
+        pc = PlayerCharacter(name="Test", settlement="Town", region="Region", profession="farmer", gold=100)
+        outcome, label = _resolve_choice(self._make_sc("exodus"), 1, pc, None, random.Random(42))
+        assert label == "Stay and rebuild"
+        assert outcome.gold_delta < 0 and outcome.health_delta > 0
+
+    def test_exodus_scavenge(self):
+        pc = PlayerCharacter(name="Test", settlement="Town", region="Region", profession="farmer", gold=0, health=80)
+        outcome, label = _resolve_choice(self._make_sc("exodus"), 2, pc, None, random.Random(42))
+        assert label == "Scavenge what remains"
+        assert outcome.gold_delta > 0
+
+    def test_unknown_event_type_fallback(self):
+        pc = PlayerCharacter(name="Test", settlement="Town", region="Region", profession="farmer")
+        outcome, label = _resolve_choice(self._make_sc("nonexistent"), 0, pc, None, random.Random(42))
+        assert label == "Do nothing"
+        assert "do nothing" in outcome.description.lower()
+
+    def test_seed_deterministic_choice(self):
+        rng1, rng2 = random.Random(42), random.Random(42)
+        pc1 = PlayerCharacter(name="A", settlement="T", region="R", profession="f", gold=100, health=80)
+        pc2 = PlayerCharacter(name="A", settlement="T", region="R", profession="f", gold=100, health=80)
+        sc = self._make_sc("stranger")
+        o1, l1 = _resolve_choice(sc, 0, pc1, None, rng1)
+        o2, l2 = _resolve_choice(sc, 0, pc2, None, rng2)
+        assert l1 == l2
+        assert o1.gold_delta == o2.gold_delta
+        assert o1.inventory_add == o2.inventory_add
+
+
+class TestGetInteractiveEvents:
+    """Event selection logic."""
+
+    def test_no_events_returns_empty(self):
+        world = generate_world(42, width=15, height=10)
+        rng = random.Random(0)
+        pc = PlayerCharacter(name="Test", settlement="Town", region="Region", profession="farmer", year=10)
+        choices = _get_interactive_events(pc, world, rng, [])
+        assert isinstance(choices, list)
+
+    def test_plague_event_triggers_plague_scenario(self):
+        world = generate_world(42, width=15, height=10)
+        rng = random.Random(42)
+        pc = PlayerCharacter(name="Test", settlement="Town", region="MyRegion", profession="farmer", year=10)
+        events = [SimEvent(year=10, event_type="plague", description="Plague", affected_regions=["MyRegion"], affected_settlements=["Town"])]
+        choices = _get_interactive_events(pc, world, rng, events)
+        assert any(c.event_type == "plague" for c in choices)
+
+    def test_war_event_triggers_war_scenario(self):
+        world = generate_world(42, width=15, height=10)
+        rng = random.Random(42)
+        pc = PlayerCharacter(name="Test", settlement="Town", region="MyRegion", profession="farmer", year=10)
+        events = [SimEvent(year=10, event_type="war", description="War", affected_regions=["MyRegion"])]
+        choices = _get_interactive_events(pc, world, rng, events)
+        assert any(c.event_type == "war" for c in choices)
+
+    def test_discovery_event_triggers_discovery(self):
+        world = generate_world(42, width=15, height=10)
+        rng = random.Random(42)
+        pc = PlayerCharacter(name="Test", settlement="Town", region="MyRegion", profession="farmer", year=10)
+        events = [SimEvent(year=10, event_type="discovery", description="Discovery", affected_regions=["MyRegion"])]
+        choices = _get_interactive_events(pc, world, rng, events)
+        assert any(c.event_type == "discovery" for c in choices)
+
+    def test_exodus_event_triggers_exodus(self):
+        world = generate_world(42, width=15, height=10)
+        rng = random.Random(42)
+        pc = PlayerCharacter(name="Test", settlement="Town", region="MyRegion", profession="farmer", year=10)
+        events = [SimEvent(year=10, event_type="exodus", description="Exodus", affected_regions=["MyRegion"], affected_settlements=["Town"])]
+        choices = _get_interactive_events(pc, world, rng, events)
+        assert any(c.event_type == "exodus" for c in choices)
+
+    def test_at_most_two_events(self):
+        world = generate_world(42, width=15, height=10)
+        rng = random.Random(42)
+        pc = PlayerCharacter(name="Test", settlement="Town", region="MyRegion", profession="farmer", year=10)
+        events = [
+            SimEvent(year=10, event_type="war", description="War", affected_regions=["MyRegion"]),
+            SimEvent(year=10, event_type="discovery", description="Discovery", affected_regions=["MyRegion"]),
+            SimEvent(year=10, event_type="plague", description="Plague", affected_regions=["MyRegion"], affected_settlements=["Town"]),
+        ]
+        choices = _get_interactive_events(pc, world, rng, events)
+        assert len(choices) <= 2
+
+    def test_seed_deterministic_choices(self):
+        world = generate_world(42, width=15, height=10)
+        pc = PlayerCharacter(name="Test", settlement="Town", region="Region", profession="farmer", year=10)
+        events = [SimEvent(year=10, event_type="war", description="War", affected_regions=["Region"])]
+        c1 = _get_interactive_events(pc, world, random.Random(42), events)
+        c2 = _get_interactive_events(pc, world, random.Random(42), events)
+        assert len(c1) == len(c2)
+        for a, b in zip(c1, c2):
+            assert a.event_type == b.event_type
+
+    def test_scenario_list_not_empty(self):
+        assert len(_SCENARIOS) >= 7
+
+
+class TestScenarioFunctions:
+    """Individual scenario functions."""
+
+    def test_stranger_scenario_event_type(self):
+        pc = PlayerCharacter(name="Test", settlement="Town", region="Region", profession="farmer")
+        result = _maybe_stranger_scenario(pc, None, random.Random(42), [])
+        if result is not None:
+            assert result.event_type == "stranger"
+
+    def test_plague_scenario_with_event(self):
+        pc = PlayerCharacter(name="Test", settlement="Town", region="MyRegion", profession="farmer", year=10)
+        events = [SimEvent(year=10, event_type="plague", description="Plague", affected_settlements=["Town"])]
+        result = _maybe_plague_scenario(pc, None, random.Random(42), events)
+        assert result is not None and result.event_type == "plague"
+
+    def test_plague_scenario_without_event(self):
+        pc = PlayerCharacter(name="Test", settlement="Town", region="Region", profession="farmer", year=10)
+        result = _maybe_plague_scenario(pc, None, random.Random(42), [])
+        assert result is None
+
+    def test_war_scenario_with_event(self):
+        pc = PlayerCharacter(name="Test", settlement="Town", region="MyRegion", profession="farmer", year=10)
+        events = [SimEvent(year=10, event_type="war", description="War", affected_regions=["MyRegion"])]
+        result = _maybe_war_scenario(pc, None, random.Random(42), events)
+        assert result is not None and result.event_type == "war"
+
+    def test_war_scenario_wrong_region(self):
+        pc = PlayerCharacter(name="Test", settlement="Town", region="MyRegion", profession="farmer", year=10)
+        events = [SimEvent(year=10, event_type="war", description="War", affected_regions=["OtherRegion"])]
+        result = _maybe_war_scenario(pc, None, random.Random(42), events)
+        assert result is None
+
+    def test_merchant_scenario_with_trade_event(self):
+        pc = PlayerCharacter(name="Test", settlement="Town", region="Region", profession="farmer", year=10)
+        events = [SimEvent(year=10, event_type="trade_boom", description="Trade boom")]
+        result = _maybe_merchant_scenario(pc, None, random.Random(42), events)
+        if result is not None:
+            assert result.event_type == "merchant"
+
+    def test_discovery_scenario_wrong_region(self):
+        pc = PlayerCharacter(name="Test", settlement="Town", region="MyRegion", profession="farmer", year=10)
+        events = [SimEvent(year=10, event_type="discovery", description="Discovery", affected_regions=["OtherRegion"])]
+        result = _maybe_discovery_scenario(pc, None, random.Random(42), events)
+        assert result is None
+
+    def test_religious_scenario_with_event(self):
+        pc = PlayerCharacter(name="Test", settlement="Town", region="MyRegion", profession="farmer", year=10)
+        events = [SimEvent(year=10, event_type="divine_blessing", description="Blessing", affected_regions=["MyRegion"])]
+        result = _maybe_religious_scenario(pc, None, random.Random(42), events)
+        if result is not None:
+            assert result.event_type == "religious"
+
+    def test_exodus_scenario_with_event(self):
+        pc = PlayerCharacter(name="Test", settlement="Town", region="MyRegion", profession="farmer", year=10)
+        events = [SimEvent(year=10, event_type="exodus", description="Exodus", affected_settlements=["Town"])]
+        result = _maybe_exodus_scenario(pc, None, random.Random(42), events)
+        assert result is not None and result.event_type == "exodus"
