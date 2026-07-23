@@ -70,10 +70,11 @@ class TestSimulationCore:
 
     def test_deterministic_simulation(self):
         """Same seed + same parameters → same result."""
-        world = generate_world(42)
+        w1 = generate_world(42)
+        w2 = generate_world(42)
         
-        r1 = run_simulation(world, num_years=50, chaos_factor=0.2)
-        r2 = run_simulation(world, num_years=50, chaos_factor=0.2)
+        r1 = run_simulation(w1, num_years=50, chaos_factor=0.2)
+        r2 = run_simulation(w2, num_years=50, chaos_factor=0.2)
         
         assert r1.final_state.total_population == r2.final_state.total_population
         assert r1.final_state.num_settlements == r2.final_state.num_settlements
@@ -351,9 +352,10 @@ class TestIntermediateSnapshots:
 
     def test_snapshot_determinism(self):
         """Snapshots should be deterministic: same seed → same snapshots."""
-        world = generate_world(42)
-        r1 = run_simulation(world, num_years=50, chaos_factor=0.3, snapshot_interval=10)
-        r2 = run_simulation(world, num_years=50, chaos_factor=0.3, snapshot_interval=10)
+        w1 = generate_world(42)
+        w2 = generate_world(42)
+        r1 = run_simulation(w1, num_years=50, chaos_factor=0.3, snapshot_interval=10)
+        r2 = run_simulation(w2, num_years=50, chaos_factor=0.3, snapshot_interval=10)
         for s1, s2 in zip(r1.snapshots, r2.snapshots):
             assert s1.year == s2.year
             assert s1.total_population == s2.total_population

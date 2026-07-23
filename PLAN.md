@@ -109,6 +109,14 @@ Year-by-year simulation in the Dwarf Fortress tradition. The world is no longer 
 | 6 ✅ | Export any snapshot as TTRPG-ready campaign doc | `wyrd export --seed 42 --year 127 --format ttrpg` produces Foundry/WorldAnvil-ready JSON
 | 7 ✅ | Polish: compact sim output, snapshot-aware HTML map | `wyrd run --seed 42 --years 500 --compact` saves gzip sim; HTML shows snapshot state
 
+## Phase 18 — Depth & Quality (in progress)
+
+**Focus:** Making existing systems richer instead of adding new modules.
+
+| # | What | Status | Verified |
+|---|------|--------|----------|
+| 1 | Bestiary tests (65 new) + bugfixes + travel encounters | ✅ 2026-07-23 | 65 tests, all pass; `wyrd embody` travel has creature encounters |
+
 ### Design Principles
 
 1. **Every output is beautiful.** ANSI color, careful layout, no debug spew.

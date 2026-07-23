@@ -874,7 +874,7 @@ def _render_travel_options(char: PlayerCharacter,
 # ── Main Game Loop ────────────────────────────────────────────────────
 
 
-def _prompt(char: PlayerCharacter, world: World,
+def _prompt(char: PlayerCharacter, world: World, state: SimState,
             events: list[SimEvent]) -> bool:
     """One turn of the game loop. Returns False to quit."""
     print(_status_line(char))
@@ -886,7 +886,8 @@ def _prompt(char: PlayerCharacter, world: World,
         print()
 
     # Prompt
-    print(f"  {ANSI_DIM}[n]ext year  [s]tatus  [t]ravel  [q]uit{ANSI_RESET}")
+    print(f"  {ANSI_DIM}[n]ext year  [s]tatus  [m]arket  "
+          f"[t]ravel  [q]uit{ANSI_RESET}")
     try:
         cmd = input(f"  {_color(226)}►{ANSI_RESET} ").strip().lower()
     except (EOFError, KeyboardInterrupt):
@@ -911,10 +912,12 @@ def _prompt(char: PlayerCharacter, world: World,
                   f"{'…' if len(char.settlements_visited) > 5 else ''}")
     elif cmd == "t":
         _handle_travel(char, world)
+    elif cmd == "m":
+        _handle_market(char, world, state)
     elif cmd == "n":
         return True  # Advance a year
     else:
-        print(f"  {ANSI_DIM}Unknown: '{cmd}'. Try n, s, t, or q.{ANSI_RESET}")
+        print(f"  {ANSI_DIM}Unknown: '{cmd}'. Try n, s, m, t, or q.{ANSI_RESET}")
 
     return True  # Continue playing
 
@@ -966,17 +969,13 @@ def _resolve_travel_encounter(outcome: int, creature: "Creature",
             # Victory!
             gold_reward = rng.randint(5, 15) * tier
             health_cost = -rng.randint(5, 15) * int(tier_factor)
-            item = None
-            if rng.random() < 0.3:
-                item = rng.choice([
-                    "a claw talisman", "creature hide", "a fang necklace",
-                    "a bone charm", "a vial of venom", "a rare pelt",
-                ])
+            from .shop import creature_loot
+            loot_items = creature_loot(creature.creature_type, tier, rng)
             char.gold += gold_reward
             char.total_gold_earned += gold_reward
             char.health = max(0, min(100, char.health + health_cost))
-            if item:
-                char.inventory.append(item)
+            for li in loot_items:
+                char.inventory.append(li["name"])
             _record_deed(char, f"Defeated a {creature.name} in combat")
             _record_legacy_event(char, f"Survived an encounter with {creature.name}")
             parts = [f"You draw your weapon and face the {creature.name}!"]
@@ -984,8 +983,11 @@ def _resolve_travel_encounter(outcome: int, creature: "Creature",
             parts.append(f"You find {gold_reward} gold on the beast's remains.")
             if health_cost:
                 parts.append(f"You are wounded ({health_cost} HP).")
-            if item:
-                parts.append(f"You recover {item} as a trophy.")
+            if loot_items:
+                loot_names = [li["name"] for li in loot_items[:2]]
+                parts.append(f"You recover: {', '.join(loot_names)}.")
+                if len(loot_items) > 2:
+                    parts.append(f"... and {len(loot_items) - 2} more items.")
             return "\n".join(parts)
         else:
             # Defeat
@@ -1149,6 +1151,110 @@ def _handle_travel(char: PlayerCharacter, world: World) -> None:
     else:
         # Encounter already consumed the year
         print(f"  {ANSI_DIM}You eventually reach {ANSI_BOLD}{dest_name}{ANSI_RESET}{ANSI_DIM}.{ANSI_RESET}")
+
+
+def _handle_market(char: PlayerCharacter, world: World, state: SimState) -> None:
+    """Open the settlement market. Player can buy/sell items."""
+    from .shop import (
+        shop_items_for_economy, render_shop_settlement_name,
+        render_item_list, render_sell_inventory,
+        estimate_item_value,
+    )
+    settlement_data = state.settlements.get(char.settlement)
+    economy_type = settlement_data.economy_type if settlement_data else None
+    population = settlement_data.population if settlement_data else 500
+
+    rng = random.Random(
+        world.seed + 6000000 + hash(char.settlement) % 100000 + char.year
+    )
+    items = shop_items_for_economy(economy_type or "trading", rng, population)
+
+    while True:
+        print()
+        print(render_shop_settlement_name(char.settlement, economy_type, char.gold))
+        print(f"  {ANSI_DIM}Your gold: {_color(220)}{char.gold}g"
+              f"{ANSI_RESET}{ANSI_DIM}  Items: {len(char.inventory)}{ANSI_RESET}")
+        print()
+        for idx, item in enumerate(items):
+            if item.get("stock", 0) > 0:
+                print(render_item_list(item, idx))
+        print()
+        print(f"  {ANSI_DIM}[#] buy  [s]ell  [q]uit market{ANSI_RESET}")
+
+        try:
+            cmd = input(f"  {_color(226)}►{ANSI_RESET} ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+
+        if cmd == "q":
+            break
+
+        if cmd == "s":
+            _handle_sell_items(char, rng)
+            continue
+
+        if cmd.isdigit():
+            idx = int(cmd) - 1
+            if 0 <= idx < len(items):
+                item = items[idx]
+                if item.get("stock", 0) <= 0:
+                    print(f"  {ANSI_DIM}Out of stock.{ANSI_RESET}")
+                elif char.gold < item["price"]:
+                    print(f"  {ANSI_DIM}Need {item['price']}g, "
+                          f"have {char.gold}g.{ANSI_RESET}")
+                else:
+                    char.gold -= item["price"]
+                    char.total_gold_spent += item["price"]
+                    char.inventory.append(item["name"])
+                    item["stock"] = item.get("stock", 1) - 1
+                    print(f"  {_color(46)}Bought {item['name']} "
+                          f"({item['price']}g).{ANSI_RESET}")
+                    _record_deed(char,
+                                 f"Purchased at {char.settlement} market")
+            else:
+                print(f"  {ANSI_DIM}Invalid item.{ANSI_RESET}")
+        else:
+            print(f"  {ANSI_DIM}[#] buy  [s]ell  [q]uit{ANSI_RESET}")
+
+
+def _handle_sell_items(char: PlayerCharacter, rng: random.Random) -> None:
+    """Handle selling items from the player's inventory."""
+    from .shop import estimate_item_value, render_sell_inventory
+
+    while True:
+        print()
+        sell_lines = render_sell_inventory(char.inventory)
+        for line in sell_lines:
+            print(line)
+
+        try:
+            cmd = input(f"  {_color(226)}►{ANSI_RESET} ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+
+        if cmd == "q":
+            break
+
+        if cmd.isdigit():
+            idx = int(cmd) - 1
+            seen = list(dict.fromkeys(char.inventory))
+            if 0 <= idx < len(seen):
+                item_name = seen[idx]
+                if item_name not in char.inventory:
+                    continue
+                value = estimate_item_value(item_name)
+                sell_price = max(1, value // 2)
+                char.inventory.remove(item_name)
+                char.gold += sell_price
+                char.total_gold_earned += sell_price
+                print(f"  {_color(46)}Sold {item_name} for "
+                      f"{sell_price}g.{ANSI_RESET}")
+            else:
+                print(f"  {ANSI_DIM}Invalid.{ANSI_RESET}")
+        else:
+            print(f"  {ANSI_DIM}[#] sell  [q] back{ANSI_RESET}")
 
 
 def _advance_year(char: PlayerCharacter, world: World,
@@ -1370,7 +1476,7 @@ def embody_play(world: World,
     events: list[SimEvent] = []
     running = True
     while running and char.alive and char.year < years:
-        if not _prompt(char, world, events):
+        if not _prompt(char, world, state, events):
             running = False
             break
 
