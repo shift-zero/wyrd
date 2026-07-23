@@ -914,7 +914,7 @@ def _gateway_loop(stdscr):
             _draw(stdscr, list_start_y, 2, " Seed     Size     Population     Settlements     Features", CP["dim"])
             list_start_y += 1
 
-            max_visible = h - list_start_y - 5
+            max_visible = h - list_start_y - 3  # Reserve 2 lines for msg + 1 for status bar
             scroll_offset = max(0, selected_idx - max_visible + 1) if max_visible > 0 else 0
             visible_worlds = sorted_worlds[scroll_offset:scroll_offset + max_visible]
 
@@ -980,17 +980,17 @@ def _gateway_loop(stdscr):
                 detail_y = list_start_y - 2  # Start above the list header
                 _draw_world_detail_panel(stdscr, detail_data,
                                           detail_y, detail_x,
-                                          h - list_start_y - 3, w - detail_x - 1)
+                                          h - list_start_y - 1, w - detail_x - 1)
 
-        # ── Status message ────────────────────────────────────────────
+        # ── Status message (one line above status bar) ────────────────
         if status_msg and time_module.monotonic() - status_time < 4:
-            _fill_line(stdscr, h - 3, CP["border"])
-            _draw(stdscr, h - 3, 2, f"  {status_msg}", CP["accent"])
+            _fill_line(stdscr, h - 2, CP["border"])
+            _draw(stdscr, h - 2, 2, f"  {status_msg}", CP["accent"])
         else:
             status_msg = ""
 
         # ── Status bar (persistent mode indicator + context-aware hints) ─
-        status_y = h - 3
+        status_y = h - 1
         # Determine mode indicator
         if world_in_session:
             mode_str = f" ▶ Session: wyrd #{world_in_session.seed}"
