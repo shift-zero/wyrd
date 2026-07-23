@@ -32,6 +32,7 @@ Two fixes this session:
 2. **Gateway sort UX.** Added sort direction indicators (↑/↓ arrows) in the gateway status bar hint. Added Shift+Backtab (curses.KEY_BTAB) to toggle sort direction without resetting selection. Tab still cycles through sort keys (seed/population/name) and resets to natural order.
 
 ### What to tackle next
+- **Fix: `TERRAIN` not imported in gateway.py** — `_render_mini_map()` at line 323 uses `TERRAIN.get(...)` but gateway.py only imports `World`, `generate_world`, and `load_world`, not `TERRAIN` from `.world`. Pressing `g` in the gateway generates a world then crashes when the detail panel renders the mini-map.
 - **Explore alternative renderers (SDL, terminal graphic modes)** — biggest open item mentioned in CRON.md. Sixel graphics or a GTK/Qt viewer would give real map rendering instead of ASCII characters.
 - **Gateway trade route overlay** — replace the current `t` key `endwin()`→print→`initscr()` cycle with a curses inline overlay showing trade routes on a map.
 - **Look for remaining visual bugs** — check viewer, explorer, and embody TUI for overlay/rendering issues similar to the gateway fix in the previous session.
