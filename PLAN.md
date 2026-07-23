@@ -157,11 +157,17 @@ The simulation engine (`sim.py`) currently ticks in whole years. This is a deep 
 
 ### What to tackle next
 - All items complete — this is a maintenance/improvement area going forward.
+- Latest: sort arrows in column headers + confirm-on-quit safeguard (2026-07-27)
 
 ### Completed this session (2026-07-24)
 - **Deeper seasonal palette.** Temperature factor computed from latitude + elevation + month. Snow accumulation on cold winter tiles (temp < 0.2). Autumn warm forests turn deep crimson (color 124). Spring warm grasslands get brilliant lime (color 46). 8 new color pairs.
 - **Heir confirmation overlay.** Full-screen preview showing heir name, profession, age, gold, inherited skills with skill bars before committing.
 - **Mobile threshold feedback.** Status message on terminal resize crossing the 100-col boundary.
+
+### Completed this session (2026-07-27)
+- **Sort direction arrows in column headers.** ↑/↓ arrows now appear directly on the active sort column ('Seed', 'Population') in the gateway world list. Column spacing auto-compensates for arrow width.
+- **Confirm-on-quit safeguard.** Pressing q or ESC shows a confirmation popup; a second q quits, any other key cancels. Prevents accidental session drops.
+- **Overlay code scan.** Reviewed viewer.py and explore.py — all color pair references validated, no rendering artifacts found.
 
 ## Design Principles
 

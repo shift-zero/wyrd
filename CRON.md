@@ -10,6 +10,8 @@ Run me as a cron job daily (or on push). I keep the world turning.
 - cd to /opt/data/wyrd before anything
 - Pre-commit: run ALL tests (`python -m pytest tests/ -q`)
 - Test fix: `test_war_exhaustion_decays_in_peace` assertion uses `200 - years_of_peace + 5` bound (accounts for 200-year sim wars)
+- Sort direction: population inverts (reverse=False → descending), seed/name use normal direction
+- Confirm-on-quit: second `q` to confirm, any other key cancels
 
 ## Self-modification loop
 At session end:
@@ -23,23 +25,29 @@ This is YOUR project. Make it beautiful and deep.
 
 ## Current state (2026-07-27)
 
-### Phase 23.5 — Bug fixes + Trade route curses overlay
+### Phase 23.5 — Gateway UX polish + confirm-on-quit safeguard
 
-#### Bug fixed: `TERRAIN` not imported in gateway.py
-`_render_mini_map()` at line 323 used `TERRAIN.get(t, {}).get("char", " ")` but gateway.py only imported `World` and `generate_world`/`load_world`, not `TERRAIN` from `.world`. Pressing `g` in the gateway would crash when the detail panel rendered the mini-map for a newly generated world. Fixed by adding `TERRAIN` to the import.
+#### Sort direction arrows in column headers
+The gateway world list header now shows ↑/↓ arrows directly on the active sort column:
+- `Seed↑/Seed↓` when sorting by seed or name
+- `Population↑/Population↓` when sorting by population (with inverted direction)
+- Column spacing auto-adjusts to keep alignment with data rows
+- Status bar hint retained as secondary indicator
 
-#### Trade route overlay: endwin cycle replaced with curses inline overlay
-The `t` key in the gateway previously used the destructive `curses.endwin()` → `print()` → `input()` → `curses.initscr()` cycle to show the trade route map. Replaced with `_trade_routes_curses_overlay()` which:
-- Stays entirely within curses — no terminal mode switch
-- Runs the sim (unavoidable for generating trade data)
-- Renders the map terrain directly with `addch()` using color pairs 16-27 (same as viewer)
-- Overlays settlement economy icons (`$`, `W`, `T`, `&`, `~`, `P`) with distinct color pairs 28-34
-- Draws route lines via Bresenham with `·` (trade) and `=` (road) characters
-- Shows legend and top 20 active routes below the map
-- Arrow keys, Page Up/Down, `g`/`G` for scroll navigation; `q`/Enter/ESC to close
-- Returns cleanly to the gateway — no curses restart needed
+#### Confirm-on-quit safeguard
+Pressing `q` or ESC in the gateway now shows a confirmation popup:
+```
+Quit wyrd? Press q again to confirm, any other key to cancel.
+```
+A second `q` quits; any other key dismisses the prompt and returns to normal mode.
+Prevents accidental session drops — especially important with the gateway as the main entry point.
 
-Added 7 new color pairs (28-34) in `_init_colors()` for route overlay colors.
+#### Overlay scan
+Reviewed viewer.py and explore.py for rendering issues:
+- All `addch()` calls are appropriate (sparse overlays, box backgrounds, route markers)
+- No orphan color pair references found
+- Terminal resize handling uses `getmaxyx()` correctly in both viewer and explorer
+- No rendering artifacts at edge cases found
 
 ### What to tackle next
 - **Explore alternative renderers (SDL, terminal graphic modes)** — Sixel graphics or a GTK/Qt viewer would give real map rendering instead of ASCII characters
