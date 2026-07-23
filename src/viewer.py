@@ -197,12 +197,17 @@ def _render_map(stdscr, world: World, smap: dict,
 
 
 def _draw_header(stdscr, seed, year, total, paused, speed, w):
-    fmt = f" wyrd — Seed {seed}  [{year:,}/{total:,}]  "
-    fmt += "⏸ PAUSED" if paused else "▶ RUNNING"
-    fmt += f"  {speed:.1f}x/yr"
+    """Clean header bar with wyrd title and sim status."""
+    fmt = f" wyrd — Seed {seed}  "
+    mode = "⏸ PAUSED" if paused else "▶ RUNNING"
+    mode_color = _CP["status"] if paused else _CP["accent"]
+    yr_str = f" Year {year:,}/{total:,}"
+    speed_str = f" {speed:.1f}x"
+    _fill_line(stdscr, 0, _CP["header"])
     _draw(stdscr, 0, 0, fmt, _CP["header"], bold=True)
-    hint = " [Space]pause [+/-]speed [→]step [d]diff [p]chart [?]help [q]quit "
-    _draw(stdscr, 0, max(0, w - len(hint) - 1), hint, _CP["dim"])
+    _draw(stdscr, 0, len(fmt), mode, mode_color, bold=True)
+    _draw(stdscr, 0, max(0, w - len(speed_str) - 2), speed_str, _CP["dim"])
+    _draw(stdscr, 0, max(0, w - len(speed_str) - len(yr_str) - 4), yr_str, _CP["info"])
 
 
 def _draw_stats(stdscr, state: SimState):
@@ -237,13 +242,23 @@ def _draw_events(stdscr, events: list, max_events: int, start_y: int, w: int):
         _draw(stdscr, y, 0, text[:w - 1], cp)
 
 
-def _draw_footer(stdscr, h, w):
-    controls = (
-        " [Space] pause/resume  [+/-] speed  [→] step  "
-        "[d] diff  [p] pop chart  [?] help  [q] quit"
-    )
+def _draw_status_bar(stdscr, h, w, seed, year, total, paused, speed):
+    """Persistent status bar showing mode, progress, and keybind hints."""
+    # Left: mode indicator
+    if paused:
+        mode_str = f" ⏸ PAUSED  Seed {seed}  Year {year:,}/{total:,}  {speed:.1f}x"
+    else:
+        mode_str = f" ▶ RUNNING  Seed {seed}  Year {year:,}/{total:,}  {speed:.1f}x"
+
+    # Right: context-sensitive key hints
+    if paused:
+        hints = " [Space] resume  [→] step  [+/-] speed  [p] chart  [d] diff  [?] help  [q] quit"
+    else:
+        hints = " [Space] pause  [+/-] speed  [→] step  [p] chart  [d] diff  [?] help  [q] quit"
+
     _fill_line(stdscr, h - 1, _CP["dim"])
-    _draw(stdscr, h - 1, 0, controls[:w - 1], _CP["dim"])
+    _draw(stdscr, h - 1, 0, mode_str, _CP["accent"] if not paused else _CP["status"], bold=not paused)
+    _draw(stdscr, h - 1, max(0, w - len(hints) - 1), hints[:w - len(mode_str) - 3], _CP["dim"])
 
 
 # ── Population chart overlay ─────────────────────────────────────────
@@ -707,7 +722,7 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
 
         ev_start = 2 + map_h
         _draw_events(stdscr, events, events_h, ev_start, w)
-        _draw_footer(stdscr, h, w)
+        _draw_status_bar(stdscr, h, w, world.seed, cur_year, years, paused, speed)
 
         # Overlays (last = on top)
         if show_diff:

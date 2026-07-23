@@ -153,6 +153,7 @@ class SimEvent:
     year: int
     event_type: str
     description: str
+    month: int = 0  # 0 = year-level (no specific month), 1-12 for sub-year ticks
     affected_settlements: list[str] = field(default_factory=list)
     affected_regions: list[str] = field(default_factory=list)
 
@@ -185,6 +186,7 @@ class SimState:
     about the simulation run.
     """
     year: int = 0
+    sub_year_month: int = 0  # 0-11, month within current year. Only used in sub-year tick mode.
     settlements: dict[str, SettlementSnapshot] = field(default_factory=dict)
     events: list[SimEvent] = field(default_factory=list)
     world_modifiers: list[str] = field(default_factory=list)
@@ -826,6 +828,287 @@ def _simulate_tick(world: World, state: SimState, rng: random.Random,
     return events
 
 
+# ── Sub-year Month Tick ─────────────────────────────────────────────
+
+
+def _simulate_month_tick(world: World, state: SimState, rng: random.Random,
+                         year: int, month: int, chaos_factor: float = 0.1,
+                         characters: list | None = None) -> list[SimEvent]:
+    """Simulate one month (1/12 of a year) for the world.
+
+    This is a lightweight tick that distributes ~1/12 of yearly effects
+    across each month. Year-end subsystems (economy, faction_sim, cataclysm,
+    era transitions, political) only fire when month == 11 (the 12th month).
+
+    Args:
+        world: The base world data
+        state: Current simulation state (mutated in-place)
+        rng: Seeded RNG for determinism
+        year: Current simulation year
+        month: Current month (0-11)
+        chaos_factor: Overall chaos scaling
+        characters: Named characters for event integration
+
+    Returns:
+        List of events generated this month
+    """
+    events: list[SimEvent] = []
+    state.sub_year_month = month
+
+    # Scale factor: how much of yearly activity happens this month
+    # Months 0-10: lightweight tick (1/24 of yearly for smoothness)
+    # Month 11: year-end wrap-up + remaining effects
+    if month < 11:
+        sf = 1.0 / 24.0  # Half-weight for intra-year months (smooth)
+    else:
+        sf = 1.0 - (11.0 / 24.0)  # Remainder in the 12th month (about 0.54)
+
+    # Process each active settlement
+    for s_name in list(state.settlements.keys()):
+        s = state.settlements[s_name]
+        if not s.is_active:
+            continue
+
+        # Calculate carrying capacity
+        if world.capacity_map is not None and 0 <= s.y < len(world.capacity_map) and 0 <= s.x < len(world.capacity_map[0]):
+            carrying_cap = world.capacity_map[s.y][s.x]
+        else:
+            carrying_cap = _calculate_carrying_capacity(world, s.x, s.y)
+
+        if world.food_map is not None and world.wealth_map is not None and 0 <= s.y < len(world.food_map) and 0 <= s.x < len(world.food_map[0]):
+            food_avail = world.food_map[s.y][s.x]
+            wealth_avail = world.wealth_map[s.y][s.x]
+        else:
+            food_avail, wealth_avail = _resource_availability(world, s.x, s.y)
+
+        # Food: scaled monthly production and consumption
+        food_production = s.population * food_avail * 2.0 * sf
+        food_consumption = s.population * 0.5 * (1 + _random_variation(rng, 0.1 / 12)) * sf
+        s.food_stores += food_production - food_consumption
+        s.food_stores = max(0, min(s.food_stores, s.population * 5))
+
+        # Health: very subtle monthly drift
+        crowding_ratio = s.population / max(carrying_cap, 1)
+        s.health += (max(0.05, 1.0 - crowding_ratio * 0.5) - s.health) * sf * 0.5
+        s.health = max(0.05, min(1.0, s.health))
+
+        # Prosperity: scaled monthly drift
+        target_prosperity = wealth_avail * 0.7 + food_avail * 0.3
+        s.prosperity += (target_prosperity - s.prosperity) * 0.1 * sf + _random_variation(rng, 0.02 * sf)
+        s.prosperity = max(0.0, min(1.0, s.prosperity))
+
+        # Population: scaled monthly logistic growth
+        if s.food_stores <= 0 or s.health < 0.2:
+            decline_rate = (0.05 + (1 - s.health) * 0.2 + max(0, -s.food_stores / s.population) * 0.1) * sf
+            s.population = max(1, int(s.population * (1 - decline_rate)))
+        else:
+            effective_capacity = carrying_cap * max(food_avail, 0.2)
+            growth_rate = (0.02 + s.prosperity * 0.02) * sf
+            new_pop = _logistic_growth(s.population, effective_capacity, growth_rate)
+            new_pop *= (1 + _random_variation(rng, 0.03 * sf))
+            s.population = max(1, int(new_pop))
+
+        # Update kind based on scaled population
+        s.kind = _population_to_kind(s.population)
+
+        # Event checks (scaled probability per month)
+        # Plague
+        if s.health < 0.4 and rng.random() < 0.03 * chaos_factor * sf and s.population > 5:
+            death_toll = max(1, int(s.population * rng.uniform(0.1, 0.4) * sf))
+            if death_toll < 2:
+                death_toll = 0  # Too small to matter
+            if death_toll > 0:
+                s.population -= death_toll
+                if s.population < 1:
+                    s.population = 1
+                s.health = rng.uniform(0.3, 0.6)
+                events.append(SimEvent(
+                    year=year, month=month + 1,
+                    event_type="plague",
+                    description=f"Plague lingers in {s.name} ({s.region}), claiming {death_toll} this month.",
+                    affected_settlements=[s.name],
+                    affected_regions=[s.region],
+                ))
+
+        # Famine
+        if (s.food_stores < s.population * 0.5
+                and rng.random() < 0.03 * chaos_factor * sf
+                and s.population > 3 and month == 11):
+            death_toll = max(1, int(s.population * rng.uniform(0.05, 0.2)))
+            s.population -= death_toll
+            if s.population < 1:
+                s.population = 1
+            s.food_stores = max(0, s.food_stores - s.population * 0.5)
+            if death_toll > 0:
+                events.append(SimEvent(
+                    year=year, month=month + 1,
+                    event_type="famine",
+                    description=f"Famine deepens in {s.name}. {death_toll} perish from hunger.",
+                    affected_settlements=[s.name],
+                    affected_regions=[s.region],
+                ))
+
+        # Prosperity events (month 11 only)
+        if s.prosperity > 0.7 and rng.random() < 0.01 * chaos_factor * (sf * 12) and month == 11:
+            boom_pop = int(s.population * rng.uniform(0.03, 0.08))
+            s.population += boom_pop
+            s.prosperity = min(1.0, s.prosperity + 0.05)
+            events.append(SimEvent(
+                year=year, month=month + 1,
+                event_type="prosperity",
+                description=f"{s.name} experiences a trade boom. Population grows by {boom_pop}.",
+                affected_settlements=[s.name],
+                affected_regions=[s.region],
+            ))
+
+    # ── Year-end subsystems (fire only in month 11) ─────────────────
+    if month == 11:
+        # New settlement founding
+        for s in list(state.settlements.values()):
+            if not s.is_active:
+                continue
+            carrying_cap = _calculate_carrying_capacity(world, s.x, s.y)
+            if s.population > carrying_cap * 0.7 and rng.random() < 0.02 * chaos_factor:
+                new_x = s.x + rng.randint(-8, 8)
+                new_y = s.y + rng.randint(-8, 8)
+                new_x = max(1, min(world.width - 2, new_x))
+                new_y = max(1, min(world.height - 2, new_y))
+                if world.terrain[new_y][new_x] in ("deep_water", "shallow"):
+                    continue
+                new_name = _generate_settlement_name(rng, state)
+                if new_name in state.settlements:
+                    continue
+                emigrants = int(s.population * rng.uniform(0.05, 0.15))
+                s.population -= emigrants
+                new_s = SettlementSnapshot(
+                    name=new_name, region=s.region,
+                    x=new_x, y=new_y,
+                    population=max(1, emigrants), kind="hamlet",
+                    founded_year=year, prosperity=0.3,
+                    food_stores=emigrants * 2, health=0.8,
+                )
+                state.settlements[new_name] = new_s
+                events.append(SimEvent(
+                    year=year, month=month + 1,
+                    event_type="founding",
+                    description=f"A new settlement, {new_name}, is founded by emigrants from {s.name}.",
+                    affected_settlements=[s.name, new_name],
+                    affected_regions=[s.region],
+                ))
+
+            # Migration
+            elif s.population > carrying_cap * 0.5 and rng.random() < 0.008 * chaos_factor:
+                emigrants = max(1, int(s.population * rng.uniform(0.02, 0.06)))
+                s.population -= emigrants
+                events.append(SimEvent(
+                    year=year, month=month + 1,
+                    event_type="exodus",
+                    description=f"A group of {emigrants} departs {s.name} seeking new opportunities.",
+                    affected_settlements=[s.name],
+                    affected_regions=[s.region],
+                ))
+
+        # Settlement abandonment (year-end check)
+        for s_name in list(state.settlements.keys()):
+            s_state = state.settlements[s_name]
+            if not s_state.is_active:
+                continue
+            if s_state.population <= 3:
+                s_state.is_active = False
+                events.append(SimEvent(
+                    year=year, month=month + 1,
+                    event_type="abandonment",
+                    description=f"{s_name} falls silent. Its last residents scatter.",
+                    affected_settlements=[s_name],
+                    affected_regions=[s_state.region],
+                ))
+
+        # War between settlements
+        active_settlements = [s for s in state.settlements.values() if s.is_active]
+        if len(active_settlements) >= 2 and rng.random() < 0.03 * chaos_factor * (1 + len(active_settlements) * 0.03):
+            s1 = rng.choice(active_settlements)
+            others = [s for s in active_settlements if s.name != s1.name]
+            if others:
+                s2 = rng.choice(others)
+                distance = math.sqrt((s1.x - s2.x) ** 2 + (s1.y - s2.y) ** 2)
+                crowding_bonus = max(0, 1 - distance / 30)
+                poverty_factor = max(0, 0.6 - s1.prosperity) + max(0, 0.6 - s2.prosperity)
+                war_chance = crowding_bonus * (0.15 + poverty_factor * 0.5) * chaos_factor
+                if rng.random() < war_chance:
+                    casualties = max(1, int(min(s1.population, s2.population) * rng.uniform(0.05, 0.2)))
+                    actual_s1_loss = min(casualties // 2, s1.population - 1)
+                    actual_s2_loss = min(casualties - actual_s1_loss, s2.population - 1)
+                    s1.population -= actual_s1_loss
+                    s2.population -= actual_s2_loss
+                    if s1.population < 1: s1.population = 1
+                    if s2.population < 1: s2.population = 1
+                    events.append(SimEvent(
+                        year=year, month=month + 1,
+                        event_type="war",
+                        description=f"War erupts between {s1.name} and {s2.name}. "
+                                    f"{actual_s1_loss + actual_s2_loss} total casualties.",
+                        affected_settlements=[s1.name, s2.name],
+                        affected_regions=list(set([s1.region, s2.region])),
+                    ))
+
+        # Political tick
+        try:
+            from .faction_sim import _simulate_political_tick
+            political_events = _simulate_political_tick(world, state, rng, year, chaos_factor)
+            for pe in political_events:
+                pe.month = month + 1
+            events.extend(political_events)
+        except Exception:
+            pass
+
+        # Cataclysm tick
+        try:
+            from .cataclysm import _simulate_cataclysm_tick, cataclysm_to_sim_event
+            cataclysms = _simulate_cataclysm_tick(world, state, rng, year, chaos_factor)
+            for cataclysm in cataclysms:
+                ce = cataclysm_to_sim_event(cataclysm)
+                ce.month = month + 1
+                events.append(ce)
+        except Exception:
+            pass
+
+        # Economy tick
+        try:
+            from .economy import reconstruct_routes, serialize_routes, _simulate_economy_tick
+            route_objects = reconstruct_routes(state.trade_routes)
+            route_objects, economy_events_raw = _simulate_economy_tick(
+                world, state, rng, year, route_objects, chaos_factor,
+            )
+            state.trade_routes = serialize_routes(route_objects)
+            for etype, desc, icon in economy_events_raw:
+                events.append(SimEvent(
+                    year=year, month=month + 1,
+                    event_type=etype,
+                    description=desc,
+                ))
+        except Exception:
+            pass
+
+        # Record population data for this year
+        state.population_record.append({
+            "year": year,
+            "total_population": state.total_population,
+            "num_settlements": state.num_settlements,
+            "num_abandoned": state.num_abandoned,
+        })
+
+        # Update world modifiers and era transitions
+        _update_modifiers(state)
+        _check_era_transition(state, year, rng, chaos_factor)
+
+    # Re-evaluate kind for all active settlements
+    for s in state.settlements.values():
+        if s.is_active:
+            s.kind = _population_to_kind(s.population)
+
+    return events
+
+
 def _random_variation(rng: random.Random, magnitude: float) -> float:
     """Generate a small random variation around 0, in range [-magnitude, magnitude]."""
     return rng.uniform(-magnitude, magnitude)
@@ -1458,6 +1741,122 @@ def run_simulation(world: World, num_years: int = 100,
     # Apply narrative consequences: character deaths, quest updates, new quests
     _apply_narrative_consequences(world, state, events)
     
+    return SimResult(
+        seed=world.seed + 4000000 + seed_offset,
+        num_years=num_years,
+        initial_state=initial_state,
+        final_state=state,
+        events=events,
+        snapshots=snapshots,
+    )
+
+
+def simulate_years_monthly(world: World, state: SimState, num_years: int,
+                           seed_offset: int = 0, chaos_factor: float = 0.1,
+                           snapshot_interval: int = 0,
+                           snapshots_out: list[SimState] | None = None,
+                           characters: list | None = None) -> list[SimEvent]:
+    """Run simulation using month-level ticks for smoother granularity.
+
+    Unlike simulate_years (which ticks one year at a time), this function
+    ticks 12 months per year using _simulate_month_tick, distributing
+    population/food/health changes smoothly across the year.
+
+    The total effects over 12 months are equivalent to one year tick,
+    but intermediate state snapshots show gradual change rather than
+    sudden jumps.
+
+    Args:
+        world: The base world
+        state: Simulation state (will be mutated)
+        num_years: How many years to simulate
+        seed_offset: Offset for the RNG seed
+        chaos_factor: Random chaos amount (0.0-1.0)
+        snapshot_interval: Snapshots every N years (0 = no snapshots)
+        snapshots_out: List to append snapshots to
+        characters: Named characters for event integration
+
+    Returns:
+        List of all events generated during the simulation
+    """
+    all_events: list[SimEvent] = []
+
+    sim_seed = world.seed + 4000000 + seed_offset
+    rng = random.Random(sim_seed)
+
+    start_year = state.year
+
+    # Initialize economy (seed-deterministic)
+    try:
+        from .economy import serialize_routes, assign_economies, _generate_trade_routes
+        rng_for_economy = random.Random(sim_seed + 999)
+        assign_economies(world, state, rng_for_economy)
+        routes = _generate_trade_routes(state, rng_for_economy, 0)
+        state.trade_routes = serialize_routes(routes)
+    except Exception:
+        pass
+
+    for y in range(1, num_years + 1):
+        current_year = start_year + y
+        state.year = current_year
+        state.sub_year_month = 0
+
+        for m in range(12):
+            month_events = _simulate_month_tick(
+                world, state, rng, current_year, m,
+                chaos_factor, characters,
+            )
+            all_events.extend(month_events)
+
+        # Take snapshots at year boundaries
+        if snapshots_out is not None and snapshot_interval > 0 and current_year % snapshot_interval == 0:
+            snapshots_out.append(copy.deepcopy(state))
+
+    return all_events
+
+
+def run_monthly_simulation(world: World, num_years: int = 100,
+                           seed_offset: int = 0, chaos_factor: float = 0.3,
+                           snapshot_interval: int = 50,
+                           characters: list | None = None) -> SimResult:
+    """Run a monthly-granularity simulation and return the result.
+
+    Same interface as run_simulation, but uses month-level ticks for
+    smoother population/food changes. Useful for the viewer and embody
+    modes where sub-year granularity matters.
+
+    Args:
+        world: The world to simulate
+        num_years: How many years to run
+        seed_offset: Branching offset for the RNG seed
+        chaos_factor: Random chaos amount (0.0-1.0)
+        snapshot_interval: Years between snapshots (0 = no snapshots)
+
+    Returns:
+        SimResult with final state and all events
+    """
+    initial_state = initialize_sim_state(world)
+    state = copy.deepcopy(initial_state)
+
+    state.character_status = _init_character_status(characters)
+
+    snapshots: list[SimState] = []
+
+    if snapshot_interval > 0:
+        snapshots.append(copy.deepcopy(state))
+
+    events = simulate_years_monthly(
+        world, state, num_years, seed_offset, chaos_factor,
+        snapshot_interval=snapshot_interval,
+        snapshots_out=snapshots,
+        characters=characters,
+    )
+
+    if snapshot_interval > 0 and (num_years == 0 or num_years % snapshot_interval != 0):
+        snapshots.append(copy.deepcopy(state))
+
+    _apply_narrative_consequences(world, state, events)
+
     return SimResult(
         seed=world.seed + 4000000 + seed_offset,
         num_years=num_years,

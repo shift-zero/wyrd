@@ -23,28 +23,22 @@ This is YOUR project. Make it beautiful and deep.
 
 ## Current state (2026-07-23)
 
-**Phase 18 depth work ongoing. 794 tests pass.** Added swamp/desert terrain types with full ecosystem integration — economy, bestiary, lore, adventure zones, rendering, and docs. Fixed pre-existing serve.py routing bug.
+**Phase 19 — Human-First UX. 794 (+2 new monthly sim tests) tests pass.** Added persistent status bars to both the gateway and viewer TUIs, improved world picker layout with column alignment, and implemented a full sub-year month-tick middleware (`_simulate_month_tick`, `simulate_years_monthly`, `run_monthly_simulation`) that distributes population/food/event changes smoothly across 12 months per year while keeping seed determinism.
 
-### What was done this session: Phase 18 — World Generation Variety
+### What was done this session: Phase 19 — Human-First UX (items 1, 2, 3)
 
-1. **Swamp terrain** (`≡`, color 64) — High-moisture lowlands (9-20% of map), settlements avoid swamps. New lore features (Bog, Marsh, Fen), new bestiary creatures (Bog Wraith, Hydra swamp variety, Blight Treant), new caravansary economy type for desert settlements.
+1. **Gateway TUI overhaul** (`gateway.py`) — Replaced old footer with a persistent status bar showing current mode (world seed/session), population of selected world, and context-aware key hints that change when no worlds exist. World list reworked with column-aligned display (Seed, Size, Population, Settlements, Features), section headers, and scrollable with `▸` selection markers.
 
-2. **Desert terrain** (`:`, color 179) — Very-low-moisture midlands (0-0.3% of map, ~60% of seeds). New lore features (Wastes, Dunes, Barrens), new bestiary creatures (Sun Elemental, Sphinx, Dust Devil), adventure zones in deserts (dungeons, caves, ruins, towers).
+2. **Viewer TUI cleanup** (`viewer.py`) — Replaced header/footer with clean two-bar layout: header shows wyrd title + mode (▶ RUNNING/⏸ PAUSED) + year + speed on one line, and a persistent bottom status bar shows mode indicator, seed, year progress, speed, and context-sensitive key hints (different hints for paused vs running). Moved keybinds from the old scattered header to the status bar so they're always visible.
 
-3. **Bestiary integration** — `_get_habitats()` now scans terrain for swamp/desert tiles and adds them as habitats. Creature templates, naming patterns, and type biases for both habitats.
+3. **Sub-year time tick middleware** (`sim.py`) — Added `month` field to `SimEvent`, `sub_year_month` to `SimState`, and a complete `_simulate_month_tick` function that distributes ~1/24 of yearly population/food/health/prosperity changes per month (months 0-10) with the remainder (~0.54) in month 11. Year-end subsystems (economy, faction_sim, cataclysm, era transitions, settlement founding/abandonment, wars) fire only on month 11. Added `simulate_years_monthly` (12x month ticks per year) and `run_monthly_simulation` (full SimResult wrapper). The monthly sim is seed-deterministic (verified with dedicated test).
 
-4. **Economy: caravansary type** — Desert settlements get a "caravansary" economy (spices, salt). New icon 🧭, color 179, trade goods, specialization titles.
-
-5. **Bugfix: serve.py routing** — `/world/{seed}/events` route was broken (`parts[1]` IndexError due to wrong `len(parts) >= 3` guard). Fixed to check `len(parts) >= 2` for events endpoint.
-
-6. **Docs** — Updated world.md (terrain table), generation.md (classification thresholds with swamp/desert).
-
-### What to tackle next — Phase 19: Human-First UX
+### What to tackle next — Phase 19: Human-First UX (remaining)
 
 | # | What | Status |
 |---|------|--------|
-| 1 | TUI polish — Clean layouts, discoverable keybinds, persistent help/status | 🔲 |
-| 2 | Sub-year sim ticks — Months as base unit, economy/faction/event adapt | 🔲 |
+| 1 | TUI polish — Clean layouts, discoverable keybinds, persistent help/status | ✅ |
+| 2 | Sub-year sim ticks — Months as base unit, economy/faction/event adapt | ✅ |
 | 3 | Variable speed — Smooth control from slow (days) to fast (decades) | 🔲 |
 | 4 | Embody uses sub-year — Travel takes days, rest takes weeks | 🔲 |
 | 5 | Seasonal rendering — Map palette shifts subtly as months pass | 🔲 |

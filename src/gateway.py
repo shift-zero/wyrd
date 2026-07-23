@@ -310,8 +310,13 @@ def _gateway_loop(stdscr):
         if not worlds:
             _draw(stdscr, list_start_y, 2, "No worlds found. Press [g] to generate one.", CP["dim"])
         else:
-            _draw(stdscr, list_start_y, 2,
-                  f"Recent Worlds ({len(worlds)} found)", CP["title"], bold=True)
+            # Section header with separator
+            _fill_line(stdscr, list_start_y, CP["dim"])
+            title = f"  Recent Worlds  ({len(worlds)} found)  "
+            _draw(stdscr, list_start_y, 0, title, CP["title"], bold=True)
+            list_start_y += 1
+            _fill_line(stdscr, list_start_y, CP["dim"])
+            _draw(stdscr, list_start_y, 2, " Seed     Size     Population     Settlements     Features", CP["dim"])
             list_start_y += 1
 
             max_visible = h - list_start_y - 5
@@ -326,20 +331,34 @@ def _gateway_loop(stdscr):
                 if is_selected:
                     _fill_line(stdscr, y, CP["highlight"])
 
-                marker = "\u25b8 " if is_selected else "  "
+                marker = "▸ " if is_selected else "  "
                 _draw(stdscr, y, 2, marker, CP["accent"], bold=True)
 
-                x_pos = 4
-                seed_str = f"#{w_info['seed']}"
-                _draw(stdscr, y, x_pos, seed_str, CP["seed"], bold=True)
-                x_pos += len(seed_str) + 1
+                # Seed column (left-aligned)
+                seed_str = f"#{w_info['seed']:<6}"
+                _draw(stdscr, y, 5, seed_str, CP["seed"], bold=True)
 
-                info = (f"  {w_info['dimensions']}  "
-                        f"{w_info['population']:,} souls \u00b7 {w_info['regions']} regions")
-                _draw(stdscr, y, x_pos, info, CP["dim"])
+                # Size column
+                dim_str = f"{w_info['dimensions']:<8}"
+                _draw(stdscr, y, 16, dim_str, CP["dim"])
 
-                # Badges (right-aligned)
-                bx = w - 20
+                # Population column with compact formatting
+                pop = w_info["population"]
+                if pop >= 1_000_000:
+                    pop_str = f"{pop/1_000_000:.1f}M"
+                elif pop >= 1_000:
+                    pop_str = f"{pop/1_000:.1f}k"
+                else:
+                    pop_str = str(pop)
+                pop_str = f"{pop_str:>9}"
+                _draw(stdscr, y, 25, pop_str, CP["normal"])
+
+                # Settlement count
+                s_count = f"{w_info['regions']} regions"
+                _draw(stdscr, y, 35, s_count, CP["dim"])
+
+                # Badges (right-aligned, last 10 cols)
+                bx = w - 14
                 if _has_sim_file(w_info["seed"]):
                     _draw(stdscr, y, bx, "S", CP["badge_s"], bold=True); bx += 2
                 if w_info["has_magic"]:
@@ -358,12 +377,27 @@ def _gateway_loop(stdscr):
         else:
             status_msg = ""
 
-        # ── Footer ────────────────────────────────────────────────────
-        footer_y = h - 2
-        footer = (" [\u2191\u2193] select  [g] generate  [l] load  [e] explore  "
-                  "[v] view sim  [d] describe  [s] run  [t] routes  [?] help  [q] quit")
-        _fill_line(stdscr, footer_y, CP["dim"])
-        _draw(stdscr, footer_y, 0, footer[:w - 1], CP["dim"])
+        # ── Status bar (persistent mode indicator + context-aware hints) ─
+        status_y = h - 3
+        # Determine mode indicator
+        if world_in_session:
+            mode_str = f" ▶ Session: wyrd #{world_in_session.seed}"
+        elif worlds and 0 <= selected_idx < len(worlds):
+            w_info = worlds[selected_idx]
+            mode_str = f" wyrd #{w_info['seed']} — {w_info['population']:,} souls"
+        else:
+            mode_str = " No world selected"
+
+        # Build context-sensitive key hints (right-aligned)
+        if worlds:
+            hints = " [↑↓/k j] sel  [g] gen  [l] load  [e] explore  [v] view  [d] desc  [s] sim  [t] routes"
+        else:
+            hints = " [g] generate  [l] load"
+        hints += "  [?] help  [q] quit"
+
+        _fill_line(stdscr, status_y, CP["border"])
+        _draw(stdscr, status_y, 0, mode_str, CP["accent"], bold=True)
+        _draw(stdscr, status_y, max(0, w - len(hints) - 1), hints[:w - len(mode_str) - 2], CP["dim"])
 
         # ── Help overlay ─────────────────────────────────────────────
         if show_help:

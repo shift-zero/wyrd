@@ -77,12 +77,12 @@ The simulation engine (`sim.py`) currently ticks in whole years. This is a deep 
 
 | # | What | Verifiable |
 |---|------|------------|
-| 1 🔲 | TUI layout overhaul — clean panels, status bar, consistent navigation | Navigating the TUI feels natural without pressing `?` first |
-| 2 🔲 | Keybind discoverability — persistent help hints, modal context labels | You always know what keys do in the current view |
-| 3 🔲 | Sub-year time tick in sim engine — months as base unit | `wyrd run` can tick in months; events schedule at month granularity |
-| 4 🔲 | Variable speed control in viewer — smooth from slow (days) to fast (decades) | `v` viewer has speed slider that goes from "days crawl by" to "years fly by" |
-| 5 🔲 | Embody mode uses sub-year ticks — travel days, rest weeks, age yearly | Moving between settlements takes visible days, not instant teleport |
-| 6 🔲 | Seasonal rendering — map colors shift subtly as months pass | A year of sim shows 4 distinct seasonal palette shifts on the map |
+| 1 ✅ | TUI layout overhaul — clean panels, status bar, consistent navigation | Navigating the TUI feels natural without pressing `?` first | 2026-07-23 |
+| 2 ✅ | Keybind discoverability — persistent help hints, modal context labels | You always know what keys do in the current view | 2026-07-23 |
+| 3 ✅ | Sub-year time tick in sim engine — months as base unit | `wyrd run` can tick in months; events schedule at month granularity | 2026-07-23 |
+| 4 🔲 | Variable speed control in viewer — smooth from slow (days) to fast (decades) | `v` viewer has speed slider that goes from "days crawl by" to "years fly by" | |
+| 5 🔲 | Embody mode uses sub-year ticks — travel days, rest weeks, age yearly | Moving between settlements takes visible days, not instant teleport | |
+| 6 🔲 | Seasonal rendering — map colors shift subtly as months pass | A year of sim shows 4 distinct seasonal palette shifts on the map | |
 
 ## Design Principles
 
