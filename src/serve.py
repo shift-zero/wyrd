@@ -258,9 +258,38 @@ PORT = 8080
 class WyrdHandler(BaseHTTPRequestHandler):
     """HTTP request handler for wyrd dashboard."""
 
-    def do_GET(self):
-        path = self.path.rstrip("/") or "/"
+    def _parse_pagination(self) -> tuple[int, int]:
+        """Parse limit/offset query params. Returns (offset, limit)."""
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
         try:
+            limit = max(1, min(100, int(params.get("limit", ["20"])[0])))
+        except (ValueError, TypeError):
+            limit = 20
+        try:
+            offset = max(0, int(params.get("offset", ["0"])[0]))
+        except (ValueError, TypeError):
+            offset = 0
+        return offset, limit
+
+    def _paginated(self, items: list, total: int | None = None) -> dict:
+        offset, limit = self._parse_pagination()
+        page = items[offset:offset + limit]
+        return {
+            "data": page,
+            "pagination": {
+                "offset": offset,
+                "limit": limit,
+                "returned": len(page),
+                "total": total if total is not None else len(items),
+            },
+        }
+
+    def do_GET(self):
+        path = self.path.split("?")[0].rstrip("/") or "/"
+        try:
+            # ── HTML Dashboard (existing) ─────────────────────────────
             if path == "/" or path == "/worlds":
                 self._handle_worlds()
             elif path.startswith("/world/"):
@@ -279,6 +308,8 @@ class WyrdHandler(BaseHTTPRequestHandler):
                     self._handle_world_events(seed, year)
                 else:
                     self._handle_world_detail(seed)
+
+            # ── Legacy /api/* (backward compat) ──────────────────────
             elif path == "/api/worlds":
                 self._handle_api_worlds()
             elif path.startswith("/api/world/"):
@@ -288,6 +319,11 @@ class WyrdHandler(BaseHTTPRequestHandler):
                     self._handle_api_world(seed, int(parts[2]))
                 else:
                     self._handle_api_world(seed)
+
+            # ── REST API v1 ──────────────────────────────────────────
+            elif path.startswith("/api/v1/") or path == "/api/v1":
+                self._handle_api_v1()
+
             else:
                 self._send_error(404, f"Not found: {path}")
         except Exception as e:
@@ -302,12 +338,15 @@ class WyrdHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(html.encode("utf-8"))
 
-    def _send_json(self, data: dict):
-        self.send_response(200)
+    def _send_json(self, data: dict, status: int = 200):
+        self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(json.dumps(data, indent=2).encode("utf-8"))
+
+    def _send_json_error(self, status: int, message: str):
+        self._send_json({"error": message}, status=status)
 
     def _send_error(self, code: int, message: str):
         self.send_response(code)
@@ -563,6 +602,387 @@ h1{{color:#e94560;}}p{{color:#8b949e;}}</style></head>
             data["snapshot_year"] = snapshot_year
         self._send_json(data)
 
+    # ── REST API v1 ────────────────────────────────────────────────────
+
+    def _handle_api_v1(self):
+        """Dispatch REST API v1 requests."""
+        path = self.path.split("?")[0].rstrip("/")
+        rest = path[len("/api/v1/"):]
+
+        # GET /api/v1
+        if not rest:
+            self._send_json({
+                "wyrd": "Generative Fantasy Sandbox",
+                "version": "0.1.0",
+                "endpoints": {
+                    "GET /worlds": "List all generated worlds",
+                    "GET /worlds/<seed>": "World summary",
+                    "GET /worlds/<seed>/regions": "All regions with settlements",
+                    "GET /worlds/<seed>/settlements": "All settlements across regions",
+                    "GET /worlds/<seed>/characters": "Narrative characters",
+                    "GET /worlds/<seed>/quests": "Narrative quests",
+                    "GET /worlds/<seed>/events": "Narrative + sim events",
+                    "GET /worlds/<seed>/factions": "Factions with relationships",
+                    "GET /worlds/<seed>/zones": "Adventure zones",
+                    "GET /worlds/<seed>/pantheon": "Religion/pantheon data",
+                    "GET /worlds/<seed>/economy": "Economy and trade routes",
+                    "GET /worlds/<seed>/magic": "Magic system",
+                    "GET /worlds/<seed>/simulation": "Simulation state",
+                    "GET /worlds/<seed>/snapshots": "Available snapshot years",
+                    "GET /worlds/<seed>/terrain": "Full terrain grid",
+                },
+                "docs": "https://github.com/shift-zero/wyrd",
+            })
+            return
+
+        parts = rest.split("/")
+        endpoint = parts[0]
+
+        if endpoint == "worlds":
+            if len(parts) == 1:
+                self._api_list_worlds()
+            elif len(parts) == 2:
+                try:
+                    seed = int(parts[1])
+                except ValueError:
+                    self._send_json({"error": f"Invalid seed: {parts[1]}"}, status=400)
+                    return
+                self._api_get_world(seed)
+            elif len(parts) == 3:
+                try:
+                    seed = int(parts[1])
+                except ValueError:
+                    self._send_json({"error": f"Invalid seed: {parts[1]}"}, status=400)
+                    return
+                self._api_get_world_resource(seed, parts[2])
+            else:
+                self._send_json({"error": f"Unknown path: /api/v1/{rest}"}, status=404)
+        else:
+            self._send_json_error(404, f"Unknown endpoint: {endpoint}")
+
+    def _load_api_world(self, seed: int):
+        """Load a world for API use, returning None on failure."""
+        world = _load_world(seed)
+        if world is None:
+            self._send_json_error(404, f"World #{seed} not found. Generate it with `wyrd generate --seed {seed}`")
+            return None
+        return world
+
+    def _api_list_worlds(self):
+        """GET /api/v1/worlds — List all generated worlds (paginated)."""
+        worlds = _find_worlds()
+        self._send_json(self._paginated(worlds))
+
+    def _api_get_world(self, seed: int):
+        """GET /api/v1/worlds/<seed> — World summary (not full dump)."""
+        world = self._load_api_world(seed)
+        if world is None:
+            return
+        total_pop = sum(s.population for r in world.regions for s in r.settlements)
+        total_settlements = sum(len(r.settlements) for r in world.regions)
+        terrain_counts = {}
+        for row in world.terrain:
+            for t in row:
+                terrain_counts[t] = terrain_counts.get(t, 0) + 1
+        data = {
+            "seed": world.seed,
+            "width": world.width,
+            "height": world.height,
+            "tiles": world.tiles,
+            "regions": len(world.regions),
+            "settlements": total_settlements,
+            "population": total_pop,
+            "rivers": len(world.rivers),
+            "adventure_zones": len(world.adventure_zones),
+            "factions": len(world.factions),
+            "has_lore": world.lore is not None,
+            "has_narrative": world.narrative is not None,
+            "has_chronicles": world.chronicles is not None,
+            "has_magic": world.magic is not None,
+            "has_pantheon": world.pantheon is not None,
+            "has_bestiary": len(world.bestiary) > 0,
+            "terrain_distribution": terrain_counts,
+        }
+        self._send_json(data)
+
+    def _api_get_world_resource(self, seed: int, resource: str):
+        """GET /api/v1/worlds/<seed>/<resource> — Specific resource."""
+        if resource in ("simulation", "snapshots", "terrain"):
+            world = _load_world(seed)
+            if world is None:
+                self._send_json_error(404, f"World #{seed} not found.")
+                return
+        else:
+            world = self._load_api_world(seed)
+        if world is None:
+            return
+
+        if resource == "regions":
+            result = []
+            for r in world.regions:
+                s_list = [{"name": s.name, "x": s.x, "y": s.y,
+                           "population": s.population, "kind": s.kind}
+                          for s in r.settlements]
+                result.append({"name": r.name, "biome": r.biome,
+                               "settlements": s_list,
+                               "settlement_count": len(s_list),
+                               "total_population": sum(s.population for s in r.settlements)})
+            self._send_json(self._paginated(result))
+
+        elif resource == "settlements":
+            result = []
+            for r in world.regions:
+                for s in r.settlements:
+                    result.append({
+                        "name": s.name, "x": s.x, "y": s.y,
+                        "population": s.population, "kind": s.kind,
+                        "region": r.name, "biome": r.biome,
+                    })
+            self._send_json(self._paginated(result))
+
+        elif resource == "characters":
+            if world.narrative and world.narrative.characters:
+                chars = []
+                for c in world.narrative.characters:
+                    chars.append({
+                        "name": c.name, "surname": c.surname,
+                        "full_name": c.full_name, "age": c.age,
+                        "gender": c.gender, "occupation": c.occupation,
+                        "personality_traits": c.personality_traits,
+                        "home_region": c.home_region,
+                        "home_settlement": c.home_settlement,
+                        "backstory": c.backstory, "status": c.status,
+                    })
+                self._send_json(self._paginated(chars))
+            else:
+                self._send_json({"data": [], "pagination": {"offset": 0, "limit": 20, "returned": 0, "total": 0}})
+
+        elif resource == "quests":
+            if world.narrative and hasattr(world.narrative, 'quests') and world.narrative.quests:
+                quests = []
+                for q in world.narrative.quests:
+                    quests.append({
+                        "name": q.name, "quest_type": q.quest_type,
+                        "difficulty": q.difficulty, "description": q.description,
+                        "giver_character": q.giver_character,
+                        "giver_settlement": q.giver_settlement,
+                        "target_region": q.target_region,
+                        "rewards": q.rewards, "is_active": q.is_active,
+                    })
+                self._send_json(self._paginated(quests))
+            else:
+                self._send_json({"data": [], "pagination": {"offset": 0, "limit": 20, "returned": 0, "total": 0}})
+
+        elif resource == "events":
+            events = []
+            # Sim events
+            sim_data = _load_sim_data(seed)
+            if sim_data:
+                for evt in sim_data.get("events", []):
+                    events.append({
+                        "year": evt.get("year", 0),
+                        "type": evt.get("event_type", "unknown"),
+                        "description": evt.get("description", ""),
+                        "source": "simulation",
+                    })
+            # Narrative events
+            if world.narrative and hasattr(world.narrative, 'events'):
+                for evt in world.narrative.events:
+                    events.append({
+                        "year": evt.year,
+                        "type": evt.event_type,
+                        "description": evt.description,
+                        "source": "narrative",
+                        "regions_involved": evt.regions_involved,
+                        "settlements_involved": evt.settlements_involved,
+                        "characters_involved": evt.characters_involved,
+                    })
+            events.sort(key=lambda e: e["year"])
+            self._send_json(self._paginated(events))
+
+        elif resource == "factions":
+            if world.factions:
+                facs = []
+                for f in world.factions:
+                    facs.append({
+                        "name": f.name, "faction_type": f.faction_type,
+                        "icon": f.icon, "territory": f.territory,
+                        "leader_name": f.leader_name, "leader_title": f.leader_title,
+                        "influence": f.influence, "wealth": f.wealth,
+                        "military": f.military, "stability": f.stability,
+                        "power_score": f.power_score, "reputation": f.reputation,
+                        "goals": f.goals, "description": f.description,
+                    })
+                result = {
+                    "factions": facs,
+                    "relationships": [
+                        {
+                            "faction_a": r.faction_a,
+                            "faction_b": r.faction_b,
+                            "rel_type": r.rel_type,
+                            "description": r.description,
+                        }
+                        for r in world.faction_relationships
+                    ],
+                }
+                self._send_json(result)
+            else:
+                self._send_json({"factions": [], "relationships": []})
+
+        elif resource == "zones":
+            if world.adventure_zones:
+                zones = []
+                for z in world.adventure_zones:
+                    zones.append({
+                        "name": z.name, "zone_type": z.zone_type,
+                        "char": z.char, "x": z.x, "y": z.y,
+                        "region": z.region, "difficulty": z.difficulty,
+                        "inhabitants": z.inhabitants, "description": z.description,
+                        "treasure_tier": z.treasure_tier, "quest_hook": z.quest_hook,
+                    })
+                self._send_json(self._paginated(zones))
+            else:
+                self._send_json({"data": [], "pagination": {"offset": 0, "limit": 20, "returned": 0, "total": 0}})
+
+        elif resource == "pantheon":
+            if world.pantheon:
+                from .religion import PantheonSystem
+                p = world.pantheon
+                religions = []
+                for rel in p.religions:
+                    deities = []
+                    for d in rel.deities:
+                        deities.append({
+                            "name": d.name, "surname": d.surname,
+                            "full_name": f"{d.name} {d.surname}",
+                            "domains": d.domains, "alignment": d.alignment,
+                            "symbol": d.symbol, "holy_animal": d.holy_animal,
+                            "description": d.description,
+                        })
+                    holy_sites = []
+                    for hs in rel.holy_sites:
+                        holy_sites.append({
+                            "name": hs.name, "deity_name": hs.deity_name,
+                            "site_type": hs.site_type, "settlement": hs.settlement,
+                            "region": hs.region, "description": hs.description,
+                        })
+                    religions.append({
+                        "name": rel.name, "description": rel.description,
+                        "tenets": rel.tenets, "clergy_title": rel.clergy_title,
+                        "holy_day": rel.holy_day, "alignment": rel.alignment,
+                        "deities": deities, "holy_sites": holy_sites,
+                    })
+                self._send_json({"religions": religions,
+                                 "total_deities": sum(len(r.deities) for r in p.religions),
+                                 "total_holy_sites": sum(len(r.holy_sites) for r in p.religions)})
+            else:
+                self._send_json({"religions": [], "total_deities": 0, "total_holy_sites": 0})
+
+        elif resource == "economy":
+            # Check if sim data has economy info
+            sim_data = _load_sim_data(seed)
+            route_data = None
+            if sim_data:
+                routes = sim_data.get("trade_routes", [])
+                economies = sim_data.get("settlement_economies", {})
+                route_data = {
+                    "routes": routes,
+                    "settlement_economies": economies,
+                }
+            self._send_json({
+                "has_economy_data": route_data is not None,
+                "economy_data": route_data,
+                "settlements": [
+                    {"name": s.name, "region": r.name, "population": s.population}
+                    for r in world.regions for s in r.settlements
+                ],
+            })
+
+        elif resource == "magic":
+            if world.magic:
+                m = world.magic
+                magic_data = {
+                    "seed": m.seed,
+                    "schools": [
+                        {
+                            "name": s.name, "color": s.color,
+                            "description": s.description,
+                            "traditions": [
+                                {
+                                    "name": t.name, "description": t.description,
+                                    "color": t.color,
+                                }
+                                for t in getattr(s, 'traditions', [])
+                            ],
+                            "biome": getattr(s, 'biome', None),
+                            "culture": getattr(s, 'culture', None),
+                        }
+                        for s in m.schools
+                    ],
+                }
+                self._send_json(magic_data)
+            else:
+                self._send_json({"seed": seed, "schools": []})
+
+        elif resource == "simulation":
+            sim_data = _load_sim_data(seed)
+            if sim_data:
+                summary = {
+                    "total_years": sim_data.get("year", 0),
+                    "total_events": len(sim_data.get("events", [])),
+                    "total_snapshots": len(sim_data.get("snapshots", {})),
+                    "snapshot_years": sorted(int(k) for k in sim_data.get("snapshots", {}).keys()),
+                    "population_record": sim_data.get("population_record", [])[-100:],
+                    "world_modifiers": sim_data.get("world_modifiers", []),
+                }
+                self._send_json(summary)
+            else:
+                self._send_json({"total_years": 0, "total_events": 0,
+                                 "total_snapshots": 0, "snapshot_years": [],
+                                 "message": "No simulation data for this world."})
+
+        elif resource == "snapshots":
+            years = _get_snapshot_years(seed)
+            sim_data = _load_sim_data(seed)
+            snapshots = []
+            for y in years:
+                raw = sim_data.get("snapshots", {}).get(str(y), {}) if sim_data else {}
+                settlements = raw.get("settlements", {})
+                total_pop = sum(s.get("population", 0) for s in settlements.values())
+                snapshots.append({
+                    "year": y,
+                    "settlements": len(settlements),
+                    "population": total_pop,
+                })
+            self._send_json({"snapshots": snapshots})
+
+        elif resource == "terrain":
+            # Full terrain grid — useful for mapping tools
+            grid = []
+            for y in range(world.height):
+                row = []
+                for x in range(world.width):
+                    t = world.terrain[y][x]
+                    cell = {
+                        "x": x, "y": y, "terrain": t,
+                        "elevation": round(world.elevation[y][x], 4) if world.elevation else 0,
+                    }
+                    # Check for river
+                    if (x, y) in world.rivers:
+                        cell["river"] = True
+                    # Check for landmark
+                    for lm in getattr(world, 'landmarks', []):
+                        if lm.x == x and lm.y == y:
+                            cell["landmark"] = lm.name
+                            cell["landmark_type"] = lm.landmark_type
+                    row.append(cell)
+                grid.append(row)
+            self._send_json({"width": world.width, "height": world.height,
+                             "grid": grid})
+
+        else:
+            self._send_error(404, f"Unknown resource: {resource}")
+
     def log_message(self, format, *args):
         """Quiet logging — only log actual requests, not favicon etc."""
         import sys
@@ -577,8 +997,42 @@ def serve_world(
     seed: Optional[int] = None,
     port: int = 8080,
     open_browser: bool = True,
+    rest_port: Optional[int] = None,
 ):
-    """Start the wyrd web dashboard server."""
+    """Start the wyrd web dashboard server, optionally with API-only server."""
+    if rest_port is not None and rest_port != port:
+        # Start a dedicated API-only server on rest_port
+        import threading
+        from http.server import HTTPServer, BaseHTTPRequestHandler
+
+        class ApiHandler(WyrdHandler):
+            """API-only handler — serves JSON, never HTML."""
+            def _send_html(self, html: str):
+                self._send_json({"error": "This server only serves JSON API. Use the dashboard server for HTML."})
+
+            def do_GET(self):
+                path = self.path.split("?")[0].rstrip("/") or "/"
+                try:
+                    if path.startswith("/api/v1/") or path == "/api/v1" or path == "/v1":
+                        self._handle_api_v1()
+                    elif path == "/":
+                        self._send_json({
+                            "wyrd": "Generative Fantasy Sandbox API",
+                            "version": "0.1.0",
+                            "docs": "http://127.0.0.1:{port}/api/v1/".format(port=rest_port),
+                        })
+                    else:
+                        self._send_error(404, f"API endpoint not found: {path}")
+                except Exception as e:
+                    self._send_error(500, f"API error: {e}")
+                    import traceback
+                    traceback.print_exc()
+
+        api_server = HTTPServer(("127.0.0.1", rest_port), ApiHandler)
+        api_thread = threading.Thread(target=api_server.serve_forever, daemon=True)
+        api_thread.start()
+        print(f"⚄ wyrd API server running at http://127.0.0.1:{rest_port}/api/v1/")
+
     server = HTTPServer(("127.0.0.1", port), WyrdHandler)
     url = f"http://127.0.0.1:{port}"
 
@@ -602,4 +1056,45 @@ def serve_world(
         server.serve_forever()
     except KeyboardInterrupt:
         print("\n⏹  wyrd server stopped.")
+        server.server_close()
+
+
+def serve_api(
+    seed: Optional[int] = None,
+    port: int = 9090,
+):
+    """Start a standalone REST API-only server."""
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+
+    class ApiHandler(WyrdHandler):
+        """API-only handler."""
+        def _send_html(self, html: str):
+            self._send_json({"error": "This server only serves JSON API."})
+
+        def do_GET(self):
+            path = self.path.split("?")[0].rstrip("/") or "/"
+            try:
+                if path.startswith("/api/v1/") or path == "/api/v1" or path == "/v1":
+                    self._handle_api_v1()
+                elif path == "/":
+                    self._send_json({
+                        "wyrd": "Generative Fantasy Sandbox API",
+                        "version": "0.1.0",
+                        "docs": f"http://127.0.0.1:{port}/api/v1/",
+                    })
+                else:
+                    self._send_error(404, f"API endpoint not found: {path}")
+            except Exception as e:
+                self._send_error(500, f"API error: {e}")
+                import traceback
+                traceback.print_exc()
+
+    server = HTTPServer(("127.0.0.1", port), ApiHandler)
+    print(f"⚄ wyrd API server running at http://127.0.0.1:{port}/api/v1/")
+    print(f"  Press Ctrl+C to stop.")
+
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n⏹  wyrd API server stopped.")
         server.server_close()

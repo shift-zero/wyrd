@@ -347,8 +347,18 @@ def main():
                             help="World seed to show on startup")
     serve_cmd.add_argument("--port", "-p", type=int, default=8080,
                             help="Port to serve on (default: 8080)")
+    serve_cmd.add_argument("--rest-port", type=int, default=None,
+                            help="Also start a REST API-only server on this port")
     serve_cmd.add_argument("--no-browser", action="store_true",
                             help="Don't open browser automatically")
+
+    # ── api ───────────────────────────────────────────────────────────
+    api_cmd = sub.add_parser("api",
+                              help="Start REST API server (JSON-only)")
+    api_cmd.add_argument("--seed", type=int, default=None,
+                          help="World seed to load on startup")
+    api_cmd.add_argument("--port", "-p", type=int, default=9090,
+                          help="Port to serve on (default: 9090)")
 
     # ── ask ────────────────────────────────────────────────────────
     ask_cmd = sub.add_parser("ask",
@@ -848,6 +858,15 @@ def main():
             seed=args.seed,
             port=args.port,
             open_browser=not args.no_browser,
+            rest_port=args.rest_port,
+        )
+
+    # ── api ───────────────────────────────────────────────────────────
+    elif args.command == "api":
+        from .serve import serve_api
+        serve_api(
+            seed=args.seed,
+            port=args.port,
         )
 
     # ── save ───────────────────────────────────────────────────────
