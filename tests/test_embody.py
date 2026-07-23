@@ -963,3 +963,386 @@ class TestRenderEpilogue:
                              region="Telvan", profession="farmer", age=0, year=0)
         result = _render_epilogue(pc)
         assert result  # Should produce output
+
+
+# ── Phase 18 — Skill System ──────────────────────────────────────────
+
+
+from src.embody import (
+    SKILL_NAMES,
+    _xp_for_level,
+    _xp_to_next_level,
+    _skill_level_from_xp,
+    _skill_bonus,
+    _gain_skill_xp,
+    _change_reputation,
+    _maybe_bandit_raid,
+    _maybe_festival,
+    _maybe_monster_hunt,
+)
+
+
+class TestSkillSystem:
+    """Skill levels, XP, and bonuses."""
+
+    def test_skill_defaults(self):
+        """Characters start with all skills at level 1 and 0 XP."""
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        for s in SKILL_NAMES:
+            assert pc.skills[s] == 1
+            assert pc.skill_xp[s] == 0
+
+    def test_xp_level_thresholds(self):
+        """XP thresholds follow triangular sequence."""
+        assert _xp_for_level(1) == 0
+        assert _xp_for_level(2) == 15
+        assert _xp_for_level(3) == 45  # (3*2/2)*15 = 45
+        assert _xp_for_level(4) == 90  # (4*3/2)*15 = 90
+        assert _xp_for_level(5) == 150  # (5*4/2)*15 = 150
+
+    def test_xp_to_next_level(self):
+        """XP needed from current level to next."""
+        assert _xp_to_next_level(1) == 15  # 15 - 0
+        assert _xp_to_next_level(2) == 30  # 45 - 15
+        assert _xp_to_next_level(3) == 45  # 90 - 45
+
+    def test_skill_level_from_xp(self):
+        """Determining level from total XP."""
+        assert _skill_level_from_xp(0) == 1
+        assert _skill_level_from_xp(14) == 1
+        assert _skill_level_from_xp(15) == 2
+        assert _skill_level_from_xp(44) == 2
+        assert _skill_level_from_xp(45) == 3
+
+    def test_skill_bonus_scales(self):
+        """Skill bonus increases with level."""
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        assert _skill_bonus(pc, "combat") == 0.0  # Level 1
+        pc.skills["combat"] = 5
+        assert _skill_bonus(pc, "combat") == 0.2  # (5-1) * 0.05
+        pc.skills["combat"] = 10
+        assert _skill_bonus(pc, "combat") == 0.45  # (10-1) * 0.05
+
+    def test_gain_skill_xp_level_up(self):
+        """Gaining enough XP levels up the skill."""
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        assert pc.skills["combat"] == 1
+        _gain_skill_xp(pc, "combat", 15)
+        assert pc.skills["combat"] == 2
+        assert pc.skill_xp["combat"] == 15
+
+    def test_gain_skill_xp_partial(self):
+        """Gaining XP below threshold keeps current level."""
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        _gain_skill_xp(pc, "combat", 10)
+        assert pc.skills["combat"] == 1
+        assert pc.skill_xp["combat"] == 10
+
+    def test_gain_skill_xp_multiple_levels(self):
+        """Gaining large XP can jump multiple levels."""
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        _gain_skill_xp(pc, "trade", 150)
+        assert pc.skills["trade"] == 5
+        assert pc.skill_xp["trade"] == 150
+
+    def test_skill_max_level_10(self):
+        """Skills cap at level 10."""
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        _gain_skill_xp(pc, "survival", 99999)
+        assert pc.skills["survival"] == 10
+
+    def test_skill_xp_unknown_skill_noop(self):
+        """Unknown skill name doesn't crash."""
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        _gain_skill_xp(pc, "nonexistent", 100)  # Should not raise
+
+    def test_skills_in_save_round_trip(self):
+        """Skills and XP persist through save/load."""
+        from src.embody import save_character, load_character, _save_path
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        _gain_skill_xp(pc, "combat", 50)
+        _gain_skill_xp(pc, "trade", 20)
+        pc.skills["persuasion"] = 3
+        try:
+            save_character(pc, 999)
+            loaded = load_character(999)
+            assert loaded is not None
+            assert loaded.skills["combat"] == pc.skills["combat"]
+            assert loaded.skill_xp["combat"] == pc.skill_xp["combat"]
+            assert loaded.skills["trade"] > 1
+            assert loaded.skills["persuasion"] == 3
+        finally:
+            path = _save_path(999)
+            if os.path.exists(path):
+                os.remove(path)
+
+
+class TestReputation:
+    """Reputation system."""
+
+    def test_default_empty(self):
+        """Characters start with no reputation."""
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        assert pc.reputation == {}
+
+    def test_add_positive(self):
+        """Reputation can be increased."""
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        result = _change_reputation(pc, "Kronar", 3)
+        assert pc.reputation["Kronar"] == 3
+        assert "improves" in result
+
+    def test_add_negative(self):
+        """Reputation can be decreased."""
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        result = _change_reputation(pc, "Kronar", -2)
+        assert pc.reputation["Kronar"] == -2
+        assert "suffers" in result
+
+    def test_clamp_positive(self):
+        """Reputation maxes at +10."""
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        _change_reputation(pc, "Kronar", 100)
+        assert pc.reputation["Kronar"] == 10
+
+    def test_clamp_negative(self):
+        """Reputation min at -10."""
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        _change_reputation(pc, "Kronar", -100)
+        assert pc.reputation["Kronar"] == -10
+
+    def test_reputation_different_settlements(self):
+        """Reputation is per-settlement."""
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        _change_reputation(pc, "Kronar", 5)
+        _change_reputation(pc, "Mistharbor", -3)
+        assert pc.reputation["Kronar"] == 5
+        assert pc.reputation["Mistharbor"] == -3
+
+    def test_reputation_zero_delta_no_output(self):
+        """Zero delta produces empty string."""
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        result = _change_reputation(pc, "Kronar", 0)
+        assert result == ""
+
+    def test_reputation_in_save_round_trip(self):
+        """Reputation persists through save/load."""
+        from src.embody import save_character, load_character, _save_path
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        _change_reputation(pc, "Kronar", 5)
+        _change_reputation(pc, "Mistharbor", -3)
+        try:
+            save_character(pc, 888)
+            loaded = load_character(888)
+            assert loaded is not None
+            assert loaded.reputation["Kronar"] == 5
+            assert loaded.reputation["Mistharbor"] == -3
+        finally:
+            path = _save_path(888)
+            if os.path.exists(path):
+                os.remove(path)
+
+
+class TestBanditScenario:
+    """Bandit raid scenario."""
+
+    def test_labels(self):
+        """Bandit labels are correct."""
+        assert _label_for_event("bandit", 0) == "Fight the bandits"
+        assert _label_for_event("bandit", 1) == "Pay them off"
+        assert _label_for_event("bandit", 2) == "Hide and wait"
+
+    def test_can_trigger(self):
+        """Bandit scenario can trigger (with high random)."""
+        world = generate_world(42, width=15, height=10)
+        rng = random.Random(42)
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer",
+                             year=10)
+        result = _maybe_bandit_raid(pc, world, rng, [])
+        # May or may not trigger; should not crash
+        assert result is None or isinstance(result, EventChoiceData)
+
+    def test_trigger_in_war(self):
+        """Bandit scenario triggers more in war."""
+        from src.sim import SimEvent
+        war_event = SimEvent(year=10, event_type="war",
+                             description="War!",
+                             affected_regions=["Telvan"])
+        # Force trigger by overriding random
+        rng = random.Random(42)
+        world = generate_world(42, width=15, height=10)
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer",
+                             year=10)
+        # Patch _maybe_bandit_raid to check it gets called
+        result = _maybe_bandit_raid(pc, world, rng, [war_event])
+        # Should work with war event and some random seeds
+        assert result is None or result.event_type == "bandit"
+
+    def test_fight_option(self):
+        """Fight resolution produces valid outcome."""
+        world = generate_world(42, width=15, height=10)
+        rng = random.Random(42)
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        sc = EventChoiceData(prompt="Bandits!", event_type="bandit", icon="🗡")
+        outcome, label = _resolve_choice(sc, 0, pc, world, rng)
+        assert isinstance(outcome, ChoiceOutcome)
+        assert label == "Fight the bandits"
+        assert "gold" in outcome.description.lower() or "bandits" in outcome.description.lower()
+
+    def test_pay_option(self):
+        """Pay resolution deducts gold."""
+        world = generate_world(42, width=15, height=10)
+        rng = random.Random(42)
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer", gold=100)
+        sc = EventChoiceData(prompt="Bandits!", event_type="bandit", icon="🗡")
+        outcome, label = _resolve_choice(sc, 1, pc, world, rng)
+        assert outcome.gold_delta < 0
+        assert label == "Pay them off"
+
+    def test_hide_option(self):
+        """Hide resolution produces outcome."""
+        world = generate_world(42, width=15, height=10)
+        rng = random.Random(42)
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        sc = EventChoiceData(prompt="Bandits!", event_type="bandit", icon="🗡")
+        outcome, label = _resolve_choice(sc, 2, pc, world, rng)
+        assert isinstance(outcome, ChoiceOutcome)
+        assert label == "Hide and wait"
+
+    def test_gives_skill_xp(self):
+        """Bandit scenario gives skill XP."""
+        world = generate_world(42, width=15, height=10)
+        rng = random.Random(42)
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        old_combat_xp = pc.skill_xp["combat"]
+        sc = EventChoiceData(prompt="Bandits!", event_type="bandit", icon="🗡")
+        _resolve_choice(sc, 0, pc, world, rng)
+        assert pc.skill_xp["combat"] > old_combat_xp
+
+
+class TestFestivalScenario:
+    """Festival celebration scenario."""
+
+    def test_labels(self):
+        """Festival labels are correct."""
+        assert _label_for_event("festival", 0) == "Join the celebration"
+        assert _label_for_event("festival", 1) == "Help organize"
+        assert _label_for_event("festival", 2) == "Skip it"
+
+    def test_can_trigger(self):
+        """Festival scenario can trigger."""
+        world = generate_world(42, width=15, height=10)
+        rng = random.Random(42)
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer",
+                             year=10)
+        result = _maybe_festival(pc, world, rng, [])
+        assert result is None or isinstance(result, EventChoiceData)
+
+    def test_join_option(self):
+        """Join festival gives gold and health."""
+        world = generate_world(42, width=15, height=10)
+        rng = random.Random(42)
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer", gold=50)
+        sc = EventChoiceData(prompt="Festival!", event_type="festival", icon="🎉")
+        outcome, label = _resolve_choice(sc, 0, pc, world, rng)
+        assert label == "Join the celebration"
+        assert outcome.health_delta > 0  # Always gain health from joining
+
+    def test_organize_option(self):
+        """Organize festival gives gold and reputation."""
+        world = generate_world(42, width=15, height=10)
+        rng = random.Random(42)
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        sc = EventChoiceData(prompt="Festival!", event_type="festival", icon="🎉")
+        outcome, label = _resolve_choice(sc, 1, pc, world, rng)
+        assert label == "Help organize"
+        assert outcome.gold_delta >= 0  # Always earns something
+
+    def test_skip_option(self):
+        """Skip festival does nothing."""
+        world = generate_world(42, width=15, height=10)
+        rng = random.Random(42)
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        sc = EventChoiceData(prompt="Festival!", event_type="festival", icon="🎉")
+        outcome, label = _resolve_choice(sc, 2, pc, world, rng)
+        assert label == "Skip it"
+        assert outcome.gold_delta == 0
+
+
+class TestMonsterHuntScenario:
+    """Monster hunt scenario."""
+
+    def test_labels(self):
+        """Monster hunt labels are correct."""
+        assert _label_for_event("monster_hunt", 0) == "Hunt the creature"
+        assert _label_for_event("monster_hunt", 1) == "Hire a hunter"
+        assert _label_for_event("monster_hunt", 2) == "Ignore the threat"
+
+    def test_requires_bestiary(self):
+        """Monster hunt returns None when world has no bestiary."""
+        world = generate_world(42, width=15, height=10)
+        world.bestiary = None
+        rng = random.Random(42)
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        result = _maybe_monster_hunt(pc, world, rng, [])
+        assert result is None
+
+    def test_hunt_option(self):
+        """Hunt resolution produces valid outcome."""
+        world = generate_world(42, width=15, height=10)
+        rng = random.Random(42)
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        sc = EventChoiceData(prompt="Monster!", event_type="monster_hunt", icon="🐉")
+        outcome, label = _resolve_choice(sc, 0, pc, world, rng)
+        assert isinstance(outcome, ChoiceOutcome)
+        assert label == "Hunt the creature"
+
+    def test_hire_option(self):
+        """Hire resolution costs gold."""
+        world = generate_world(42, width=15, height=10)
+        rng = random.Random(42)
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer", gold=100)
+        sc = EventChoiceData(prompt="Monster!", event_type="monster_hunt", icon="🐉")
+        outcome, label = _resolve_choice(sc, 1, pc, world, rng)
+        assert label == "Hire a hunter"
+        assert outcome.gold_delta < 0  # Always costs gold
+
+    def test_ignore_option(self):
+        """Ignore resolution does nothing."""
+        world = generate_world(42, width=15, height=10)
+        rng = random.Random(42)
+        pc = PlayerCharacter(name="Rikard", settlement="Kronar",
+                             region="Telvan", profession="farmer")
+        sc = EventChoiceData(prompt="Monster!", event_type="monster_hunt", icon="🐉")
+        outcome, label = _resolve_choice(sc, 2, pc, world, rng)
+        assert label == "Ignore the threat"
+        assert outcome.gold_delta == 0

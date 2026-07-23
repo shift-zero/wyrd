@@ -26,6 +26,69 @@ from .sim import (
 
 from .render import ANSI_RESET, ANSI_BOLD, ANSI_DIM, _color
 
+# Skill names and their XP thresholds
+SKILL_NAMES = ["combat", "trade", "persuasion", "survival", "crafting"]
+
+
+def _make_skills() -> dict[str, int]:
+    """Create default skill levels (all start at 1)."""
+    return {s: 1 for s in SKILL_NAMES}
+
+
+def _make_skill_xp() -> dict[str, int]:
+    """Create default skill XP (all start at 0)."""
+    return {s: 0 for s in SKILL_NAMES}
+
+
+def _xp_for_level(level: int) -> int:
+    """XP needed to reach a given level (level 1 = 0, level 2 = 15, etc.)."""
+    if level <= 1:
+        return 0
+    return int((level * (level - 1) / 2) * 15)
+
+
+def _xp_to_next_level(current_level: int) -> int:
+    """XP needed from current level to reach next level."""
+    return _xp_for_level(current_level + 1) - _xp_for_level(current_level)
+
+
+def _skill_level_from_xp(total_xp: int) -> int:
+    """Determine skill level from total XP (max 10)."""
+    for level in range(10, 0, -1):
+        if total_xp >= _xp_for_level(level):
+            return level
+    return 1
+
+
+def _skill_bonus(char: "PlayerCharacter", skill: str) -> float:
+    """Get the outcome bonus for a skill (0.0 to 0.5 based on level 1-10)."""
+    level = char.skills.get(skill, 1)
+    return (level - 1) * 0.05  # +5% per level over 1
+
+
+def _gain_skill_xp(char: "PlayerCharacter", skill: str, amount: int) -> None:
+    """Grant XP to a skill and auto-level-up if threshold reached."""
+    if skill not in char.skills:
+        return
+    old_level = char.skills[skill]
+    char.skill_xp[skill] = char.skill_xp.get(skill, 0) + amount
+    new_level = _skill_level_from_xp(char.skill_xp[skill])
+    char.skills[skill] = min(new_level, 10)
+    if char.skills[skill] > old_level:
+        print(f"  {_color(46)}⚡ {skill.capitalize()} increased to level {char.skills[skill]}!{ANSI_RESET}")
+
+
+def _change_reputation(char: "PlayerCharacter", settlement: str, delta: int) -> str:
+    """Change reputation for a settlement (-10 to +10 range). Returns a flavor string."""
+    current = char.reputation.get(settlement, 0)
+    new_val = max(-10, min(10, current + delta))
+    char.reputation[settlement] = new_val
+    if delta > 0:
+        return f"  {_color(46)}Your standing in {settlement} improves.{ANSI_RESET}"
+    elif delta < 0:
+        return f"  {_color(196)}Your standing in {settlement} suffers.{ANSI_RESET}"
+    return ""
+
 
 # ── Player Character ──────────────────────────────────────────────────
 
@@ -51,6 +114,10 @@ class PlayerCharacter:
     total_gold_spent: int = 0
     deeds: list[str] = field(default_factory=list)  # Notable accomplishments
     parent_name: str | None = None  # For multi-generational tracking
+    # Phase 18 — Skill system & reputation
+    skills: dict[str, int] = field(default_factory=_make_skills)
+    skill_xp: dict[str, int] = field(default_factory=_make_skill_xp)
+    reputation: dict[str, int] = field(default_factory=dict)  # settlement -> -10..+10
 
     def to_dict(self) -> dict:
         """Serialize to a JSON-compatible dict."""
@@ -72,6 +139,9 @@ class PlayerCharacter:
             "total_gold_spent": self.total_gold_spent,
             "deeds": self.deeds,
             "parent_name": self.parent_name,
+            "skills": self.skills,
+            "skill_xp": self.skill_xp,
+            "reputation": self.reputation,
         }
 
     @classmethod
@@ -206,14 +276,10 @@ def _render_welcome(char: PlayerCharacter, world: World,
     lines.append(f"  The world of seed {ANSI_BOLD}{world.seed}{ANSI_RESET} "
                  f"stretches before you.")
     lines.append("")
-    lines.append(f"  {_color(226)}►{ANSI_RESET} Type {ANSI_BOLD}n{ANSI_RESET} "
-                 f"to advance a year")
-    lines.append(f"  {_color(226)}►{ANSI_RESET} Type {ANSI_BOLD}s{ANSI_RESET} "
-                 f"to show your status")
-    lines.append(f"  {_color(226)}►{ANSI_RESET} Type {ANSI_BOLD}t{ANSI_RESET} "
-                 f"to travel to another settlement")
-    lines.append(f"  {_color(226)}►{ANSI_RESET} Type {ANSI_BOLD}q{ANSI_RESET} "
-                 f"to quit")
+    lines.append(f"  {_color(226)}►{ANSI_RESET} {ANSI_BOLD}n{ANSI_RESET} next year  "
+                 f"{ANSI_BOLD}s{ANSI_RESET} status  {ANSI_BOLD}m{ANSI_RESET} market  "
+                 f"{ANSI_BOLD}t{ANSI_RESET} travel  {ANSI_BOLD}q{ANSI_RESET} quit")
+    lines.append(f"  {ANSI_DIM}  Skills grow with use — fight, trade, persuade, survive, craft.{ANSI_RESET}")
     lines.append("")
     return "\n".join(lines)
 
@@ -474,6 +540,81 @@ def _maybe_exodus_scenario(char: PlayerCharacter, world: World,
     )
 
 
+# ── Phase 18 — New Scenarios ──────────────────────────────────────────
+
+
+def _maybe_bandit_raid(char: PlayerCharacter, world: World,
+                       rng: random.Random,
+                       events: list[SimEvent]) -> EventChoiceData | None:
+    """Bandits raid the settlement or nearby road. ~12% base chance, higher in war."""
+    war_afoot = any(
+        e.year == char.year
+        and e.event_type in ("war", "faction_war", "faction_collapse")
+        for e in events
+    )
+    base_chance = 0.18 if war_afoot else 0.10
+    if rng.random() > base_chance:
+        return None
+    targets = ["the outskirts of", "the main road near", "the farms outside"]
+    return EventChoiceData(
+        prompt=f"Bandits are raiding {rng.choice(targets)} {char.settlement}! "
+               f"Smoke rises from the fields.",
+        event_type="bandit",
+        icon="🗡",
+    )
+
+
+def _maybe_festival(char: PlayerCharacter, world: World,
+                    rng: random.Random,
+                    events: list[SimEvent]) -> EventChoiceData | None:
+    """Festival or celebration. ~10% chance, higher in prosperous times."""
+    prosperity_afoot = any(
+        e.year == char.year
+        and e.event_type in ("prosperity", "trade_boom", "divine_blessing")
+        for e in events
+    )
+    base_chance = 0.18 if prosperity_afoot else 0.08
+    if rng.random() > base_chance:
+        return None
+    festivities = [
+        "harvest festival", "founding day", "great market fair",
+        "midsummer celebration", "winter solstice feast",
+    ]
+    return EventChoiceData(
+        prompt=f"A {rng.choice(festivities)} begins in {char.settlement}! "
+               f"The streets fill with music, food, and laughter.",
+        event_type="festival",
+        icon="🎉",
+    )
+
+
+def _maybe_monster_hunt(char: PlayerCharacter, world: World,
+                        rng: random.Random,
+                        events: list[SimEvent]) -> EventChoiceData | None:
+    """A dangerous creature threatens the area. Based on world bestiary. ~8%."""
+    bestiary = getattr(world, 'bestiary', None)
+    if not bestiary:
+        return None
+    if rng.random() > 0.08:
+        return None
+    # Pick a threatening creature native to the region biome
+    region_obj = next((r for r in world.regions if r.name == char.region), None)
+    biome = region_obj.biome if region_obj else "temperate"
+    candidates = [c for c in bestiary
+                  if c.habitat == biome and c.behavior in ("aggressive", "cunning", "territorial")]
+    if not candidates:
+        candidates = [c for c in bestiary if c.behavior in ("aggressive", "territorial")]
+    if not candidates:
+        return None
+    creature = rng.choice(candidates)
+    return EventChoiceData(
+        prompt=f"A {ANSI_BOLD}{creature.name}{ANSI_RESET} has been sighted near "
+               f"{char.settlement}! The elders offer a bounty for its head.",
+        event_type="monster_hunt",
+        icon="🐉",
+    )
+
+
 _SCENARIOS = [
     _maybe_stranger_scenario,
     _maybe_plague_scenario,
@@ -482,6 +623,9 @@ _SCENARIOS = [
     _maybe_discovery_scenario,
     _maybe_religious_scenario,
     _maybe_exodus_scenario,
+    _maybe_bandit_raid,
+    _maybe_festival,
+    _maybe_monster_hunt,
 ]
 
 
@@ -515,9 +659,12 @@ def _resolve_choice(scenario: EventChoiceData, option_index: int,
 
     if et == "stranger":
         if opt == 0:  # Shelter them
-            if rng.random() < 0.4:
+            _gain_skill_xp(char, "persuasion", 5)
+            shelter_chance = 0.4 + _skill_bonus(char, "persuasion")
+            if rng.random() < shelter_chance:
                 item = rng.choice(["an old map", "a cryptic note", "a healing salve",
                                    "a pouch of herbs", "a carved talisman"])
+                _change_reputation(char, char.settlement, 1)
                 return (ChoiceOutcome(
                     description=f"You share your hearth. In thanks, the stranger leaves you "
                                 f"{item}.",
@@ -535,6 +682,8 @@ def _resolve_choice(scenario: EventChoiceData, option_index: int,
                 description="You close the door. The stranger moves on into the night."
             ), "Turn them away")
         else:  # Rob them
+            _gain_skill_xp(char, "combat", 4)
+            _change_reputation(char, char.settlement, -2)
             loot = rng.randint(10, 30)
             return (ChoiceOutcome(
                 description=f"You overpower the stranger and take {loot} gold. "
@@ -574,7 +723,9 @@ def _resolve_choice(scenario: EventChoiceData, option_index: int,
         if opt == 0:  # Join the fight
             weapon = rng.choice(["a battered sword", "a sturdy spear",
                                  "a short bow", "a war axe"])
-            survive = rng.random() < 0.6
+            _gain_skill_xp(char, "combat", 10)
+            survive_base = 0.6 + _skill_bonus(char, "combat")
+            survive = rng.random() < survive_base
             if survive:
                 reward = rng.randint(20, 60)
                 return (ChoiceOutcome(
@@ -591,12 +742,14 @@ def _resolve_choice(scenario: EventChoiceData, option_index: int,
                 inventory_add=weapon,
             ), "Take up arms")
         elif opt == 1:  # Provide supplies
+            _gain_skill_xp(char, "trade", 5)
             return (ChoiceOutcome(
                 description="You contribute supplies to the war effort. "
                             "The quartermaster thanks you.",
                 gold_delta=-30,
             ), "Send supplies")
         else:  # Flee
+            _gain_skill_xp(char, "survival", 5)
             dest = _pick_fallback_settlement(char, world, rng)
             if dest:
                 return (ChoiceOutcome(
@@ -611,7 +764,16 @@ def _resolve_choice(scenario: EventChoiceData, option_index: int,
 
     elif et == "merchant":
         if opt == 0:  # Invest
-            profit = rng.choice([-30, -10, 20, 50, 100, 150])
+            _gain_skill_xp(char, "trade", 8)
+            # Trade skill shifts profit outcomes: higher = less loss, more gain
+            trade_bonus = _skill_bonus(char, "trade")
+            if trade_bonus > 0.15:
+                profit_pool = [-10, 20, 50, 80, 120, 180]
+            elif trade_bonus > 0.05:
+                profit_pool = [-20, -5, 30, 60, 100, 150]
+            else:
+                profit_pool = [-30, -10, 20, 50, 100, 150]
+            profit = rng.choice(profit_pool)
             if profit > 0:
                 return (ChoiceOutcome(
                     description=f"You invest 50 gold. The venture pays off — "
@@ -638,10 +800,16 @@ def _resolve_choice(scenario: EventChoiceData, option_index: int,
 
     elif et == "discovery":
         if opt == 0:  # Explore
-            item = rng.choice(["an ancient relic", "a golden amulet",
-                               "a sealed scroll", "a gemstone",
-                               "a mysterious orb", "a silver ring"])
-            find_gold = rng.randint(10, 40)
+            _gain_skill_xp(char, "survival", 10)
+            # Survival skill yields better finds
+            surv_bonus = _skill_bonus(char, "survival")
+            item_pool = ["an ancient relic", "a golden amulet",
+                         "a sealed scroll", "a gemstone",
+                         "a mysterious orb", "a silver ring"]
+            if surv_bonus > 0.15:
+                item_pool.extend(["a dragon-scale", "a crown of stars", "a rune-etched blade"])
+            item = rng.choice(item_pool)
+            find_gold = rng.randint(10, 40) + int(surv_bonus * 40)
             return (ChoiceOutcome(
                 description=f"You brave the ruins and find {item} worth "
                             f"{find_gold} gold!",
@@ -664,13 +832,16 @@ def _resolve_choice(scenario: EventChoiceData, option_index: int,
 
     elif et == "religious":
         if opt == 0:  # Join/Pray
-            healing = rng.randint(5, 20)
+            _gain_skill_xp(char, "persuasion", 5)
+            healing = rng.randint(5, 20) + int(_skill_bonus(char, "persuasion") * 20)
+            _change_reputation(char, char.settlement, 1)
             return (ChoiceOutcome(
                 description=f"You join the procession and pray. "
                             f"You feel restored (+{healing} health).",
                 health_delta=healing,
             ), "Join the procession")
         elif opt == 1:  # Donate
+            _gain_skill_xp(char, "persuasion", 3)
             return (ChoiceOutcome(
                 description="You make an offering to the faithful. "
                             "They bless your generosity.",
@@ -685,6 +856,7 @@ def _resolve_choice(scenario: EventChoiceData, option_index: int,
 
     elif et == "exodus":
         if opt == 0:  # Join exodus
+            _gain_skill_xp(char, "survival", 8)
             dest = _pick_fallback_settlement(char, world, rng)
             if dest:
                 return (ChoiceOutcome(
@@ -699,6 +871,7 @@ def _resolve_choice(scenario: EventChoiceData, option_index: int,
                 health_delta=-5,
             ), "Join (but lost)")
         elif opt == 1:  # Stay and rebuild
+            _gain_skill_xp(char, "crafting", 8)
             return (ChoiceOutcome(
                 description="You stay and help rebuild. "
                             "Those who remain band together.",
@@ -706,12 +879,120 @@ def _resolve_choice(scenario: EventChoiceData, option_index: int,
                 health_delta=5,
             ), "Stay and rebuild")
         else:  # Loot abandoned homes
+            _gain_skill_xp(char, "survival", 5)
             loot = rng.randint(10, 25)
             return (ChoiceOutcome(
                 description=f"You find abandoned goods worth {loot} gold.",
                 gold_delta=loot,
                 health_delta=-5,
             ), "Scavenge what remains")
+
+    elif et == "bandit":
+        if opt == 0:  # Fight the bandits
+            _gain_skill_xp(char, "combat", 10)
+            win_chance = 0.5 + _skill_bonus(char, "combat")
+            if rng.random() < win_chance:
+                reward = rng.randint(15, 50)
+                _change_reputation(char, char.settlement, 2)
+                return (ChoiceOutcome(
+                    description=f"You drive off the bandits! The townsfolk "
+                                f"reward your bravery with {reward} gold.",
+                    gold_delta=reward,
+                    health_delta=-rng.randint(5, 15),
+                ), "Fight the bandits")
+            return (ChoiceOutcome(
+                description="The bandits overwhelm you. You're beaten and left "
+                            "for dead, but somehow survive.",
+                gold_delta=-rng.randint(10, 30),
+                health_delta=-25,
+            ), "Fight the bandits")
+        elif opt == 1:  # Pay them off
+            _gain_skill_xp(char, "trade", 5)
+            cost = rng.randint(15, 40)
+            return (ChoiceOutcome(
+                description=f"You pay the bandits {cost} gold to leave you be. "
+                            f"They take the gold and disappear into the shadows.",
+                gold_delta=-cost,
+            ), "Pay them off")
+        else:  # Hide and wait
+            _gain_skill_xp(char, "survival", 5)
+            return (ChoiceOutcome(
+                description="You hide in the cellar until the bandits move on. "
+                            "The settlement is shaken but you survive.",
+                health_delta=-5,
+            ), "Hide and wait")
+
+    elif et == "festival":
+        if opt == 0:  # Join the celebration
+            _gain_skill_xp(char, "persuasion", 5)
+            _change_reputation(char, char.settlement, 1)
+            gold_found = rng.randint(5, 20)
+            health_gain = rng.randint(3, 10)
+            return (ChoiceOutcome(
+                description=f"You throw yourself into the festivities! You make "
+                            f"friends, feast, and even win {gold_found} gold in "
+                            f"the games. (+{health_gain} health)",
+                gold_delta=gold_found,
+                health_delta=health_gain,
+            ), "Join the celebration")
+        elif opt == 1:  # Help organize
+            _gain_skill_xp(char, "crafting", 8)
+            _change_reputation(char, char.settlement, 2)
+            earnings = rng.randint(10, 30)
+            return (ChoiceOutcome(
+                description=f"You help organize the festival. Your efforts are "
+                            f"noticed — the elders pay you {earnings} gold and "
+                            f"thank you warmly.",
+                gold_delta=earnings,
+            ), "Help organize")
+        else:  # Skip it
+            return (ChoiceOutcome(
+                description="You stay home while the settlement celebrates. "
+                            "A quiet night."
+            ), "Skip it")
+
+    elif et == "monster_hunt":
+        if opt == 0:  # Hunt the creature
+            _gain_skill_xp(char, "combat", 12)
+            hunt_chance = 0.4 + _skill_bonus(char, "combat") + _skill_bonus(char, "survival")
+            if rng.random() < hunt_chance:
+                bounty = rng.randint(30, 80)
+                _change_reputation(char, char.settlement, 3)
+                _record_deed(char, "Slayed a dangerous creature")
+                return (ChoiceOutcome(
+                    description=f"You track and slay the creature! The bounty of "
+                                f"{bounty} gold is yours, and the settlement "
+                                f"celebrates your heroism.",
+                    gold_delta=bounty,
+                    health_delta=-rng.randint(10, 25),
+                ), "Hunt the creature")
+            return (ChoiceOutcome(
+                description="The creature proves too cunning. It wounds you "
+                            "badly before escaping into the wilds.",
+                health_delta=-30,
+                gold_delta=-rng.randint(5, 15),
+            ), "Hunt the creature")
+        elif opt == 1:  # Hire a hunter
+            _gain_skill_xp(char, "trade", 5)
+            cost = rng.randint(20, 40)
+            success = rng.random() < 0.6
+            if success:
+                return (ChoiceOutcome(
+                    description=f"You hire a seasoned hunter for {cost} gold. "
+                                f"They return with the creature's head! "
+                                f"The settlement is safe.",
+                    gold_delta=-cost,
+                ), "Hire a hunter")
+            return (ChoiceOutcome(
+                description=f"You pay {cost} gold but the hunter returns empty-handed. "
+                            f"The creature is still out there.",
+                gold_delta=-cost,
+            ), "Hire a hunter")
+        else:  # Ignore
+            return (ChoiceOutcome(
+                description="You ignore the threat. Others will deal with it — "
+                            "or not. The world turns."
+            ), "Ignore the threat")
 
     # Fallback
     return (ChoiceOutcome(
@@ -743,6 +1024,9 @@ def _label_for_event(event_type: str, option_index: int) -> str:
         "discovery":["Explore the site", "Report to authorities", "Ignore it"],
         "religious":["Join the procession", "Make an offering", "Watch from afar"],
         "exodus":   ["Join the exodus", "Stay and rebuild", "Scavenge what remains"],
+        "bandit":   ["Fight the bandits", "Pay them off", "Hide and wait"],
+        "festival": ["Join the celebration", "Help organize", "Skip it"],
+        "monster_hunt": ["Hunt the creature", "Hire a hunter", "Ignore the threat"],
     }
     opts = labels.get(event_type, ["Accept", "Decline", "Ignore"])
     if option_index < len(opts):
@@ -812,6 +1096,16 @@ def _handle_interactive_events(char: PlayerCharacter, world: World,
             _record_deed(char, "Joined a religious procession")
         elif sc.event_type == "merchant" and opt_idx == 0:
             _record_deed(char, "Invested in trade")
+        elif sc.event_type == "bandit" and opt_idx == 0:
+            _record_deed(char, "Fought off bandits")
+        elif sc.event_type == "festival" and opt_idx == 0:
+            _record_deed(char, "Joined a festival celebration")
+        elif sc.event_type == "festival" and opt_idx == 1:
+            _record_deed(char, "Organized a festival")
+        elif sc.event_type == "monster_hunt" and opt_idx == 0:
+            _record_deed(char, "Hunted a deadly creature")
+        elif sc.event_type == "monster_hunt" and opt_idx == 1:
+            _record_deed(char, "Hired a monster hunter")
 
         # Record legacy event
         _record_legacy_event(char, f"{label} — {outcome.description[:60]}")
@@ -904,6 +1198,15 @@ def _prompt(char: PlayerCharacter, world: World, state: SimState,
         print(f"  Health: {char.health}/100")
         print(f"  Age: {char.age}")
         print(f"  Inventory: {', '.join(char.inventory) if char.inventory else 'nothing yet'}")
+        # Show skills
+        skill_strs = [f"{_color(45)}{s.capitalize()}: {lvl}{ANSI_RESET}"
+                      for s, lvl in char.skills.items()]
+        print(f"  Skills: {', '.join(skill_strs)}")
+        # Show reputation
+        if char.reputation:
+            rep_strs = [f"{s}: {v:+d}" for s, v in
+                        sorted(char.reputation.items(), key=lambda x: -abs(x[1]))[:3]]
+            print(f"  Reputation: {', '.join(rep_strs)}")
         if char.deeds:
             print(f"  Deeds: {', '.join(char.deeds[:3])}"
                   f"{'…' if len(char.deeds) > 3 else ''}")
@@ -1538,6 +1841,18 @@ def embody_play(world: World,
             )
             # Heir inherits visited settlements knowledge
             heir.settlements_visited = [s for s in char.settlements_visited if s]
+            # Heir inherits partial skills (2/3 of parent's XP per skill, min level 1)
+            heir.skill_xp = {
+                s: max(0, char.skill_xp.get(s, 0) * 2 // 3)
+                for s in SKILL_NAMES
+            }
+            for s in SKILL_NAMES:
+                heir.skills[s] = max(1, _skill_level_from_xp(heir.skill_xp.get(s, 0)))
+            # Heir inherits some reputation (partial)
+            heir.reputation = {
+                s: max(-10, min(10, v // 2))
+                for s, v in char.reputation.items()
+            } if char.reputation else {}
             # Record birth in legacy
             _record_legacy_event(heir, f"Born as heir of {char.name}")
             if char.deeds:

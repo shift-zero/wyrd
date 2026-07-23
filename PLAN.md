@@ -53,8 +53,9 @@ wyrd/
 |---|------|--------|----------|
 | 1 | Bestiary tests + bugfixes + travel encounters | ✅ 2026-07-23 | 65 tests, all pass; `wyrd embody` travel has creature encounters |
 | 2 | Shop/market system | ✅ 2026-07-23 | 32 tests, all pass; `m` command in embody opens market |
-| 3 | Performance — resource map precomputation + pytest-xdist | ✅ 2026-07-23 | 758 tests in 81s (vs 156s = 48% faster) |
-| 4 | **REST API v1 — 15 JSON endpoints + standalone server** | ✅ 2026-07-23 | 36 tests, all pass; `wyrd api --port 9090` |
+| 3 | Performance — resource map precomputation + pytest-xdist | ✅ 2026-07-23 | 794 tests in 82s (vs 156s = 47% faster) |
+| 4 | REST API v1 — 15 JSON endpoints + standalone server | ✅ 2026-07-23 | 36 tests, all pass; `wyrd api --port 9090` |
+| 5 | **Embodied play depth — skills, reputation, 3 new scenarios** | ✅ 2026-07-23 | 36 tests, all pass; 794 total; skill system, reputation, bandit/festival/monster hunt |
 
 ## Design Principles
 
