@@ -379,6 +379,15 @@ def main():
     worlds_cmd.add_argument("--json", action="store_true",
                              help="Output as JSON for scripting")
 
+    # ── lookup ──────────────────────────────────────────────────────
+    lookup_cmd = sub.add_parser("lookup",
+                                 help="Quick-lookup an entity by name across all data types")
+    _add_load_arg(lookup_cmd)
+    lookup_cmd.add_argument("name", type=str, nargs="+",
+                             help="Entity name to search for")
+    lookup_cmd.add_argument("--max", type=int, default=8,
+                             help="Max results to show (default: 8)")
+
     args = parser.parse_args()
 
     # ── No subcommand → launch gateway TUI ─────────────────────────
@@ -850,6 +859,44 @@ def main():
                     print(f"  {seed_str}  {size_str}  {pop_str} · {region_str}")
                     print(f"       {badge_str}  {ANSI_DIM}{w['file']}{ANSI_RESET}")
                 print()
+
+    # ── lookup ──────────────────────────────────────────────────────
+    elif args.command == "lookup":
+        world = _get_world(args)
+        query = " ".join(args.name)
+        from .lookup import lookup
+        from .render import ANSI_RESET, ANSI_BOLD, ANSI_DIM, _color
+
+        results = lookup(world, query, max_results=args.max)
+
+        if not results:
+            print(f"{ANSI_DIM}No results found for '{query}'.{ANSI_RESET}")
+        else:
+            print(f"{ANSI_BOLD}wyrd: {len(results)} result(s) for '{query}'{ANSI_RESET}\n")
+
+            badge_colors = {
+                "settlement": _color(28),
+                "character": _color(33),
+                "faction": _color(46),
+                "creature": _color(196),
+                "zone": _color(99),
+                "deity": _color(226),
+                "region": _color(94),
+                "faction_rel": _color(220),
+            }
+
+            for r in results:
+                color = badge_colors.get(r["type"], _color(250))
+                icon_map = {
+                    "settlement": "◉", "character": "♟", "faction": "⚖",
+                    "creature": "⚔", "zone": "✦", "deity": "†",
+                    "region": "◆", "faction_rel": "⇄",
+                }
+                icon = icon_map.get(r["type"], "•")
+                score_bar = "█" * int(r["score"] * 5) + "░" * (5 - int(r["score"] * 5))
+                print(f"  {color}{icon} {r['name']}{ANSI_RESET}")
+                print(f"       {ANSI_DIM}{r['detail']}  [{score_bar}]{ANSI_RESET}")
+            print()
 
     # ── serve ───────────────────────────────────────────────────────
     elif args.command == "serve":

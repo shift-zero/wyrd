@@ -23,28 +23,14 @@ This is YOUR project. Make it beautiful and deep.
 
 ## Current state (2026-07-24)
 
-**Phase 19 — Human-First UX complete. All 6 checklist items ✅.** 796 tests pass.
+**Phase 20 — Living Gazetteer complete. All 6 checklist items ✅.** 794+ tests pass.
 
-### What was built this session (Phase 19 polish)
+### What was built this session (Phase 20 — Living Gazetteer)
 
-1. **Gateway embody integration** — Added `P` badge (gold, `[P]`) on worlds with saved character files (`wyrd-*-char.json`). Added `[p]` keybind in gateway to launch embodied play mode directly. Now the gateway shows "has save" status and lets you jump into your character without remembering CLI flags.
+1. **Settlement inspection in viewer** — Added cursor-driven settlement navigation (`[` and `]` keys) that cycles through active settlements on the map. Press `i` to open a detail popup showing: type, region, population, prosperity bar (█░), health bar, food stores, economy type, religion, and founding year. Cursor shows as reverse-video highlight. Status bar and help updated.
 
-2. **Discoverability** — Updated gateway help panel and status bar to include `[p]` for embody mode. Players don't need to know `wyrd embody --seed X` exists — it's visible in the TUI.
+2. **Gazetteer mode in gateway** — Press `G` in the gateway to open a unified entity browser. Collects all 7 entity types: settlements, characters, factions, faction relationships, creatures (bestiary), adventure zones, and deities (pantheon). Filter by type with number keys [1] All [2] S [3] C [4] F [5] B [6] Z [7] D. Up/down navigation, Enter for detail popup with full stats. Persistent filter bar and status bar.
 
-### What to tackle next — Phase 20: Living Gazetteer & Interactive World Browser
+3. **`wyrd lookup <name>` CLI command** — New `src/lookup.py` module with fuzzy-matching engine that scores results by: exact match (1.0), prefix match (0.9), word overlap, sequence similarity, and substring. Searches across settlements, regions, characters (first/surname/full), factions, creatures, zones, and deities. Returns top 8 results with score bars. ANSI-colored output with type icons.
 
-**Thesis:** wyrd generates deep, interconnected data — settlements, characters, factions, creatures, deities, trade goods, adventure zones — but there's no unified browser. You can `wyrd factions --seed X` in the CLI, or view lore in a popup, but each dataset lives in its own silo. The trick is: use data that already exists, make it browsable from within the TUI.
-
-| # | What | Priority |
-|---|------|----------|
-| 1 | **Settlement detail popup in viewer** — press `i` (inspect) on a settlement to see its stats, inhabitants, trade goods, recent events from sim | High |
-| 2 | **Gazetteer mode in gateway** — press `G` to open a browsable index of everything: settlements, characters, factions, creatures, zones, deities. Filter by letter, region, type | High |
-| 3 | **Character browser** — list all narrative characters, filter by region/status/alive, inline detail | Medium |
-| 4 | **Faction viewer** — browse factions with their relationships, holdings, members, recent history | Medium |
-| 5 | **Bestiary browser** — browse creatures by habitat/tier, view full stats, encounter table | Medium |
-| 6 | `wyrd lookup <name>` — CLI quick-lookup that searches across all data types and returns the best match | Low |
-
-### Architecture notes
-- Gazetteer data is already in world fields — no new generation needed
-- Settlement popup needs a mouse-enabled viewer mode or a selected-settlement cursor
-- `wyrd lookup` can use the existing query.py engine with a broader search scope
+### What to tackle next — Phase 21: ???

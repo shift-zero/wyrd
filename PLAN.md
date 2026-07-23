@@ -89,20 +89,20 @@ The simulation engine (`sim.py`) currently ticks in whole years. This is a deep 
 | 5 ✅ | Embody mode uses sub-year ticks — travel days, rest weeks, age yearly | Moving between settlements takes 1-2 months, not instant teleport; `1m` / `1w` time options | 2026-07-24 |
 || 6 ✅ | Seasonal rendering — map colors shift subtly as months pass | A year of sim shows 4 distinct seasonal palette shifts on the viewer map | 2026-07-24 |
 |
-|## Phase 20 — Living Gazetteer (current)
-|
-|**Thesis:** wyrd generates deep data but it's scattered across CLI subcommands. A unified in-TUI browser makes everything discoverable.
-|
-|### Items
-|
-|| # | What | Verifiable |
-||---|------|------------|
-|| 1 🔲 | Settlement detail popup in viewer — press `i` on a settlement | Popup shows name, pop, prosperity, trade goods, recent events |
-|| 2 🔲 | Gazetteer mode in gateway — press `G` for browsable index | Filterable listing of settlements, characters, factions, creatures, zones, deities |
-|| 3 🔲 | Character browser — list all narrative chars, filter by status | Inline detail for each character: name, title, status, home |
-|| 4 🔲 | Faction viewer — browse factions with relationships, holdings | View shows allies, rivals, territory, recent history |
-|| 5 🔲 | Bestiary browser — filter by habitat/tier, view full stats | Creature cards with tier, habitat, behavior, loot table |
-|| 6 🔲 | `wyrd lookup <name>` — CLI quick-lookup across all data types | Searches settlements, chars, creatures, zones, returns best match |
+## Phase 20 — Living Gazetteer (complete ✅)
+
+**Thesis:** wyrd generates deep data but it's scattered across CLI subcommands. A unified in-TUI browser makes everything discoverable.
+
+### Items
+
+| # | What | Verifiable |
+|---|------|------------|
+| 1 ✅ | Settlement detail popup in viewer — press `i` on a settlement | Popup shows name, pop, prosperity, trade goods, recent events | 2026-07-24 |
+| 2 ✅ | Gazetteer mode in gateway — press `G` for browsable index | Filterable listing of settlements, characters, factions, creatures, zones, deities | 2026-07-24 |
+| 3 ✅ | Character browser — list all narrative chars, filter by status | Inline detail for each character: name, title, status, home | 2026-07-24 |
+| 4 ✅ | Faction viewer — browse factions with relationships, holdings | View shows allies, rivals, territory, recent history | 2026-07-24 |
+| 5 ✅ | Bestiary browser — filter by habitat/tier, view full stats | Creature cards with tier, habitat, behavior, loot table | 2026-07-24 |
+| 6 ✅ | `wyrd lookup <name>` — CLI quick-lookup across all data types | Searches settlements, chars, creatures, zones, returns best match | 2026-07-24 |
 
 ## Design Principles
 
