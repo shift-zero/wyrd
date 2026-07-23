@@ -487,7 +487,6 @@ def main():
                 print(render_sim_detailed(result, world))
         else:
             # Render from saved state
-            from .render import render_map
             print(render_sim_summary_from_state(sim_state, world, world.seed))
 
     # ── view ─────────────────────────────────────────────────────────
@@ -553,7 +552,6 @@ def main():
             else:
                 print(f"Zone #{idx} not found. There are {len(world.adventure_zones)} zones (0-{len(world.adventure_zones)-1}).")
         else:
-            from .render import render_map
             print(render_map(world, show_settlements=True))
             print()
             print(render_zones(world, detail=args.detail))
