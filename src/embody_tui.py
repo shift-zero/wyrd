@@ -358,8 +358,12 @@ def _draw_choice_result(stdscr, msg: str, duration: float = 2.0):
 # ── Main TUI loop ──────────────────────────────────────────────────────
 
 def _render_sidebar(stdscr, char: PlayerCharacter, y: int, x: int,
-                    width: int, height: int) -> int:
-    """Render the character stats sidebar panel. Returns next y position."""
+                    width: int, height: int, compact: bool = False) -> int:
+    """Render the character stats sidebar panel. Returns next y position.
+    
+    In compact mode (narrow terminals <100 cols), shows only essentials:
+    name, health, gold, age, season, year, location — no skills/deeds/visited/rep.
+    """
     if width < 10:
         return y
 
@@ -406,52 +410,52 @@ def _render_sidebar(stdscr, char: PlayerCharacter, y: int, x: int,
     _draw(stdscr, y, x, " " + "─" * (width - 2), _CP["border"])
     y += 1
 
-    # Skills
-    _draw(stdscr, y, x, " Skills:", _CP["skill"], bold=True)
-    y += 1
-    skill_colors = {"combat": _CP["error"], "trade": _CP["gold"],
-                    "persuasion": _CP["accent"], "survival": _CP["location"],
-                    "crafting": _CP["deed"]}
-    for s_name in ("combat", "trade", "persuasion", "survival", "crafting"):
-        level = char.skills.get(s_name, 1)
-        xp_needed = max(1, _skill_level_from_xp(
-            char.skill_xp.get(s_name, 0) + 1) * 5)
-        bar_w = min(width - 6, 12)
-        filled = max(0, min(bar_w, level))
-        sk_bar = "█" * filled + "░" * (bar_w - filled)
-        icon = {"combat": "⚔", "trade": "💰", "persuasion": "🗣",
-                "survival": "🏕", "crafting": "🔨"}.get(s_name, "•")
-        scp = skill_colors.get(s_name, _CP["normal"])
-        _draw(stdscr, y, x, f" {icon} {s_name[:4]:>4} {sk_bar} {level:>2}", scp)
+    # Skills (skipped in compact mode)
+    if not compact:
+        _draw(stdscr, y, x, " Skills:", _CP["skill"], bold=True)
         y += 1
-
-    y += 1
-    # Divider
-    _draw(stdscr, y, x, " " + "─" * (width - 2), _CP["border"])
-    y += 1
-
-    # Deeds (compact)
-    if char.deeds:
-        _draw(stdscr, y, x, f" ⚜ Deeds: {len(char.deeds)}", _CP["deed"])
-        y += 1
-        for d in char.deeds[-3:]:
-            _draw(stdscr, y, x, f"   {d[:width - 6]}", _CP["dim"])
+        skill_colors = {"combat": _CP["error"], "trade": _CP["gold"],
+                        "persuasion": _CP["accent"], "survival": _CP["location"],
+                        "crafting": _CP["deed"]}
+        for s_name in ("combat", "trade", "persuasion", "survival", "crafting"):
+            level = char.skills.get(s_name, 1)
+            xp_needed = max(1, _skill_level_from_xp(
+                char.skill_xp.get(s_name, 0) + 1) * 5)
+            bar_w = min(width - 6, 12)
+            filled = max(0, min(bar_w, level))
+            sk_bar = "█" * filled + "░" * (bar_w - filled)
+            icon = {"combat": "⚔", "trade": "💰", "persuasion": "🗣",
+                    "survival": "🏕", "crafting": "🔨"}.get(s_name, "•")
+            scp = skill_colors.get(s_name, _CP["normal"])
+            _draw(stdscr, y, x, f" {icon} {s_name[:4]:>4} {sk_bar} {level:>2}", scp)
             y += 1
         y += 1
+        # Divider
+        _draw(stdscr, y, x, " " + "─" * (width - 2), _CP["border"])
+        y += 1
 
-    # Visited settlements
-    visited = len(char.settlements_visited)
-    _draw(stdscr, y, x, f" 👣 Visited: {visited} place{'s' if visited != 1 else ''}", _CP["dim"])
-    y += 1
-
-    # Reputation
-    if char.reputation:
-        rep_items = sorted(char.reputation.items(), key=lambda kv: -abs(kv[1]))[:2]
-        for s, v in rep_items:
-            color = _CP["accent"] if v > 0 else _CP["error"]
-            sign = "+" if v > 0 else ""
-            _draw(stdscr, y, x, f"   {s[:12]:>12}: {sign}{v}", color)
+        # Deeds (compact)
+        if char.deeds:
+            _draw(stdscr, y, x, f" ⚜ Deeds: {len(char.deeds)}", _CP["deed"])
             y += 1
+            for d in char.deeds[-3:]:
+                _draw(stdscr, y, x, f"   {d[:width - 6]}", _CP["dim"])
+                y += 1
+            y += 1
+
+        # Visited settlements
+        visited = len(char.settlements_visited)
+        _draw(stdscr, y, x, f" 👣 Visited: {visited} place{'s' if visited != 1 else ''}", _CP["dim"])
+        y += 1
+
+        # Reputation
+        if char.reputation:
+            rep_items = sorted(char.reputation.items(), key=lambda kv: -abs(kv[1]))[:2]
+            for s, v in rep_items:
+                color = _CP["accent"] if v > 0 else _CP["error"]
+                sign = "+" if v > 0 else ""
+                _draw(stdscr, y, x, f"   {s[:12]:>12}: {sign}{v}", color)
+                y += 1
 
     return y
 
@@ -610,8 +614,10 @@ def _tui_main(stdscr, world: World,
               right_info, _CP["dim"])
 
         # ── Sidebar ─────────────────────────────────────────────────────
+        sidebar_compact = w < 100
         _render_sidebar(stdscr, char, header_y + 2, 1,
-                        sidebar_width - 1, h - 3)
+                        sidebar_width - 1, h - 3,
+                        compact=sidebar_compact)
 
         # ── Vertical divider ────────────────────────────────────────────
         divider_x = sidebar_width
