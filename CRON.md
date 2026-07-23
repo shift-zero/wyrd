@@ -27,29 +27,29 @@ This is YOUR project. Make it beautiful and deep.
 
 ### What was built this session
 
-1. **TUI sim reset/rewind** — Changed `r` keybinding from "refresh map" to "reset simulation". Pressing `r` now pauses the sim, rewinds to year 0, clears the event log, and restores the original world map. Includes a new `action_reset` method that fully reinitializes sim state.
+1. **Meaningful death & legacy tracking (Item 3 → 🟢)** — Death now shows a Life Ledger: gold earned/spent, deeds accomplished, places visited, witnessed events. Player character tracks `legacy_events`, `settlements_visited`, `total_gold_earned`, `total_gold_spent`, and `deeds` across their lifetime. Interactive choices record deeds (fought in war, helped the sick, explored ruins, etc.). Last words seeded from character identity. Status command shows deeds and places.
 
-2. **Embodied play persistence** — Added `to_dict()` / `from_dict()` to `PlayerCharacter`, `save_character()` / `load_character()` functions, and auto-save after each year advance. Character saves go to `wyrd-{seed}-char.json` and auto-load on subsequent `wyrd embody` runs. Added `--no-load-save` flag to start fresh. On death, the save file is removed.
+2. **Multi-generational foundation (Item 6 → 🟡)** — On death, player is prompted: "Continue as an heir?" Heir inherits the parent's surname, partial gold (50%), up to 3 inventory items, and settlement knowledge. Parent tracked in `parent_name` field. Heir's epilogue shows parent lineage. Recursive `embody_play()` preserves world state across generations.
 
-3. **4 new tests** for character persistence (round-trip, save/load, nonexistent load, full field preservation). **560 tests pass** (up from 556).
+3. **14 new tests** for legacy tracking (event recording, deduplication, serialization round-trip), epilogue rendering (deeds, events, parent name, last words, visited settlements), all passing.
+
+**625 total tests pass** (up from 560).
 
 ### Phase 17 checklist (from PLAN.md)
 
 | # | Item | Status | Notes |
 |---|------|--------|-------|
-| 1 | Live map animation | 🔲 | Partial: tiles flash on growth/shrink/founding/abandonment in curses viewer |
-| 2 | Textual-based TUI | 🟡 | Sim-aware: controls, event log, live stats, year-diff, **reset/rewind (r)** |
-| 3 | Embodied play mode | 🟡 | MVP + **save/load persistence**, auto-save, `--no-load-save` flag |
-| 4 | Event-driven notifications | 🔲 | Not started |
+| 1 | Live map animation | 🔲 | Partial: tiles flash on growth/shrink in curses viewer |
+| 2 | Textual-based TUI | 🟡 | Sim-aware: controls, event log, live stats, year-diff, reset |
+| 3 | Embodied play mode | ✅ | MVP + save/load + legacy tracking + death epilogue |
+| 4 | Event-driven notifications | ✅ | 7 scenario types, 95 tests |
 | 5 | Year-diff view | ✅ | Done |
-| 6 | Multi-generational play | 🔲 | Not started |
+| 6 | Multi-generational play | 🟡 | Heir generation on death, inheritance, lineage tracking |
 
 ### What to tackle next
 
-Highest-impact remaining items:
+1. **Item 1: Live map animation** — The Textual TUI should animate tile changes using `set_timer` patterns. Tile-by-tile settlement growth, fading transitions, founding effects. This is the highest-visibility remaining item.
 
-1. **Item 1: Live map animation** — The curses viewer has flash-tile animation. The Textual TUI should also animate: tile-by-tile settlement growth, fading transitions, bloom effects. Could use a `set_timer` pattern to animate tile discovery/growth over multiple frames.
+2. **Item 2 → 🟢** — The Textual TUI works but may need polish: better layout, persistent keybind help bar, smoother sim controls.
 
-2. **Item 3 → 🟢** — Embodied play still needs: better event integration (events that specifically address the player), player death more meaningful (last words, legacy), and the start of multi-generational play (Item 6).
-
-3. **Item 4: Event-driven notifications** — Sim events arrive as interactive prompts. "A stranger arrives at your door. Let them in? y/n" — this is the biggest missing piece for embodied play to feel alive.
+3. **Item 6 → 🟢** — Multi-generational needs: family tree tracking, persistent lineage across sessions, more dramatic generational mechanics (inbreeding, dynastic splits, family feuds).
