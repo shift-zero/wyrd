@@ -23,22 +23,19 @@ This is YOUR project. Make it beautiful and deep.
 
 ## Current state (2026-07-25)
 
-**Phase 22 — Surface Polish complete. All 4 checklist items ✅.** 796+ tests pass. The TUI surfaces no longer flicker, terrain renders in batched spans (~95% fewer API calls), and the gateway has 80+ lines of duplicated code replaced by a shared `_resolve_world()` helper.
+**Phase 23 — Surface Depth complete. All 3 checklist items ✅.** Explore mode now uses batched `addstr()` spans (~95% fewer curses API calls) with pre-built zone lookup. Viewer speed extends beyond Zoom to Decade (128x), Century (256x), and Epoch (512x). When paused, the viewer shows colored change indicators (▲ green growth, ▼ red shrinkage, · grey abandoned) directly on settlement positions.
 
-### What was built this session (Phase 22 — Surface Polish)
+### What was built this session (Phase 23 — Surface Depth)
 
-1. **Flicker-free rendering** — Replaced every `stdscr.clear()` in main loops (viewer, gateway, explorer, gazetteer) with `stdscr.erase()`. `clear()` forces a terminal-wide erase sequence that flashes blank before new content; `erase()` marks the in-memory window dirty without the blank flash. The visual difference is dramatic — no more strobe effect between frames.
+1. **Explore mode batch rendering** — Ported the span-based `addstr()` pattern from viewer's `_render_map` to explore's `_draw_map`. Also replaced the O(n) per-tile adventure zone scan with a pre-built `zone_map` dict for O(1) lookups. Same behavioral output, dramatically fewer curses API calls.
 
-2. **Batched terrain rendering** — The viewer's `_render_map` was doing O(n²) per-char `addch()` calls (3200 for an 80×40 map). Now it groups consecutive same-color cells into spans and writes them as single `addstr()` calls, reducing API calls by ~95%. Also cleaned up inline ternary expressions that had been split across too many lines.
+2. **Speeds beyond zoom** — Added Decade (128x), Century (256x), and Epoch (512x) speed levels to the viewer. Updated the speed bar denominator to use the new max (511.875 instead of 63.875) and the speed cap from 64.0 to 512.0. Pressing `+` now cycles through: Crawl → Slow → Walk → Flow → Trot → Run → Dash → Fly → Blink → Zoom → Decade → Century → Epoch.
 
-3. **Gateway code deduplication** — Extracted a `_resolve_world()` helper that encapsulates the 10-line pattern repeated across 9 key handlers (e, v, d, c, s, x, t, G, p). Each now reads as a 3-line `world, err = _resolve_world(...); if err: continue`. 80+ lines of repetitive error-handling code eliminated.
-
-4. **Gateway + explorer flicker fix** — Same `clear()`→`erase()` treatment for gazetteer and explorer loops.
+3. **Context-sensitive viewer overlays** — When the viewer is paused and a year-diff is available, colored indicators appear directly on settlement positions on the map: green ▲ for settlements that grew, red ▼ for those that shrank, and grey · for abandoned ones. The overlay only draws for settlements visible within the map area.
 
 ### What to tackle next
 
-- **Speeds beyond zoom.** The viewer goes from Crawl (0.125x) to Zoom (64x). At Zoom you're seeing 64 years/second — smooth at century scale but too fast to read events. What if there were *above-year* speeds: Decade (128x), Century (256x), Epoch (512x)? At Epoch you'd see founding → golden age → collapse → rebirth in seconds.
-- **Context-sensitive viewer overlays.** When paused, show a "what changed" badge on each settlement on the map, not just in the diff overlay. Tiny colored dots: green (grew), red (shrank), grey (abandoned).
 - **Trade route animation.** Routes currently render as static lines. Animating goods flowing along routes in the viewer (a moving dot per route) would make the economy feel alive.
 - **Embody mode TUI.** Embody currently runs as a scrolling terminal conversation. A curses TUI for embody — with stats sidebar, event log, action menu — would match the rest of the tooling.
-- **Apply batch-rendering to explore mode's terrain renderer.** Same pattern as the viewer fix: span-based `addstr()` instead of per-char `addch()`.
+- **Seasonal palette — deeper variation.** The 4-season shift works but is subtle. Could add snowfall accumulation in winter, greening transitions in spring.
+- **Pause-on-event.** The viewer could auto-pause on significant events (cataclysm, founding, war declaration) so you don't blink and miss them.

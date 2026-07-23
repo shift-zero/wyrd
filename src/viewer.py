@@ -299,7 +299,7 @@ def _draw_stats(stdscr, state: SimState, speed: float = 2.0):
     abandoned = state.num_abandoned
     pop = state.total_population
     # Speed bar: 8 chars, fills proportionally
-    speed_pct = max(0.0, min(1.0, (speed - 0.125) / 63.875))
+    speed_pct = max(0.0, min(1.0, (speed - 0.125) / 511.875))
     filled = int(speed_pct * 8)
     speed_bar = "█" * filled + "░" * (8 - filled)
     text = (f" Settlements: {active} active"
@@ -422,6 +422,42 @@ def _draw_chart(stdscr, state: SimState, h, w):
         _draw(stdscr, y, plot_x - 7, f"{val:>6,}", _CP["info"])
 
     _draw(stdscr, sy + ch, sx, " Press [p] to close ", _CP["dim"])
+
+
+# ── Change overlay ───────────────────────────────────────────────────
+# When paused, overlay colored growth/shrinkage indicators on settlements.
+
+
+def _draw_change_overlay(stdscr, state, last_diff: dict | None, map_h: int):
+    """Draw colored change indicators on settlement positions on the map.
+
+    Green ▲ for grew, red ▼ for shrank, grey · for abandoned.
+    Only meaningful when paused — called after _render_map.
+    """
+    if last_diff is None:
+        return
+    settlements = state.settlements
+    grew_names = {item[0] for item in last_diff.get("grew", [])}
+    shrank_names = {item[0] for item in last_diff.get("shrank", [])}
+    abandoned_names = set(last_diff.get("abandoned", []))
+
+    for name, ss in settlements.items():
+        if name in grew_names:
+            ch, cp = "▲", _CP["good"]  # green
+        elif name in shrank_names:
+            ch, cp = "▼", _CP["war"]  # red
+        elif name in abandoned_names:
+            ch, cp = "·", _CP["dim"]  # grey
+        else:
+            continue
+        # Screen position: row 2 + y (below header/stats), col x
+        sy, sx = 2 + ss.y, ss.x
+        if sy > 2 + map_h:  # off-screen below map
+            continue
+        try:
+            stdscr.addch(sy, sx, ch, curses.color_pair(cp))
+        except curses.error:
+            pass
 
 
 # ── Year-diff overlay ───────────────────────────────────────────────
@@ -857,6 +893,7 @@ _SPEED_LABELS = [
     (0.125, "Crawl"), (0.25, "Slow"), (0.5, "Walk"),
     (1, "Flow"), (2, "Trot"), (4, "Run"),
     (8, "Dash"), (16, "Fly"), (32, "Blink"), (64, "Zoom"),
+    (128, "Decade"), (256, "Century"), (512, "Epoch"),
 ]
 
 def _speed_label(speed: float) -> str:
@@ -1008,6 +1045,10 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
         _draw_stats(stdscr, state, speed)
         _render_map(stdscr, sim_world, smap, map_h, w, new_founds, flash_tiles, cur_month)
 
+        # Draw change overlay when paused (growth/shrinkage indicators)
+        if paused:
+            _draw_change_overlay(stdscr, state, last_diff, map_h)
+
         # Draw settlement cursor if we have settlements
         if settlement_list and cursor_idx < len(settlement_list) and not show_settlement_popup:
             _draw_settlement_cursor(stdscr, settlement_list[cursor_idx], 2)
@@ -1040,7 +1081,7 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
                 last = time.monotonic()
                 accum = 0.0
             elif act == "speed":
-                speed = min(speed * 2, 64.0) if val else max(speed / 2, 0.125)
+                speed = min(speed * 2, 512.0) if val else max(speed / 2, 0.125)
             elif act == "step":
                 if not paused:
                     paused = True

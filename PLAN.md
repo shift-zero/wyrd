@@ -127,9 +127,21 @@ The simulation engine (`sim.py`) currently ticks in whole years. This is a deep 
 ||| 1 ✅ | Viewer flicker elimination — `stdscr.clear()` → `stdscr.erase()` in viewer, gateway, and explorer | No blank-flash between frames |
 ||| 2 ✅ | Batched terrain rendering — `addstr()` spans instead of per-char `addch()` in viewer | ~95% fewer curses API calls per frame for terrain |
 ||| 3 ✅ | Gateway code deduplication — 9 key handlers use shared `_resolve_world()` helper | 80+ lines of duplicated world-resolution code removed |
-||| 4 ✅ | Gateway & explorer flicker fix — same `clear()`→`erase()` in both gateways | All 3 TUI surfaces have smooth rendering |
+|||| 4 ✅ | Gateway & explorer flicker fix — same `clear()`→`erase()` in both gateways | All 3 TUI surfaces have smooth rendering |
+|||
+||## Phase 23 — Surface Depth (2026-07-25 ✅)|
+|||
+||**Thesis:** The TUI surfaces are flicker-free and render efficiently — now deepen them. Batch-rendering explore mode, add above-year viewer speeds, and overlay change indicators on the settlement map.|
 ||
-|## Design Principles
+||### Items|
+||
+||| # | What | Verifiable |
+||---|------|------------|
+||| 1 ✅ | Explore mode batch rendering — port span-based `addstr()` from viewer to explore's `_draw_map` with pre-built zone lookup | ~95% fewer curses API calls per frame for explore terrain |
+||| 2 ✅ | Speeds beyond zoom — Decade (128x), Century (256x), Epoch (512x) with labels and speed bar extension | `+` key cycles through Crawl→Epoch, Epoch simulates ~43 years/second |
+||| 3 ✅ | Context-sensitive viewer overlays — green ▲/red ▼/grey · on changed settlements when paused | Pause the viewer to see ▲ on growing towns, ▼ on shrinking ones, · on abandoned |
+||
+||## Design Principles|
 
 1. **Every output is beautiful.** ANSI color, careful layout, no debug spew.
 2. **Worlds feel real.** Generated geography constrains lore, not the other way around.

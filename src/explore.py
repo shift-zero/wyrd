@@ -136,7 +136,11 @@ def _find_tile_info(world: World, x: int, y: int) -> dict:
 def _draw_map(stdscr, world: World, offset_x: int, offset_y: int,
               cursor_x: int, cursor_y: int, inspect_mode: bool,
               zoom_level: int, show_cursor: bool) -> None:
-    """Draw the map tiles onto the screen."""
+    """Draw the map tiles onto the screen.
+
+    Uses batched addstr() for same-color spans to reduce curses API calls
+    (ported from viewer's _render_map pattern).
+    """
     max_y, max_x = stdscr.getmaxyx()
     map_area_h = max_y - 5  # leave room for header + info panel
     map_area_w = max_x - 1
@@ -145,57 +149,70 @@ def _draw_map(stdscr, world: World, offset_x: int, offset_y: int,
     # zoom: 1 = 1:1, 2 = 2x2 tiles per char, 3 = 3x3, etc.
     chars_per_tile = max(1, zoom_level)
 
-    # Build a dict mapping (wx, wy) -> display char for settlements
+    # Pre-build settlement lookup
     settlement_map = {}
     for region in world.regions:
         for s in region.settlements:
             settlement_map[(s.x, s.y)] = s.char
 
+    # Pre-build zone lookup for O(1) per-tile queries
+    zone_map: dict[tuple[int, int], tuple[str, int]] = {}
+    if world.adventure_zones:
+        zone_types = ["dungeon", "cave", "ruin", "tower", "grove", "lair", "shrine", "mine"]
+        for z in world.adventure_zones:
+            try:
+                z_idx = zone_types.index(z.zone_type)
+                zone_map[(z.x, z.y)] = (z.char, 17 + z_idx)
+            except ValueError:
+                zone_map[(z.x, z.y)] = (z.char, 11)
+
     for sy in range(map_area_h):
+        spans: list[tuple[str, int]] = []  # (chars, color_pair)
         for sx in range(map_area_w):
-            # Map screen position to world position
             wx = offset_x + sx * chars_per_tile
             wy = offset_y + sy * chars_per_tile
 
             if wx >= world.width or wy >= world.height:
                 char = " "
-                color_pair = 4
+                cp = 4
             else:
                 t_key = world.terrain[wy][wx]
                 char = TERRAIN[t_key]["char"]
-                color_pair = _color_pair(t_key)
+                cp = _color_pair(t_key)
 
-                # Check for settlement
-                if (wx, wy) in settlement_map:
-                    char = settlement_map[(wx, wy)]
-                    color_pair = 10
+                # Check for settlement (highest priority map feature)
+                settlement_char = settlement_map.get((wx, wy))
+                if settlement_char is not None:
+                    char = settlement_char
+                    cp = 10
+                else:
+                    # Check for adventure zone
+                    zone_info = zone_map.get((wx, wy))
+                    if zone_info is not None:
+                        char, cp = zone_info
 
-                # Check for adventure zone (if not a settlement)
-                elif world.adventure_zones:
-                    for z in world.adventure_zones:
-                        if z.x == wx and z.y == wy:
-                            char = z.char
-                            # Zone color pairs: 17 + zone type index
-                            zone_types = ["dungeon", "cave", "ruin", "tower", "grove", "lair", "shrine", "mine"]
-                            try:
-                                z_idx = zone_types.index(z.zone_type)
-                                color_pair = 17 + z_idx
-                            except ValueError:
-                                color_pair = 11
-                            break
+            # Cursor highlight (overrides everything)
+            if show_cursor and wx == cursor_x and wy == cursor_y:
+                if inspect_mode:
+                    cp = 11  # red cursor
+                else:
+                    char = "█"  # solid block indicator
+                    cp = 11
 
-                # Cursor highlight
-                if show_cursor and wx == cursor_x and wy == cursor_y:
-                    if inspect_mode:
-                        color_pair = 11  # red cursor
-                    else:
-                        char = "█"  # solid block indicator
-                        color_pair = 11
+            # Merge into same-color span
+            if spans and spans[-1][1] == cp:
+                spans[-1] = (spans[-1][0] + char, cp)
+            else:
+                spans.append((char, cp))
 
+        # Write batched spans for this row
+        x_pos = 0
+        for chars, cp in spans:
             try:
-                stdscr.addch(1 + sy, sx, char, curses.color_pair(color_pair))
+                stdscr.addstr(1 + sy, x_pos, chars, curses.color_pair(cp))
             except curses.error:
-                pass  # off-screen
+                break
+            x_pos += len(chars)
 
 
 def _draw_header(stdscr, world: World, inspect_mode: bool,
