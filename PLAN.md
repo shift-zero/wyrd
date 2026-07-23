@@ -26,14 +26,19 @@ wyrd/
 │   ├── cataclysm.py  # Cataclysmic events
 │   ├── faction.py    # Faction system
 │   ├── bestiary.py   # Creature generation
+│   ├── embody.py     # Embodied play mode (character, skills, heir)
+│   ├── shop.py       # Market & shop system
 │   ├── serialize.py  # JSON save/load
+│   ├── gateway.py    # Unified curses gateway TUI
+│   ├── viewer.py     # Sim evolution curses viewer
 │   ├── explore.py    # Interactive terminal explorer
 │   ├── query.py      # Natural-language query engine
 │   ├── export_html.py# HTML export
 │   ├── serve.py      # Web dashboard + REST API v1
 │   ├── export_chronicles_html.py  # Chronicles HTML export
+│   ├── tui.py        # Textual TUI (alternative interface)
 │   └── __main__.py   # CLI entry point (25 subcommands)
-├── tests/         # Test suite (758 tests)
+├── tests/         # Test suite (796 tests)
 │   ├── test_generate.py
 │   ├── test_lore.py
 │   ├── test_narrative.py
@@ -45,7 +50,7 @@ wyrd/
 └── output/        # Generated worlds (gitignored)
 ```
 
-## Phase 19 — Human-First UX (current)
+## Phase 19 — Human-First UX (complete ✅)
 
 **Thesis:** wyrd has deep systems but the interface is still a dev tool's face. The TUI is messy, hard to navigate, and everything happens in year-sized chunks that are too fast to follow and too slow to feel real.
 
@@ -82,7 +87,22 @@ The simulation engine (`sim.py`) currently ticks in whole years. This is a deep 
 | 3 ✅ | Sub-year time tick in sim engine — months as base unit | `wyrd run` can tick in months; events schedule at month granularity | 2026-07-23 |
 | 4 ✅ | Variable speed control in viewer — smooth from slow (days) to fast (decades) | `v` viewer has speed slider + labels (Crawl→Zoom) and uses month-level ticks | 2026-07-24 |
 | 5 ✅ | Embody mode uses sub-year ticks — travel days, rest weeks, age yearly | Moving between settlements takes 1-2 months, not instant teleport; `1m` / `1w` time options | 2026-07-24 |
-| 6 ✅ | Seasonal rendering — map colors shift subtly as months pass | A year of sim shows 4 distinct seasonal palette shifts on the viewer map | 2026-07-24 |
+|| 6 ✅ | Seasonal rendering — map colors shift subtly as months pass | A year of sim shows 4 distinct seasonal palette shifts on the viewer map | 2026-07-24 |
+|
+|## Phase 20 — Living Gazetteer (current)
+|
+|**Thesis:** wyrd generates deep data but it's scattered across CLI subcommands. A unified in-TUI browser makes everything discoverable.
+|
+|### Items
+|
+|| # | What | Verifiable |
+||---|------|------------|
+|| 1 🔲 | Settlement detail popup in viewer — press `i` on a settlement | Popup shows name, pop, prosperity, trade goods, recent events |
+|| 2 🔲 | Gazetteer mode in gateway — press `G` for browsable index | Filterable listing of settlements, characters, factions, creatures, zones, deities |
+|| 3 🔲 | Character browser — list all narrative chars, filter by status | Inline detail for each character: name, title, status, home |
+|| 4 🔲 | Faction viewer — browse factions with relationships, holdings | View shows allies, rivals, territory, recent history |
+|| 5 🔲 | Bestiary browser — filter by habitat/tier, view full stats | Creature cards with tier, habitat, behavior, loot table |
+|| 6 🔲 | `wyrd lookup <name>` — CLI quick-lookup across all data types | Searches settlements, chars, creatures, zones, returns best match |
 
 ## Design Principles
 

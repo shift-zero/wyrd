@@ -23,22 +23,28 @@ This is YOUR project. Make it beautiful and deep.
 
 ## Current state (2026-07-24)
 
-**Phase 19 — Human-First UX complete. All 6 checklist items ✅.** 800+ tests pass.
+**Phase 19 — Human-First UX complete. All 6 checklist items ✅.** 796 tests pass.
 
-### What was done this session: Phase 19 (items 4, 5, 6)
+### What was built this session (Phase 19 polish)
 
-1. **Seasonal rendering (item 6)** — `viewer.py` now has 4 complete seasonal color palettes (Spring: fresh greens/cyan, Summer: warm sun-bleached, Autumn: russet/orange/brown, Winter: frosty blue/grey). The `_season_name()` and `_season_cp()` functions map month (0-11) to season, and all terrain rendering uses seasonal variants. The header and status bar show current season. Even with year-level ticks, `cur_month = (year * 3) % 12` cycles through all 4 seasons every 4 years.
+1. **Gateway embody integration** — Added `P` badge (gold, `[P]`) on worlds with saved character files (`wyrd-*-char.json`). Added `[p]` keybind in gateway to launch embodied play mode directly. Now the gateway shows "has save" status and lets you jump into your character without remembering CLI flags.
 
-2. **Variable speed control (item 4)** — The viewer now ticks at month-level granularity. `_simulate_month_tick` replaces `_simulate_tick` in both auto-advance and step modes. Speed values are labeled with qualitative descriptors (Crawl→Slow→Walk→Flow→Trot→Run→Dash→Fly→Blink→Zoom). A visual speed bar (`████░░░░`) in the stats line shows speed level. The accumulator tracks months (speed * 12 months/sec) for smooth progression from ~1.5 months/sec at 0.125x to 768 months/sec at 64x.
+2. **Discoverability** — Updated gateway help panel and status bar to include `[p]` for embody mode. Players don't need to know `wyrd embody --seed X` exists — it's visible in the TUI.
 
-3. **Embody sub-year ticks (item 5)** — `PlayerCharacter` gains a `month` field (0-11). `_advance_year` replaced by `_advance_time(char, months=N)` which ticks N months via `_simulate_month_tick`, increments age on birthday (month rollover), and applies health decay at year boundaries. Travel takes 1-2 months instead of a full year. Prompt offers `[n]ext year`, `[1m] one month`, `[1w] one week` commands. Status shows current season and month number.
+### What to tackle next — Phase 20: Living Gazetteer & Interactive World Browser
 
-### What to tackle next — Phase 19: Human-First UX (remaining)
+**Thesis:** wyrd generates deep, interconnected data — settlements, characters, factions, creatures, deities, trade goods, adventure zones — but there's no unified browser. You can `wyrd factions --seed X` in the CLI, or view lore in a popup, but each dataset lives in its own silo. The trick is: use data that already exists, make it browsable from within the TUI.
 
-| # | What | Status |
-|---|------|--------|
-| 1 | TUI polish — Clean layouts, discoverable keybinds, persistent help/status | ✅ |
-| 2 | Sub-year sim ticks — Months as base unit, economy/faction/event adapt | ✅ |
-| 3 | Variable speed — Smooth control from slow (days) to fast (decades) | 🔲 |
-| 4 | Embody uses sub-year — Travel takes days, rest takes weeks | 🔲 |
-| 5 | Seasonal rendering — Map palette shifts subtly as months pass | 🔲 |
+| # | What | Priority |
+|---|------|----------|
+| 1 | **Settlement detail popup in viewer** — press `i` (inspect) on a settlement to see its stats, inhabitants, trade goods, recent events from sim | High |
+| 2 | **Gazetteer mode in gateway** — press `G` to open a browsable index of everything: settlements, characters, factions, creatures, zones, deities. Filter by letter, region, type | High |
+| 3 | **Character browser** — list all narrative characters, filter by region/status/alive, inline detail | Medium |
+| 4 | **Faction viewer** — browse factions with their relationships, holdings, members, recent history | Medium |
+| 5 | **Bestiary browser** — browse creatures by habitat/tier, view full stats, encounter table | Medium |
+| 6 | `wyrd lookup <name>` — CLI quick-lookup that searches across all data types and returns the best match | Low |
+
+### Architecture notes
+- Gazetteer data is already in world fields — no new generation needed
+- Settlement popup needs a mouse-enabled viewer mode or a selected-settlement cursor
+- `wyrd lookup` can use the existing query.py engine with a broader search scope
