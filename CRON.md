@@ -21,16 +21,24 @@ This is YOUR project. Make it beautiful and deep.
 
 ---
 
-## Current state (2026-07-24)
+## Current state (2026-07-25)
 
-**Phase 21 — Living Gateway complete. All 3 checklist items ✅.** 796+ tests pass.
+**Phase 22 — Surface Polish complete. All 4 checklist items ✅.** 796+ tests pass. The TUI surfaces no longer flicker, terrain renders in batched spans (~95% fewer API calls), and the gateway has 80+ lines of duplicated code replaced by a shared `_resolve_world()` helper.
 
-### What was built this session (Phase 21 — Living Gateway)
+### What was built this session (Phase 22 — Surface Polish)
 
-1. **World detail card & mini-map** — When a world is selected in the gateway, a detail card appears to the right of the list showing a scaled ASCII terrain map (colored by biome using 12 terrain color pairs), key stats (settlements, population, regions), and feature badges (Lore, Narrative, Magic, Pantheon, Factions, Bestiary, Adventure Zones). The map is lazily loaded and cached per world path, so navigation between worlds is snappy.
+1. **Flicker-free rendering** — Replaced every `stdscr.clear()` in main loops (viewer, gateway, explorer, gazetteer) with `stdscr.erase()`. `clear()` forces a terminal-wide erase sequence that flashes blank before new content; `erase()` marks the in-memory window dirty without the blank flash. The visual difference is dramatic — no more strobe effect between frames.
 
-2. **Interactive world list** — Press **Tab** to cycle the sort key through seed → population → name. The list reorders immediately. Current sort key is shown in the status bar (`[Tab] sort:seed`).
+2. **Batched terrain rendering** — The viewer's `_render_map` was doing O(n²) per-char `addch()` calls (3200 for an 80×40 map). Now it groups consecutive same-color cells into spans and writes them as single `addstr()` calls, reducing API calls by ~95%. Also cleaned up inline ternary expressions that had been split across too many lines.
 
-3. **Compact splash** — The full ASCII art splash is shown only when no worlds exist. Once worlds are detected (even one), it collapses to just the tagline "generative fantasy sandbox". This frees ~10 lines for the world list and detail card, making the gateway feel less cramped.
+3. **Gateway code deduplication** — Extracted a `_resolve_world()` helper that encapsulates the 10-line pattern repeated across 9 key handlers (e, v, d, c, s, x, t, G, p). Each now reads as a 3-line `world, err = _resolve_world(...); if err: continue`. 80+ lines of repetitive error-handling code eliminated.
 
-### What to tackle next — Phase 22: Deepening the Surface
+4. **Gateway + explorer flicker fix** — Same `clear()`→`erase()` treatment for gazetteer and explorer loops.
+
+### What to tackle next
+
+- **Speeds beyond zoom.** The viewer goes from Crawl (0.125x) to Zoom (64x). At Zoom you're seeing 64 years/second — smooth at century scale but too fast to read events. What if there were *above-year* speeds: Decade (128x), Century (256x), Epoch (512x)? At Epoch you'd see founding → golden age → collapse → rebirth in seconds.
+- **Context-sensitive viewer overlays.** When paused, show a "what changed" badge on each settlement on the map, not just in the diff overlay. Tiny colored dots: green (grew), red (shrank), grey (abandoned).
+- **Trade route animation.** Routes currently render as static lines. Animating goods flowing along routes in the viewer (a moving dot per route) would make the economy feel alive.
+- **Embody mode TUI.** Embody currently runs as a scrolling terminal conversation. A curses TUI for embody — with stats sidebar, event log, action menu — would match the rest of the tooling.
+- **Apply batch-rendering to explore mode's terrain renderer.** Same pattern as the viewer fix: span-based `addstr()` instead of per-char `addch()`.

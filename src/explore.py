@@ -772,7 +772,7 @@ def _explore_curses(stdscr, world: World) -> None:
 
     while running:
         max_y, max_x = stdscr.getmaxyx()
-        stdscr.clear()
+        stdscr.erase()
 
         # ── Sim tick ─────────────────────────────────────────────────
         if sim_mode and not sim_paused and (sim_max_years is None or sim_year < sim_max_years):

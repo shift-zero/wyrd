@@ -226,15 +226,16 @@ def _render_map(stdscr, world: World, smap: dict,
                 month: int | None = None):
     """Render terrain + settlements into the map area (starting at line 2).
     
-    If month is provided, seasonal color variants are used for terrain."""
+    If month is provided, seasonal color variants are used for terrain.
+    Uses batched addstr() for same-color spans to reduce curses API calls."""
 
     flash_tiles = flash_tiles or {}
     for sy in range(mh):
         wy = sy  # no vertical offset in viewer — show top-left
         if wy >= world.height:
             break
-        line = ""
-        colors = []
+        # Build (char, color_pair) spans for one line
+        spans: list[tuple[str, int]] = []
         for sx in range(min(mw, world.width)):
             wx = sx
             key = (wx, wy)
@@ -244,12 +245,8 @@ def _render_map(stdscr, world: World, smap: dict,
                 if key in new_founds:
                     c = _CP["new_found"]
                 elif key in flash_tiles:
-                    # Flash between yellow and bright green
                     frames = flash_tiles[key]
-                    if frames % 3 < 2:
-                        c = _CP["new_found"]  # bright green flash
-                    else:
-                        c = _CP["settlement"]  # normal yellow
+                    c = _CP["new_found"] if frames % 3 < 2 else _CP["settlement"]
                 elif info.get("active", True):
                     c = _CP["settlement"]
                 else:
@@ -258,26 +255,27 @@ def _render_map(stdscr, world: World, smap: dict,
                 if wx < world.width and wy < world.height:
                     t = world.terrain[wy][wx]
                     char = TERRAIN[t]["char"]
-                    # Terrain flash animation (cataclysm-changed tiles)
                     if key in flash_tiles:
                         frames = flash_tiles[key]
-                        if frames % 3 < 2:
-                            c = _CP["accent"]  # bright flash for terrain
-                        else:
-                            c = _cp(t) if month is None else _season_cp(t, month)
+                        c = _CP["accent"] if frames % 3 < 2 else (_cp(t) if month is None else _season_cp(t, month))
                     else:
                         c = _cp(t) if month is None else _season_cp(t, month)
                 else:
                     char = " "
                     c = 4
-            line += char
-            colors.append(c)
-        # Write line char by char (curses handles individual attrs)
-        for i, ch in enumerate(line):
+            # Merge into same-color span if possible
+            if spans and spans[-1][1] == c:
+                spans[-1] = (spans[-1][0] + char, c)
+            else:
+                spans.append((char, c))
+        # Write batched spans
+        x_pos = 0
+        for chars, cp in spans:
             try:
-                stdscr.addch(2 + sy, i, ch, curses.color_pair(colors[i]))
+                stdscr.addstr(2 + sy, x_pos, chars, curses.color_pair(cp))
             except curses.error:
                 break
+            x_pos += len(chars)
 
 
 def _draw_header(stdscr, seed, year, total, paused, speed, w, month=None):
@@ -1004,7 +1002,7 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
         map_h = max(1, h - 7 - events_h - 1)
 
         # ── Draw ─────────────────────────────────────────────────────
-        stdscr.clear()
+        stdscr.erase()  # erase() marks dirty without flash-to-blank
         _draw_header(stdscr, world.seed, cur_year, years,
                      paused, speed, w, cur_month)
         _draw_stats(stdscr, state, speed)

@@ -434,6 +434,23 @@ def _launch_curses_view(stdscr, title: str, view_fn, *args, **kwargs):
     return new_stdscr
 
 
+def _resolve_world(world_in_session, sorted_worlds, selected_idx):
+    """Resolve a world reference — from session state, or by loading the selected world.
+
+    Returns (world | None, error_msg | None).
+    """
+    world = world_in_session
+    if world is None and sorted_worlds and 0 <= selected_idx < len(sorted_worlds):
+        try:
+            from .serialize import load_world
+            world = load_world(sorted_worlds[selected_idx]["path"])
+        except Exception:
+            return None, "Could not load world"
+    if world is None:
+        return None, "No world loaded — generate or select one first"
+    return world, None
+
+
 # ── Gazetteer mode (Phase 20 — Living Gazetteer) ──────────────────────
 
 
@@ -632,7 +649,7 @@ def _gazetteer_mode(stdscr, world):
 
     while running:
         h, w = stdscr.getmaxyx()
-        stdscr.clear()
+        stdscr.erase()
 
         # Apply filter
         if active_filter is None:
@@ -840,7 +857,7 @@ def _gateway_loop(stdscr):
             key = stdscr.getch()
             continue
 
-        stdscr.clear()
+        stdscr.erase()
 
         # ── Draw splash ──────────────────────────────────────────────
         # Compact splash when worlds exist — just the title line
@@ -1095,16 +1112,9 @@ def _gateway_loop(stdscr):
                 status_time = time_module.monotonic()
 
         elif key == ord("e"):
-            world = world_in_session
-            if world is None and sorted_worlds and 0 <= selected_idx < len(sorted_worlds):
-                try:
-                    world = load_world(sorted_worlds[selected_idx]["path"])
-                except Exception:
-                    status_msg = "\u274c Could not load world"
-                    status_time = time_module.monotonic()
-                    continue
-            if world is None:
-                status_msg = "\u274c No world loaded \u2014 generate or select one first"
+            world, err = _resolve_world(world_in_session, sorted_worlds, selected_idx)
+            if err:
+                status_msg = f"❌ {err}"
                 status_time = time_module.monotonic()
                 continue
             world_in_session = world
@@ -1112,16 +1122,9 @@ def _gateway_loop(stdscr):
             stdscr = _launch_curses_view(stdscr, "Explorer", explore_world, world)
 
         elif key == ord("v"):
-            world = world_in_session
-            if world is None and sorted_worlds and 0 <= selected_idx < len(sorted_worlds):
-                try:
-                    world = load_world(sorted_worlds[selected_idx]["path"])
-                except Exception:
-                    status_msg = "\u274c Could not load world"
-                    status_time = time_module.monotonic()
-                    continue
-            if world is None:
-                status_msg = "\u274c No world loaded"
+            world, err = _resolve_world(world_in_session, sorted_worlds, selected_idx)
+            if err:
+                status_msg = f"❌ {err}"
                 status_time = time_module.monotonic()
                 continue
             world_in_session = world
@@ -1130,16 +1133,9 @@ def _gateway_loop(stdscr):
                                          view_simulation, world, 100, 0.3)
 
         elif key == ord("d"):
-            world = world_in_session
-            if world is None and sorted_worlds and 0 <= selected_idx < len(sorted_worlds):
-                try:
-                    world = load_world(sorted_worlds[selected_idx]["path"])
-                except Exception:
-                    status_msg = "\u274c Could not load world"
-                    status_time = time_module.monotonic()
-                    continue
-            if world is None:
-                status_msg = "\u274c No world loaded"
+            world, err = _resolve_world(world_in_session, sorted_worlds, selected_idx)
+            if err:
+                status_msg = f"❌ {err}"
                 status_time = time_module.monotonic()
                 continue
             world_in_session = world
@@ -1151,16 +1147,9 @@ def _gateway_loop(stdscr):
             stdscr.getch()
 
         elif key == ord("c"):
-            world = world_in_session
-            if world is None and sorted_worlds and 0 <= selected_idx < len(sorted_worlds):
-                try:
-                    world = load_world(sorted_worlds[selected_idx]["path"])
-                except Exception:
-                    status_msg = "\u274c Could not load world"
-                    status_time = time_module.monotonic()
-                    continue
-            if world is None:
-                status_msg = "\u274c No world loaded"
+            world, err = _resolve_world(world_in_session, sorted_worlds, selected_idx)
+            if err:
+                status_msg = f"❌ {err}"
                 status_time = time_module.monotonic()
                 continue
             world_in_session = world
@@ -1177,16 +1166,9 @@ def _gateway_loop(stdscr):
             stdscr.getch()
 
         elif key == ord("s"):
-            world = world_in_session
-            if world is None and sorted_worlds and 0 <= selected_idx < len(sorted_worlds):
-                try:
-                    world = load_world(sorted_worlds[selected_idx]["path"])
-                except Exception:
-                    status_msg = "\u274c Could not load world"
-                    status_time = time_module.monotonic()
-                    continue
-            if world is None:
-                status_msg = "\u274c No world loaded"
+            world, err = _resolve_world(world_in_session, sorted_worlds, selected_idx)
+            if err:
+                status_msg = f"❌ {err}"
                 status_time = time_module.monotonic()
                 continue
             world_in_session = world
@@ -1208,16 +1190,9 @@ def _gateway_loop(stdscr):
             curses.curs_set(0)
 
         elif key == ord("x"):
-            world = world_in_session
-            if world is None and sorted_worlds and 0 <= selected_idx < len(sorted_worlds):
-                try:
-                    world = load_world(sorted_worlds[selected_idx]["path"])
-                except Exception:
-                    status_msg = "\u274c Could not load world"
-                    status_time = time_module.monotonic()
-                    continue
-            if world is None:
-                status_msg = "\u274c No world loaded"
+            world, err = _resolve_world(world_in_session, sorted_worlds, selected_idx)
+            if err:
+                status_msg = f"❌ {err}"
                 status_time = time_module.monotonic()
                 continue
             world_in_session = world
@@ -1230,16 +1205,9 @@ def _gateway_loop(stdscr):
             status_time = time_module.monotonic()
 
         elif key == ord("t"):
-            world = world_in_session
-            if world is None and sorted_worlds and 0 <= selected_idx < len(sorted_worlds):
-                try:
-                    world = load_world(sorted_worlds[selected_idx]["path"])
-                except Exception:
-                    status_msg = "❌ Could not load world"
-                    status_time = time_module.monotonic()
-                    continue
-            if world is None:
-                status_msg = "❌ No world loaded"
+            world, err = _resolve_world(world_in_session, sorted_worlds, selected_idx)
+            if err:
+                status_msg = f"❌ {err}"
                 status_time = time_module.monotonic()
                 continue
             world_in_session = world
@@ -1266,35 +1234,19 @@ def _gateway_loop(stdscr):
             curses.curs_set(0)
 
         elif key == ord("G"):
-            """Gazetteer mode — browse all world entities."""
-            world = world_in_session
-            if world is None and sorted_worlds and 0 <= selected_idx < len(sorted_worlds):
-                try:
-                    world = load_world(sorted_worlds[selected_idx]["path"])
-                except Exception:
-                    status_msg = "❌ Could not load world"
-                    status_time = time_module.monotonic()
-                    continue
-            if world is None:
-                status_msg = "❌ No world loaded"
+            world, err = _resolve_world(world_in_session, sorted_worlds, selected_idx)
+            if err:
+                status_msg = f"\u274c {err}"
                 status_time = time_module.monotonic()
                 continue
             world_in_session = world
             _gazetteer_mode(stdscr, world)
-            stdscr.clear()
+            stdscr.erase()
 
         elif key == ord("p"):
-            """Play/embody — launch embodied play mode for the selected world."""
-            world = world_in_session
-            if world is None and sorted_worlds and 0 <= selected_idx < len(sorted_worlds):
-                try:
-                    world = load_world(sorted_worlds[selected_idx]["path"])
-                except Exception:
-                    status_msg = "❌ Could not load world"
-                    status_time = time_module.monotonic()
-                    continue
-            if world is None:
-                status_msg = "❌ No world loaded"
+            world, err = _resolve_world(world_in_session, sorted_worlds, selected_idx)
+            if err:
+                status_msg = f"\u274c {err}"
                 status_time = time_module.monotonic()
                 continue
             world_in_session = world

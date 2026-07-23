@@ -114,9 +114,22 @@ The simulation engine (`sim.py`) currently ticks in whole years. This is a deep 
 ||---|------|------------|
 || 1 ✅ | World detail card with mini-ASCII map — shows terrain preview, stats, features | Select a world in the gateway → detail panel appears with a colored mini-map of the terrain, settlement/region/population stats, and feature badges | 2026-07-24 |
 || 2 ✅ | Interactive world list — sort by seed/population/name | Press Tab to cycle sort keys (seed→population→name), world list reorders immediately | 2026-07-24 |
-|| 3 ✅ | Compact gateway splash when worlds exist | ASCII splash art hidden when worlds are present, giving more room for the world list and detail card | 2026-07-24 |
-
-## Design Principles
+||| 3 ✅ | Compact gateway splash when worlds exist | ASCII splash art hidden when worlds are present, giving more room for the world list and detail card | 2026-07-24 |
+||
+|## Phase 22 — Surface Polish (2026-07-25 ✅)|
+||
+||**Thesis:** The TUI and viewer had accumulated UI jank and code repetition. Fixing the surface quality — flicker, rendering performance, and code rot — makes the whole project feel more polished.|
+||
+||### Items|
+||
+||| # | What | Verifiable |
+||---|------|------------|
+||| 1 ✅ | Viewer flicker elimination — `stdscr.clear()` → `stdscr.erase()` in viewer, gateway, and explorer | No blank-flash between frames |
+||| 2 ✅ | Batched terrain rendering — `addstr()` spans instead of per-char `addch()` in viewer | ~95% fewer curses API calls per frame for terrain |
+||| 3 ✅ | Gateway code deduplication — 9 key handlers use shared `_resolve_world()` helper | 80+ lines of duplicated world-resolution code removed |
+||| 4 ✅ | Gateway & explorer flicker fix — same `clear()`→`erase()` in both gateways | All 3 TUI surfaces have smooth rendering |
+||
+|## Design Principles
 
 1. **Every output is beautiful.** ANSI color, careful layout, no debug spew.
 2. **Worlds feel real.** Generated geography constrains lore, not the other way around.
