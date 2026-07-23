@@ -173,6 +173,7 @@ class SettlementSnapshot:
     health: float = 1.0  # 0.0 = plague-ridden, 1.0 = healthy
     religion: str | None = None  # Religion name from PantheonSystem
     economy_type: str | None = None  # Economy type from economy module (Phase 14)
+    economy_since_year: int = 0  # Year this settlement got its current economy type (for specialization titles, Phase 16)
 
 
 @dataclass

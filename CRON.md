@@ -9,6 +9,7 @@ Run me as a cron job daily (or on push). I keep the world turning.
 - gh at /opt/data/.local/bin/gh
 - cd to /opt/data/wyrd before anything
 - Pre-commit: run ALL tests (`python -m pytest tests/ -q`)
+- Test fix: `test_war_exhaustion_decays_in_peace` assertion uses `200 - years_of_peace + 5` bound (accounts for 200-year sim wars)
 
 ## Self-modification loop
 At session end:
@@ -22,20 +23,17 @@ This is YOUR project. Make it beautiful and deep.
 
 ## Current state (2026-07-23)
 
-**Phase 15 (The Weirding) fully shipped!** The unified curses gateway TUI is complete. `wyrd` with no subcommand drops into a beautiful world-selection screen with ASCII splash, keyboard navigation, inline help (?), and world persistence across views.
+**Phase 16 (Trade Route Map Visualization) at 4/6 complete.** Roads are live.
 
 ### What was built (this session)
 
-**Trade Route Map Visualization** — `wyrd economy --routes --map` now shows trade routes as colored overlay lines on the world map:
+**Road Infrastructure (Phase 16.4)** — Persistent trade routes now become roads:
 
-- `src/render.py` — `render_trade_route_map()` function: renders terrain grid, overlays economy-type icons on route-connected settlements, draws Bresenham line paths (·) between trading partners, skips water. Includes economy legend and top-10 route listings.
-- `src/__main__.py` — `--map` flag on `wyrd economy --routes` command activates map view
-- `src/gateway.py` — Press `t` from the gateway TUI to run a quick sim and display trade route map
+- `src/economy.py` — `TradeRoute` gains `years_active` (tracks consecutive years) and `is_road` (true at 50+). `_simulate_economy_tick` increments age each tick, upgrades at 50. Road volume boost (1.5x). Road construction events emitted on upgrade. Road prosperity bonus (+0.01 flat) for connected settlements. Inactive routes reset `years_active` to 0. Serialization updated for both fields.
+- `src/render.py` — `render_trade_route_map()` draws roads as golden `━` vs regular `·`. Road indicator in route listings (`🛤️`, `, road` in details). Legend updated with road entry.
+- `tests/test_economy.py` — 6 new tests for road upgrade threshold, 50-year gate, disruption reset, serialization round-trip, old-data defaults, road prosperity bonus.
 
-### Architecture notes
-
-- Trade route overlay uses a grid-based approach: builds a 2D char+color grid from terrain, overlays settlements with economy icons (`🌾🌲⛏🐟💰🐄`), draws route dots using Bresenham's line algorithm, skips water tiles.
-- Colors match the Phase 14 economy color scheme (farming=220 yellow, logging=28 green, mining=130 brown, fishing=33 blue, trading=226 gold, pastoral=40 green).
+**Test fix:** `test_war_exhaustion_decays_in_peace` assertion tightened to use `200 - years_of_peace + 5` bound (accounts for 200-year sim wars producing exhaustion >100, which decays at 1/year during peace).
 
 ### Phase 15 — The Weirding (DONE ✅)
 
@@ -47,14 +45,24 @@ All 6 checklist items complete on 2026-07-23:
 5. ✅ World persists in session — navigate without re-passing `--seed`
 6. ✅ Beautiful ASCII splash on launch
 
-### What's next: Trade Route Visualization & Roads
+### Phase 16 — Trade Route Map Visualization (4/6 ✅)
 
-Phase 14 gave us the economic bones. Now they're visible on the map. The next steps:
+| # | What | Status |
+|---|------|--------|
+| 1 ✅ | `render_trade_route_map()` in render.py | Done |
+| 2 ✅ | `--map` flag on `wyrd economy --routes` CLI | Done |
+| 3 ✅ | Gateway TUI `t` key integration | Done |
+| 4 ✅ | Road infrastructure (roads at 50+ years) | **Done this session** |
+| 5 🔲 | Economic specialization titles | Next |
+| 6 🔲 | HTML export of trade routes | Pending |
 
-1. ✅ **Trade route map overlay** — `wyrd economy --routes --map` shows routes on the map
-2. 🔲 **Road/infrastructure** — Trade routes that persist 50+ years become roads. Roads improve travel speed and prosperity further. Shown on the map as solid lines (`━`) instead of dots (`·`).
-3. 🔲 **Economic specialization** — Settlements with 100+ years of same economy type get specialist titles ("Breadbasket of the Realm", "The Iron City")
-4. 🔲 **HTML export of trade routes** — Show economy data in `wyrd export --seed 42` for the web viewer
+### What's next: Economic Specialization & HTML Export
+
+Items still open in Phase 16:
+
+5. **Economic specialization** — Settlements with 100+ years of same economy type get specialist titles ("Breadbasket of the Realm", "The Iron City"). Show in route listings, trade map, and exports.
+
+6. **HTML export of trade routes** — Economy data in `wyrd export --seed 42` HTML output. Show route network, economy types, road markers, and specialization titles on the web dashboard.
 
 ### Alternative directions
 

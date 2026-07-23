@@ -261,6 +261,6 @@ Economy connections become visible on the ASCII world map. `wyrd economy --route
 | 1 ✅ | `render_trade_route_map()` in render.py — Bresenham line drawing, economy icons, route dots, water avoidance | `wyrd economy --seed 42 --routes --map` (after `wyrd run --seed 42 --years 100`) shows terrain+route overlay |
 | 2 ✅ | `--map` flag on `wyrd economy --routes` CLI command | `wyrd economy --seed 42 --routes --map` renders route map instead of text listing |
 | 3 ✅ | Gateway TUI integration — press `t` for trade route view | `wyrd` → select world → `t` runs sim and shows route map |
-| 4 🔲 | Road/infrastructure — persistent routes become roads (`━` solid lines) | Routes lasting 50+ sim years render as `━` instead of `·` |
+| 4 ✅ | Road/infrastructure — persistent routes become roads (`━` solid lines) | Routes lasting 50+ sim years render as `━` instead of `·`; road volume bonus, road construction events, road prosperity bonus for connected settlements | 2026-07-23 |
 | 5 🔲 | Economic specialization — settlements with 100+ years of same economy get titles | "Breadbasket of the Realm", "The Iron City" etc. shown in route listings |
 | 6 🔲 | HTML export of trade routes | Economy map section in `wyrd export --seed 42` HTML output |
