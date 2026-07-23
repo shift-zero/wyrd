@@ -770,6 +770,13 @@ def _simulate_tick(world: World, state: SimState, rng: random.Random,
     except Exception:
         pass  # Economy events are non-critical; don't crash sim
 
+    # Re-evaluate kind for all settlements after any population modifications
+    # (plague, famine, war casualties, emigration — all can change pop without
+    #  updating kind at the modification site)
+    for s in state.settlements.values():
+        if s.is_active:
+            s.kind = _population_to_kind(s.population)
+
     return events
 
 
