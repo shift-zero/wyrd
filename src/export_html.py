@@ -98,6 +98,40 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     border-radius: 8px;
     margin-bottom: 1.5rem;
   }}
+  .trade-routes {{
+    margin-bottom: 1.5rem;
+  }}
+  .trade-routes h2 {{
+    font-size: 1rem;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+  }}
+  .trade-route-item {{
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0.5rem;
+    background: var(--surface);
+    border-radius: 4px;
+    margin-bottom: 0.3rem;
+    font-size: 0.85rem;
+  }}
+  .route-road {{
+    border-left: 3px solid #d7af5f;
+  }}
+  .route-disrupted {{
+    opacity: 0.5;
+    text-decoration: line-through;
+  }}
+  .route-goods {{
+    color: #aaa;
+    font-size: 0.75rem;
+  }}
+  .route-volume {{
+    min-width: 4rem;
+    text-align: right;
+    color: var(--muted);
+  }}
   .footer {{
     color: var(--muted);
     font-size: 0.75rem;
@@ -126,6 +160,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 {factions_html}
 
 {bestiary_html}
+
+{trade_routes_html}
 
 <div class="lore">{lore_html}</div>
 
@@ -170,6 +206,7 @@ def export_world_html(
     abandoned_settlements: list[dict] | None = None,
     population_record: list[dict] | None = None,
     sim_events_count: int = 0,
+    trade_routes: list[dict] | None = None,
 ) -> str:
     """Export a world as a self-contained HTML page.
 
@@ -179,6 +216,7 @@ def export_world_html(
         abandoned_settlements: List of {name, x, y} for abandoned/ruined settlements
         population_record: List of {year, total_population, ...} from sim state
         sim_events_count: Total number of sim events that occurred
+        trade_routes: Optional list of trade route dicts from sim state
     """
     # ── Build ruin lookup ───────────────────────────────────────────
     ruins: dict[tuple[int, int], str] = {}
@@ -392,6 +430,57 @@ def export_world_html(
             '</div>'
         )
 
+    # ── Trade Routes ──────────────────────────────────────────────
+    trade_routes_html = ""
+    if trade_routes:
+        from .economy import reconstruct_routes, ECONOMY_ICONS
+
+        routes = reconstruct_routes(trade_routes)
+        active = [r for r in routes if r.is_active]
+        disrupted = [r for r in routes if not r.is_active]
+
+        route_lines = []
+
+        if active:
+            route_lines.append(
+                f'<div style="font-size:0.85rem;color:#888;margin-bottom:0.5rem;">'
+                f'💰 {len(active)} active trade routes</div>'
+            )
+            for r in sorted(active, key=lambda x: (x.is_road, -x.volume), reverse=True):
+                road_badge = " 🛤️ ROAD" if r.is_road else ""
+                vol_pct = int(r.volume * 100)
+                route_lines.append(
+                    f'<div class="trade-route-item{" route-road" if r.is_road else ""}">'
+                    f'<span style="color:#d78700;font-weight:bold;">↔</span>'
+                    f'<span style="font-weight:bold;">{r.source}</span>'
+                    f'<span style="color:#888;">→</span>'
+                    f'<span style="font-weight:bold;">{r.destination}</span>'
+                    f'<span class="route-goods"> — {r.goods}{road_badge}</span>'
+                    f'<span class="route-volume">vol {vol_pct}%</span>'
+                    f'</div>'
+                )
+
+        if disrupted:
+            route_lines.append(
+                f'<div style="font-size:0.85rem;color:#888;margin-top:0.5rem;">'
+                f'💔 {len(disrupted)} disrupted routes</div>'
+            )
+            for r in disrupted:
+                route_lines.append(
+                    f'<div class="trade-route-item route-disrupted">'
+                    f'<span style="color:#660000;">✕</span>'
+                    f'<span>{r.source} → {r.destination}</span>'
+                    f'<span class="route-goods"> — {r.goods}</span>'
+                    f'</div>'
+                )
+
+        trade_routes_html = (
+            '<div class="trade-routes">'
+            '<h2>💰 Trade Routes</h2>'
+            + "\\n".join(route_lines) +
+            '</div>'
+        )
+
     # ── Lore ────────────────────────────────────────────────────────
     lore_text = render_lore(world) if world.lore else "(no lore generated)"
     # Strip ANSI escape codes for HTML
@@ -467,6 +556,7 @@ def export_world_html(
         regions_html=regions_html,
         factions_html=factions_html,
         bestiary_html=bestiary_html,
+        trade_routes_html=trade_routes_html,
         lore_html=lore_html,
         font_size=font_size,
         date=today,

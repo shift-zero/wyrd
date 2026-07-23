@@ -836,6 +836,7 @@ def main():
         sim_events = None
         abandoned_settlements = None
         population_record = None
+        trade_routes_data = None
         if getattr(args, 'snapshot_year', None) is not None:
             try:
                 from .serialize import load_sim_state
@@ -868,6 +869,15 @@ def main():
                 # Extract population record
                 if sim_data and "population_record" in sim_data:
                     population_record = sim_data["population_record"]
+
+                # Extract trade routes
+                trade_routes_data = None
+                snap_key = str(args.snapshot_year)
+                if sim_data and "snapshots" in sim_data and snap_key in sim_data["snapshots"]:
+                    snap = sim_data["snapshots"][snap_key]
+                    trade_routes_data = snap.get("trade_routes")
+                elif sim_data and "final_state" in sim_data:
+                    trade_routes_data = sim_data["final_state"].get("trade_routes")
             except Exception:
                 pass
 
@@ -896,6 +906,7 @@ def main():
                 abandoned_settlements=abandoned_settlements,
                 population_record=pop_record,
                 sim_events_count=len(sim_events) if sim_events else 0,
+                trade_routes=trade_routes_data,
             )
             with open(output, "w") as f:
                 f.write(html)
