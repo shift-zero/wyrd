@@ -15,11 +15,14 @@ import time
 
 from .world import World, TERRAIN
 from .sim import (
-    initialize_sim_state, _simulate_tick, simulate_years,
+    initialize_sim_state, _simulate_tick, _simulate_month_tick,
+    simulate_years,
     apply_sim_state_to_world, SimState, SimEvent,
 )
 
-# ── Color pairs (1-22) ───────────────────────────────────────────────
+# ── Color pairs (1-58) ───────────────────────────────────────────────
+# Pairs 1-22: base terrain + UI
+# Pairs 23-58: seasonal terrain variants (4 seasons × 9 terrain types)
 
 _CP = {
     "deep_water": 1, "shallow": 2, "sand": 3, "grass": 4,
@@ -27,7 +30,43 @@ _CP = {
     "settlement": 10, "abandoned": 11, "new_found": 12,
     "header": 13, "status": 14, "dim": 15, "accent": 17,
     "info": 18, "war": 19, "famine": 20, "plague": 21, "good": 22,
+    # Seasonal variants — each season gets 9 pairs (deep_water..river)
+    "spr_deep_water": 23, "spr_shallow": 24, "spr_sand": 25,
+    "spr_grass": 26, "spr_forest": 27, "spr_hills": 28,
+    "spr_mountains": 29, "spr_snow": 30, "spr_river": 31,
+    "sum_deep_water": 32, "sum_shallow": 33, "sum_sand": 34,
+    "sum_grass": 35, "sum_forest": 36, "sum_hills": 37,
+    "sum_mountains": 38, "sum_snow": 39, "sum_river": 40,
+    "aut_deep_water": 41, "aut_shallow": 42, "aut_sand": 43,
+    "aut_grass": 44, "aut_forest": 45, "aut_hills": 46,
+    "aut_mountains": 47, "aut_snow": 48, "aut_river": 49,
+    "win_deep_water": 50, "win_shallow": 51, "win_sand": 52,
+    "win_grass": 53, "win_forest": 54, "win_hills": 55,
+    "win_mountains": 56, "win_snow": 57, "win_river": 58,
 }
+
+SEASONS = ["winter", "spring", "summer", "autumn"]  # N+Earth seasons
+
+def _season_name(month: int) -> str:
+    """Map month (0-11) to season name."""
+    if month in (11, 0, 1):
+        return "winter"
+    elif month in (2, 3, 4):
+        return "spring"
+    elif month in (5, 6, 7):
+        return "summer"
+    else:
+        return "autumn"
+
+def _season_cp(terrain_key: str, month: int | None) -> int:
+    """Get color pair for terrain, adjusted for season if month is known."""
+    if month is None:
+        return _CP.get(terrain_key, 4)
+    season = _season_name(month)
+    key = f"{season}_{terrain_key}"
+    if key in _CP:
+        return _CP[key]
+    return _CP.get(terrain_key, 4)
 
 _EVENT_ICON = {
     "plague": "☠", "famine": "🌾", "war": "⚔", "discovery": "✦",
@@ -94,6 +133,47 @@ def _init():
     curses.init_pair(20, 130, -1)   # famine (brown)
     curses.init_pair(21, 90, -1)    # plague (magenta)
     curses.init_pair(22, 46, -1)    # good (green)
+    # ── Seasonal terrain variants ──
+    # Spring: fresh greens, bright
+    curses.init_pair(23, 33, -1)    # spr_deep_water — slightly lighter blue
+    curses.init_pair(24, 39, -1)    # spr_shallow — brighter shallow
+    curses.init_pair(25, 229, -1)   # spr_sand — pale gold
+    curses.init_pair(26, 34, -1)    # spr_grass — bright fresh green
+    curses.init_pair(27, 28, -1)    # spr_forest — lush green
+    curses.init_pair(28, 100, -1)   # spr_hills — green-brown
+    curses.init_pair(29, 137, -1)   # spr_mountains — warm grey-brown
+    curses.init_pair(30, 255, -1)   # spr_snow — bright white
+    curses.init_pair(31, 51, -1)    # spr_river — bright cyan
+    # Summer: warm, slightly yellowed
+    curses.init_pair(32, 27, -1)    # sum_deep_water
+    curses.init_pair(33, 33, -1)    # sum_shallow
+    curses.init_pair(34, 230, -1)   # sum_sand — warm sand
+    curses.init_pair(35, 106, -1)   # sum_grass — sun-bleached green
+    curses.init_pair(36, 64, -1)    # sum_forest — olive green
+    curses.init_pair(37, 101, -1)   # sum_hills — warm brown
+    curses.init_pair(38, 143, -1)   # sum_mountains — tawny
+    curses.init_pair(39, 255, -1)   # sum_snow
+    curses.init_pair(40, 45, -1)    # sum_river
+    # Autumn: orange, brown, red
+    curses.init_pair(41, 26, -1)    # aut_deep_water — darker blue
+    curses.init_pair(42, 31, -1)    # aut_shallow — muted
+    curses.init_pair(43, 180, -1)   # aut_sand — ochre
+    curses.init_pair(44, 142, -1)   # aut_grass — dry yellow-brown
+    curses.init_pair(45, 130, -1)   # aut_forest — russet/red-brown
+    curses.init_pair(46, 137, -1)   # aut_hills — autumn brown
+    curses.init_pair(47, 138, -1)   # aut_mountains — muted grey-brown
+    curses.init_pair(48, 250, -1)   # aut_snow — grey-white
+    curses.init_pair(49, 37, -1)    # aut_river — steel blue
+    # Winter: cool blues, white, grey
+    curses.init_pair(50, 25, -1)    # win_deep_water — icy dark blue
+    curses.init_pair(51, 31, -1)    # win_shallow — icy blue
+    curses.init_pair(52, 188, -1)   # win_sand — pale grey
+    curses.init_pair(53, 65, -1)    # win_grass — frosty muted green
+    curses.init_pair(54, 59, -1)    # win_forest — dark frost
+    curses.init_pair(55, 102, -1)   # win_hills — cold grey-brown
+    curses.init_pair(56, 145, -1)   # win_mountains — cold grey
+    curses.init_pair(57, 255, -1)   # win_snow — brilliant white
+    curses.init_pair(58, 38, -1)    # win_river — icy cyan
 
 
 def _cp(terrain_key: str) -> int:
@@ -142,8 +222,12 @@ def _fill_line(stdscr, y, cp):
 
 def _render_map(stdscr, world: World, smap: dict,
                 mh: int, mw: int, new_founds: set,
-                flash_tiles: dict | None = None):
-    """Render terrain + settlements into the map area (starting at line 2)."""
+                flash_tiles: dict | None = None,
+                month: int | None = None):
+    """Render terrain + settlements into the map area (starting at line 2).
+    
+    If month is provided, seasonal color variants are used for terrain."""
+
     flash_tiles = flash_tiles or {}
     for sy in range(mh):
         wy = sy  # no vertical offset in viewer — show top-left
@@ -180,9 +264,9 @@ def _render_map(stdscr, world: World, smap: dict,
                         if frames % 3 < 2:
                             c = _CP["accent"]  # bright flash for terrain
                         else:
-                            c = _cp(t)
+                            c = _cp(t) if month is None else _season_cp(t, month)
                     else:
-                        c = _cp(t)
+                        c = _cp(t) if month is None else _season_cp(t, month)
                 else:
                     char = " "
                     c = 4
@@ -196,13 +280,15 @@ def _render_map(stdscr, world: World, smap: dict,
                 break
 
 
-def _draw_header(stdscr, seed, year, total, paused, speed, w):
-    """Clean header bar with wyrd title and sim status."""
+def _draw_header(stdscr, seed, year, total, paused, speed, w, month=None):
+    """Clean header bar with wyrd title, sim status, season, and speed."""
     fmt = f" wyrd — Seed {seed}  "
     mode = "⏸ PAUSED" if paused else "▶ RUNNING"
     mode_color = _CP["status"] if paused else _CP["accent"]
-    yr_str = f" Year {year:,}/{total:,}"
-    speed_str = f" {speed:.1f}x"
+    season_str = _season_name(month) if month is not None else ""
+    yr_str = f" {season_str} Year {year:,}/{total:,}"
+    lbl = _speed_label(speed)
+    speed_str = f" {lbl} {speed:.1f}x"
     _fill_line(stdscr, 0, _CP["header"])
     _draw(stdscr, 0, 0, fmt, _CP["header"], bold=True)
     _draw(stdscr, 0, len(fmt), mode, mode_color, bold=True)
@@ -210,13 +296,17 @@ def _draw_header(stdscr, seed, year, total, paused, speed, w):
     _draw(stdscr, 0, max(0, w - len(speed_str) - len(yr_str) - 4), yr_str, _CP["info"])
 
 
-def _draw_stats(stdscr, state: SimState):
+def _draw_stats(stdscr, state: SimState, speed: float = 2.0):
     active = state.num_settlements
     abandoned = state.num_abandoned
     pop = state.total_population
+    # Speed bar: 8 chars, fills proportionally
+    speed_pct = max(0.0, min(1.0, (speed - 0.125) / 63.875))
+    filled = int(speed_pct * 8)
+    speed_bar = "█" * filled + "░" * (8 - filled)
     text = (f" Settlements: {active} active"
             f"{f', {abandoned} abandoned' if abandoned else ''}"
-            f"  │  Pop: {pop:,}  │  Year {state.year}")
+            f"  │  Pop: {pop:,}  │  {speed_bar}  {speed:.1f}x")
     _fill_line(stdscr, 1, _CP["info"])
     _draw(stdscr, 1, 0, text, _CP["info"])
 
@@ -242,13 +332,15 @@ def _draw_events(stdscr, events: list, max_events: int, start_y: int, w: int):
         _draw(stdscr, y, 0, text[:w - 1], cp)
 
 
-def _draw_status_bar(stdscr, h, w, seed, year, total, paused, speed):
-    """Persistent status bar showing mode, progress, and keybind hints."""
+def _draw_status_bar(stdscr, h, w, seed, year, total, paused, speed, month=None):
+    """Persistent status bar showing mode, season, progress, speed label, and keybind hints."""
+    season_str = _season_name(month) if month is not None else ""
+    lbl = _speed_label(speed)
     # Left: mode indicator
     if paused:
-        mode_str = f" ⏸ PAUSED  Seed {seed}  Year {year:,}/{total:,}  {speed:.1f}x"
+        mode_str = f" ⏸ PAUSED  Seed {seed}  {season_str} Year {year:,}/{total:,}  {lbl} {speed:.1f}x"
     else:
-        mode_str = f" ▶ RUNNING  Seed {seed}  Year {year:,}/{total:,}  {speed:.1f}x"
+        mode_str = f" ▶ RUNNING  Seed {seed}  {season_str} Year {year:,}/{total:,}  {lbl} {speed:.1f}x"
 
     # Right: context-sensitive key hints
     if paused:
@@ -603,6 +695,23 @@ def _handle_key(key, state):
     return None, None
 
 
+# ── Speed labels ──────────────────────────────────────────────────────
+
+_SPEED_LABELS = [
+    (0.125, "Crawl"), (0.25, "Slow"), (0.5, "Walk"),
+    (1, "Flow"), (2, "Trot"), (4, "Run"),
+    (8, "Dash"), (16, "Fly"), (32, "Blink"), (64, "Zoom"),
+]
+
+def _speed_label(speed: float) -> str:
+    """Get qualitative label for a speed value."""
+    best = "Crawl"
+    for s, lbl in _SPEED_LABELS:
+        if abs(speed - s) < 0.01 or speed >= s * 0.75:
+            best = lbl
+    return best
+
+
 # ── Main loop ────────────────────────────────────────────────────────
 
 def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
@@ -620,6 +729,7 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
 
     events: list[SimEvent] = []
     cur_year = 0
+    cur_month = 0  # 0-11, for seasonal rendering
     paused = False
     speed = 2.0
     show_chart = False
@@ -650,28 +760,37 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
             time.sleep(0.5)
             continue
 
-        # ── Advance sim ──────────────────────────────────────────────
+        # ── Advance sim (month-level ticks) ────────────────────────────
         if not paused and cur_year < years:
             now = time.monotonic()
             dt = now - last
             last = now
-            accum += dt * speed
+            # Accumulate in months: speed * 12 months/sec
+            month_accum = dt * speed * 12.0
+            # Clip to avoid huge jumps on resume
+            if month_accum > 60.0:
+                month_accum = 60.0
+            accum += month_accum
             while accum >= 1.0 and cur_year < years:
                 accum -= 1.0
-                cur_year += 1
-                # Snapshot before tick for diff computation
-                if prev_snapshot is None:
+                cur_month += 1
+                if cur_month >= 12:
+                    cur_month = 0
+                    cur_year += 1
+                    # ── Year boundary: diff snapshot ──
+                    if prev_snapshot is None:
+                        prev_snapshot = _snapshot_populations(state)
+                    last_diff = _compute_diff(prev_snapshot, state)
                     prev_snapshot = _snapshot_populations(state)
-                tick_events = _simulate_tick(world, state, rng,
-                                             cur_year, chaos)
+
+                # Month tick (handles year-end subsystems at month 11)
+                tick_events = _simulate_month_tick(
+                    world, state, rng, cur_year, cur_month, chaos,
+                )
                 events.extend(tick_events)
                 total_simmed += 1
-                # Compute diff after tick
-                last_diff = _compute_diff(prev_snapshot, state)
-                prev_snapshot = _snapshot_populations(state)
 
-                # Track new foundings and changed settlements for animation
-                new_founds = set()
+                # Track new foundings for flash animation
                 for ev in tick_events:
                     if ev.event_type == "founding":
                         for sn in ev.affected_settlements:
@@ -680,17 +799,17 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
                                 new_founds.add((ss.x, ss.y))
                                 flash_tiles[(ss.x, ss.y)] = FLASH_DURATION
 
-                # Add growing/shrinking settlements to flash animation
-                if last_diff:
-                    for name, old, new_, delta in last_diff["grew"]:
+                # Flash growing/shrinking settlements (only at year end)
+                if cur_month == 0 and last_diff:
+                    for name, old, new_, delta in last_diff.get("grew", []):
                         ss = state.settlements.get(name)
                         if ss:
                             flash_tiles[(ss.x, ss.y)] = FLASH_DURATION
-                    for name, old, new_, delta in last_diff["shrank"]:
+                    for name, old, new_, delta in last_diff.get("shrank", []):
                         ss = state.settlements.get(name)
                         if ss:
                             flash_tiles[(ss.x, ss.y)] = FLASH_DURATION
-                    for name in last_diff["abandoned"]:
+                    for name in last_diff.get("abandoned", []):
                         ss = state.settlements.get(name)
                         if ss:
                             flash_tiles[(ss.x, ss.y)] = FLASH_DURATION
@@ -716,13 +835,13 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
         # ── Draw ─────────────────────────────────────────────────────
         stdscr.clear()
         _draw_header(stdscr, world.seed, cur_year, years,
-                     paused, speed, w)
-        _draw_stats(stdscr, state)
-        _render_map(stdscr, sim_world, smap, map_h, w, new_founds, flash_tiles)
+                     paused, speed, w, cur_month)
+        _draw_stats(stdscr, state, speed)
+        _render_map(stdscr, sim_world, smap, map_h, w, new_founds, flash_tiles, cur_month)
 
         ev_start = 2 + map_h
         _draw_events(stdscr, events, events_h, ev_start, w)
-        _draw_status_bar(stdscr, h, w, world.seed, cur_year, years, paused, speed)
+        _draw_status_bar(stdscr, h, w, world.seed, cur_year, years, paused, speed, cur_month)
 
         # Overlays (last = on top)
         if show_diff:
@@ -751,31 +870,38 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
                 if not paused:
                     paused = True
                 if cur_year < years:
-                    cur_year += 1
-                    # Snapshot before tick
-                    prev_snapshot = _snapshot_populations(state)
-                    tick_events = _simulate_tick(world, state, rng,
-                                                 cur_year, chaos)
-                    events.extend(tick_events)
-                    # Compute diff
-                    last_diff = _compute_diff(prev_snapshot, state)
-                    # Track new foundings for flash
-                    for ev in tick_events:
-                        if ev.event_type == "founding":
-                            for sn in ev.affected_settlements:
-                                ss = state.settlements.get(sn)
-                                if ss:
-                                    flash_tiles[(ss.x, ss.y)] = FLASH_DURATION
+                    # Advance 12 months (one full year)
+                    for _ in range(12):
+                        if cur_year >= years:
+                            break
+                        cur_month += 1
+                        if cur_month >= 12:
+                            cur_month = 0
+                            cur_year += 1
+                            if prev_snapshot is None:
+                                prev_snapshot = _snapshot_populations(state)
+                            last_diff = _compute_diff(prev_snapshot, state)
+                            prev_snapshot = _snapshot_populations(state)
+                        tick_events = _simulate_month_tick(
+                            world, state, rng, cur_year, cur_month, chaos,
+                        )
+                        events.extend(tick_events)
+                        for ev in tick_events:
+                            if ev.event_type == "founding":
+                                for sn in ev.affected_settlements:
+                                    ss = state.settlements.get(sn)
+                                    if ss:
+                                        flash_tiles[(ss.x, ss.y)] = FLASH_DURATION
                     if last_diff:
-                        for name, old, new_, delta in last_diff["grew"]:
+                        for name, old, new_, delta in last_diff.get("grew", []):
                             ss = state.settlements.get(name)
                             if ss:
                                 flash_tiles[(ss.x, ss.y)] = FLASH_DURATION
-                        for name, old, new_, delta in last_diff["shrank"]:
+                        for name, old, new_, delta in last_diff.get("shrank", []):
                             ss = state.settlements.get(name)
                             if ss:
                                 flash_tiles[(ss.x, ss.y)] = FLASH_DURATION
-                        for name in last_diff["abandoned"]:
+                        for name in last_diff.get("abandoned", []):
                             ss = state.settlements.get(name)
                             if ss:
                                 flash_tiles[(ss.x, ss.y)] = FLASH_DURATION

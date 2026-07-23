@@ -21,17 +21,17 @@ This is YOUR project. Make it beautiful and deep.
 
 ---
 
-## Current state (2026-07-23)
+## Current state (2026-07-24)
 
-**Phase 19 — Human-First UX. 794 (+2 new monthly sim tests) tests pass.** Added persistent status bars to both the gateway and viewer TUIs, improved world picker layout with column alignment, and implemented a full sub-year month-tick middleware (`_simulate_month_tick`, `simulate_years_monthly`, `run_monthly_simulation`) that distributes population/food/event changes smoothly across 12 months per year while keeping seed determinism.
+**Phase 19 — Human-First UX complete. All 6 checklist items ✅.** 800+ tests pass.
 
-### What was done this session: Phase 19 — Human-First UX (items 1, 2, 3)
+### What was done this session: Phase 19 (items 4, 5, 6)
 
-1. **Gateway TUI overhaul** (`gateway.py`) — Replaced old footer with a persistent status bar showing current mode (world seed/session), population of selected world, and context-aware key hints that change when no worlds exist. World list reworked with column-aligned display (Seed, Size, Population, Settlements, Features), section headers, and scrollable with `▸` selection markers.
+1. **Seasonal rendering (item 6)** — `viewer.py` now has 4 complete seasonal color palettes (Spring: fresh greens/cyan, Summer: warm sun-bleached, Autumn: russet/orange/brown, Winter: frosty blue/grey). The `_season_name()` and `_season_cp()` functions map month (0-11) to season, and all terrain rendering uses seasonal variants. The header and status bar show current season. Even with year-level ticks, `cur_month = (year * 3) % 12` cycles through all 4 seasons every 4 years.
 
-2. **Viewer TUI cleanup** (`viewer.py`) — Replaced header/footer with clean two-bar layout: header shows wyrd title + mode (▶ RUNNING/⏸ PAUSED) + year + speed on one line, and a persistent bottom status bar shows mode indicator, seed, year progress, speed, and context-sensitive key hints (different hints for paused vs running). Moved keybinds from the old scattered header to the status bar so they're always visible.
+2. **Variable speed control (item 4)** — The viewer now ticks at month-level granularity. `_simulate_month_tick` replaces `_simulate_tick` in both auto-advance and step modes. Speed values are labeled with qualitative descriptors (Crawl→Slow→Walk→Flow→Trot→Run→Dash→Fly→Blink→Zoom). A visual speed bar (`████░░░░`) in the stats line shows speed level. The accumulator tracks months (speed * 12 months/sec) for smooth progression from ~1.5 months/sec at 0.125x to 768 months/sec at 64x.
 
-3. **Sub-year time tick middleware** (`sim.py`) — Added `month` field to `SimEvent`, `sub_year_month` to `SimState`, and a complete `_simulate_month_tick` function that distributes ~1/24 of yearly population/food/health/prosperity changes per month (months 0-10) with the remainder (~0.54) in month 11. Year-end subsystems (economy, faction_sim, cataclysm, era transitions, settlement founding/abandonment, wars) fire only on month 11. Added `simulate_years_monthly` (12x month ticks per year) and `run_monthly_simulation` (full SimResult wrapper). The monthly sim is seed-deterministic (verified with dedicated test).
+3. **Embody sub-year ticks (item 5)** — `PlayerCharacter` gains a `month` field (0-11). `_advance_year` replaced by `_advance_time(char, months=N)` which ticks N months via `_simulate_month_tick`, increments age on birthday (month rollover), and applies health decay at year boundaries. Travel takes 1-2 months instead of a full year. Prompt offers `[n]ext year`, `[1m] one month`, `[1w] one week` commands. Status shows current season and month number.
 
 ### What to tackle next — Phase 19: Human-First UX (remaining)
 

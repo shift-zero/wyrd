@@ -20,7 +20,7 @@ from typing import Optional
 
 from .world import World
 from .sim import (
-    initialize_sim_state, _simulate_tick, SimState, SimEvent,
+    initialize_sim_state, _simulate_tick, _simulate_month_tick, SimState, SimEvent,
     apply_sim_state_to_world,
 )
 
@@ -104,6 +104,7 @@ class PlayerCharacter:
     health: int = 100
     age: int = 18
     year: int = 0
+    month: int = 0  # 0-11, for sub-year time tracking
     alive: bool = True
     inventory: list[str] = field(default_factory=list)
     sim_year_advanced: int = 0  # Total sim years that have been ticked
@@ -1172,27 +1173,38 @@ def _render_travel_options(char: PlayerCharacter,
 
 
 def _prompt(char: PlayerCharacter, world: World, state: SimState,
-            events: list[SimEvent]) -> bool:
-    """One turn of the game loop. Returns False to quit."""
+            events: list[SimEvent], rng: random.Random,
+            chaos: float) -> tuple[bool, int]:
+    """One turn of the game loop.
+    
+    Returns (continue_playing, months_to_advance).
+    months_to_advance is 0 if no time passes, >0 for time to pass.
+    """
     print(_status_line(char))
 
-    # Show recent news
+    # Show recent news (matching current year)
     news = _render_news(events, char, char.year)
     if news:
         print(news)
         print()
 
+    # Show current date
+    seasons = ["Winter", "Spring", "Summer", "Autumn"]
+    season = seasons[char.month // 3] if char.month < 12 else "Unknown"
+    date_str = f"{ANSI_DIM}{season}, Year {char.year} — Month {char.month + 1}{ANSI_RESET}"
+    print(f"  {date_str}")
+
     # Prompt
-    print(f"  {ANSI_DIM}[n]ext year  [s]tatus  [m]arket  "
-          f"[t]ravel  [q]uit{ANSI_RESET}")
+    print(f"  {ANSI_DIM}[n]ext year  [1m] one month  [1w] one week  "
+          f"[s]tatus  [m]arket  [t]ravel  [q]uit{ANSI_RESET}")
     try:
         cmd = input(f"  {_color(226)}►{ANSI_RESET} ").strip().lower()
     except (EOFError, KeyboardInterrupt):
         print()
-        return False
+        return False, 0
 
     if cmd == "q":
-        return False
+        return False, 0
     elif cmd == "s":
         # Just re-display; the status is already shown
         print(f"  You are {ANSI_BOLD}{char.name}{ANSI_RESET}, "
@@ -1200,6 +1212,7 @@ def _prompt(char: PlayerCharacter, world: World, state: SimState,
         print(f"  Current wealth: {_color(220)}{char.gold} gold{ANSI_RESET}")
         print(f"  Health: {char.health}/100")
         print(f"  Age: {char.age}")
+        print(f"  Season: {season}, Month {char.month + 1}")
         print(f"  Inventory: {', '.join(char.inventory) if char.inventory else 'nothing yet'}")
         # Show skills
         skill_strs = [f"{_color(45)}{s.capitalize()}: {lvl}{ANSI_RESET}"
@@ -1216,16 +1229,23 @@ def _prompt(char: PlayerCharacter, world: World, state: SimState,
         if char.settlements_visited:
             print(f"  Places: {', '.join(char.settlements_visited[:5])}"
                   f"{'…' if len(char.settlements_visited) > 5 else ''}")
+        return True, 0
     elif cmd == "t":
-        _handle_travel(char, world)
+        _handle_travel(char, world, state, rng, chaos)
+        return True, 0  # Travel already advanced time internally
     elif cmd == "m":
         _handle_market(char, world, state)
-    elif cmd == "n":
-        return True  # Advance a year
+        return True, 0
+    elif cmd in ("n", "next"):
+        return True, 12  # Advance one full year (12 months)
+    elif cmd in ("1m", "month"):
+        return True, 1  # One month
+    elif cmd in ("1w", "week"):
+        return True, 0  # ~0.25 months — skip for now
     else:
-        print(f"  {ANSI_DIM}Unknown: '{cmd}'. Try n, s, m, t, or q.{ANSI_RESET}")
+        print(f"  {ANSI_DIM}Unknown: '{cmd}'. Try n, 1m, 1w, s, m, t, or q.{ANSI_RESET}")
 
-    return True  # Continue playing
+    return True, 0
 
 
 # ── Travel Creature Encounters ──────────────────────────────────────────
@@ -1403,13 +1423,17 @@ def _maybe_travel_encounter(char: PlayerCharacter,
         char.alive = False
         print(f"\n  {ANSI_BOLD}{_color(196)}The {creature.name}'s attack proves fatal.{ANSI_RESET}")
 
-    # Travel takes a year regardless
-    char.year += 1
+    # Travel takes time regardless
     return True
 
 
-def _handle_travel(char: PlayerCharacter, world: World) -> None:
-    """Handle travel to another settlement."""
+def _handle_travel(char: PlayerCharacter, world: World,
+                   state: SimState, rng: random.Random,
+                   chaos: float) -> None:
+    """Handle travel to another settlement.
+    
+    Travel takes 1-2 months depending on distance.
+    """
     options = _render_travel_options(char, world)
     if not options:
         print(f"  {ANSI_DIM}No destinations available. The world is thin here.{ANSI_RESET}")
@@ -1442,7 +1466,7 @@ def _handle_travel(char: PlayerCharacter, world: World) -> None:
 
     print(f"  🚶 You travel to {ANSI_BOLD}{dest_name}{ANSI_RESET}...")
 
-    # ── Creature encounter during travel ──────────────────────────────
+    # Creature encounter during travel
     encounter_happened = _maybe_travel_encounter(char, world)
 
     char.settlement = dest_name
@@ -1451,11 +1475,14 @@ def _handle_travel(char: PlayerCharacter, world: World) -> None:
         char.settlements_visited.append(dest_name)
         if len(char.settlements_visited) >= 3:
             _record_deed(char, f"Visited {len(char.settlements_visited)} settlements")
+
+    # Travel takes 1-2 months (sub-year!)
+    travel_months = 1 + (1 if encounter_happened else 0)
+    _advance_time(char, world, state, rng, chaos, months=travel_months)
+
     if not encounter_happened:
-        char.year += 1  # Travel takes a year
-        print(f"  You arrive safely.")
+        print(f"  You arrive safely. ({travel_months} month{'s' if travel_months != 1 else ''} pass)")
     else:
-        # Encounter already consumed the year
         print(f"  {ANSI_DIM}You eventually reach {ANSI_BOLD}{dest_name}{ANSI_RESET}{ANSI_DIM}.{ANSI_RESET}")
 
 
@@ -1563,36 +1590,48 @@ def _handle_sell_items(char: PlayerCharacter, rng: random.Random) -> None:
             print(f"  {ANSI_DIM}[#] sell  [q] back{ANSI_RESET}")
 
 
-def _advance_year(char: PlayerCharacter, world: World,
+def _advance_time(char: PlayerCharacter, world: World,
                   state: SimState, rng: random.Random,
-                  chaos: float) -> list[SimEvent]:
-    """Advance the simulation one year and return events."""
-    char.year += 1
-    char.age += 1
+                  chaos: float, months: int = 12) -> list[SimEvent]:
+    """Advance simulation by N months and return events.
 
-    # Health decay with age
-    if char.age > 60:
-        char.health -= 2
-    elif char.age > 45:
-        char.health -= 1
-    # Random health event
-    if rng.random() < 0.05:
-        if rng.random() < 0.5:
-            char.health = min(100, char.health + 5)
-            print(f"  {_color(46)}You feel rejuvenated! +5 health{ANSI_RESET}")
-        else:
-            char.health -= 5
-            print(f"  {_color(196)}You fall ill. -5 health{ANSI_RESET}")
+    Age increments on birthday (month 0 of each full year passed).
+    Uses _simulate_month_tick for smooth sub-year progression.
+    """
+    all_events: list[SimEvent] = []
+    prev_age = char.age
 
-    if char.health <= 0:
-        char.alive = False
-        return []
+    for _ in range(months):
+        char.month += 1
+        if char.month >= 12:
+            char.month = 0
+            char.year += 1
+            char.age += 1  # Birthday!
 
-    # Run one sim tick
-    events = _simulate_tick(world, state, rng, char.year, chaos)
+            # Health decay with age (yearly)
+            if char.age > 60:
+                char.health -= 2
+            elif char.age > 45:
+                char.health -= 1
 
-    # Record notable events in legacy
-    for ev in events[-5:]:  # Check recent events
+        # Random health events (scaled to monthly)
+        if rng.random() < 0.05 / 12:
+            if rng.random() < 0.5:
+                char.health = min(100, char.health + 5)
+            else:
+                char.health -= 5
+
+        if char.health <= 0:
+            char.alive = False
+            return all_events
+
+        # Run one month tick
+        month_events = _simulate_month_tick(world, state, rng,
+                                            char.year, char.month, chaos)
+        all_events.extend(month_events)
+
+    # Record notable events in legacy (check last N events)
+    for ev in all_events[-10:]:
         if ev.event_type in ("founding", "abandonment", "war", "faction_war",
                              "earthquake", "volcanic_eruption", "great_plague",
                              "tsunami", "meteor_strike", "great_fire", "magical_cataclysm",
@@ -1602,7 +1641,14 @@ def _advance_year(char: PlayerCharacter, world: World,
             elif char.region in (ev.affected_regions or []):
                 _record_legacy_event(char, f"{ev.event_type.replace('_', ' ')} in {char.region}")
 
-    return events
+    return all_events
+
+
+def _advance_year(char: PlayerCharacter, world: World,
+                  state: SimState, rng: random.Random,
+                  chaos: float) -> list[SimEvent]:
+    """Legacy wrapper — advances by exactly 12 months (1 year)."""
+    return _advance_time(char, world, state, rng, chaos, months=12)
 
 
 # ── Entry Point ───────────────────────────────────────────────────────
@@ -1782,18 +1828,22 @@ def embody_play(world: World,
     events: list[SimEvent] = []
     running = True
     while running and char.alive and char.year < years:
-        if not _prompt(char, world, state, events):
+        cont, months = _prompt(char, world, state, events, rng, chaos)
+        if not cont:
             running = False
             break
 
-        # Check if player chose to advance a year (handled in _prompt)
-        if running and char.alive:
-            new_events = _advance_year(char, world, state, rng, chaos)
+        if months > 0:
+            new_events = _advance_time(char, world, state, rng, chaos, months=months)
             events.extend(new_events)
-            # Auto-save after each year
+            # Auto-save after time passes
             _auto_save(char, world)
-            print(f"\n  {_color(45)}Year {char.year}{ANSI_RESET} — "
-                  f"{_make_weather()}")
+
+            # Show season change
+            seasons = ["Winter", "Spring", "Summer", "Autumn"]
+            season = seasons[char.month // 3] if char.month < 12 else "Unknown"
+            time_msg = f"{months} month{'s' if months != 1 else ''}"
+            print(f"\n  {_color(45)}{time_msg} pass — {season}, Year {char.year}{ANSI_RESET}")
 
             # Interactive event choices (Phase 17, Item 4)
             _handle_interactive_events(char, world, rng, events)
