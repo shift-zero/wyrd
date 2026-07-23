@@ -29,3 +29,10 @@ _test_*.json.gz
 .hermes/next_prompt.md
 .cron-context.md
 wyrd-*.json
+
+# Debug / scratch scripts
+check_*.py
+fix_*.py
+patch_*.py
+verify_*.py
+_debug_*.py
