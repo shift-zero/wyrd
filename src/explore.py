@@ -671,7 +671,7 @@ def _draw_factions_overlay(stdscr, world: World) -> None:
 
 
 def _draw_sim_status(stdscr, world: World, state: SimState,
-                     year: int, max_years: int,
+                     year: int, max_years: int | None,
                      paused: bool, speed: float) -> None:
     """Draw the sim status line (line 1)."""
     max_y, max_x = stdscr.getmaxyx()
@@ -679,7 +679,8 @@ def _draw_sim_status(stdscr, world: World, state: SimState,
         active = state.num_settlements
         abandoned = state.num_abandoned
         pop = state.total_population
-        text = (f" Sim: Yr {year:,}/{max_years:,}"
+        year_display = f"Yr {year:,}/∞" if max_years is None else f"Yr {year:,}/{max_years:,}"
+        text = (f" Sim: {year_display}"
                 f"  {'⏸ PAUSED' if paused else '▶ RUNNING'}"
                 f"  {speed:.1f}x/yr"
                 f"  │  {active} active{', ' + str(abandoned) + ' ruined' if abandoned else ''}"
@@ -763,7 +764,7 @@ def _explore_curses(stdscr, world: World) -> None:
     sim_paused = True
     sim_speed = 3.0
     sim_year = 0
-    sim_max_years = 200
+    sim_max_years = None  # No cap — runs forever like a fishtank
     sim_accum = 0.0
     sim_last = 0.0
     sim_rng = None
@@ -774,12 +775,12 @@ def _explore_curses(stdscr, world: World) -> None:
         stdscr.clear()
 
         # ── Sim tick ─────────────────────────────────────────────────
-        if sim_mode and not sim_paused and sim_year < sim_max_years:
+        if sim_mode and not sim_paused and (sim_max_years is None or sim_year < sim_max_years):
             now = _time.monotonic()
             dt = now - sim_last
             sim_last = now
             sim_accum += dt * sim_speed
-            while sim_accum >= 1.0 and sim_year < sim_max_years:
+            while sim_accum >= 1.0 and (sim_max_years is None or sim_year < sim_max_years):
                 sim_accum -= 1.0
                 sim_year += 1
                 tick_events = _simulate_tick(world, sim_state, sim_rng,
@@ -913,7 +914,7 @@ def _explore_curses(stdscr, world: World) -> None:
 
         elif sim_mode and key == curses.KEY_RIGHT:
             # Step one year
-            if sim_year < sim_max_years:
+            if sim_max_years is None or sim_year < sim_max_years:
                 sim_paused = True
                 sim_year += 1
                 tick_events = _simulate_tick(world, sim_state, sim_rng,

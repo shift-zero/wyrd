@@ -264,3 +264,48 @@ Economy connections become visible on the ASCII world map. `wyrd economy --route
 | 4 ✅ | Road/infrastructure — persistent routes become roads (`━` solid lines) | Routes lasting 50+ sim years render as `━` instead of `·`; road volume bonus, road construction events, road prosperity bonus for connected settlements | 2026-07-23 |
 || 5 ✅ | Economic specialization — settlements with 100+ years of same economy get titles | "Breadbasket of the Realm", "The Iron City" etc. shown in route listings | 2026-07-23 |
 || 6 ✅ | HTML export of trade routes | Economy map section in `wyrd export --seed 42` HTML output | 2026-07-23 |
+
+## Phase 17 — Living Worlds (Interactive UX)
+
+**Thesis:** wyrd has deep systems but they're hidden behind CLI commands that dump text. The sim runs, you watch events scroll by. The map sits still. This phase makes the world *feel* alive — animated, interactive, playable.
+
+Three pillars:
+
+### 1. Animated simulation maps
+
+The map shouldn't sit still while the sim ticks. Tiles should animate — borders pulse, settlements grow/shrink, trade routes light up, cataclysm scars spread. Not scrolling log dumps. *Watch the world change.*
+
+Context: `wyrd view` currently redraws the whole map every year. We want smooth transitions — terrain mutations animate, population changes show as visual grow/shrink, roads form tile by tile.
+
+### 2. TUI overhaul (Bubbletea-inspired)
+
+The curses TUI works but it's messy and hard to navigate. Bubbletea (Go) has the right aesthetic — clean, modal, discoverable — but we're in Python.
+
+Options:
+- **Textual** (Python, Bubbletea-inspired, reactive widgets) — natural fit, big lift to port
+- **Better curses** — cleaner layout, modal panels, tighter keybinds, status bar, persistent minimap
+- **Hybrid** — keep curses backend but re-architect views as composable components
+
+Target feel: `wyrd` drops you into a world that feels *present*, not a menu tree.
+
+### 3. Embodied play mode
+
+`wyrd as <name>` or `wyrd embody --seed 42` — you don't just watch the world, you *live in it* as a character.
+
+- Choose or generate a character grounded in the world (culture, region, occupation)
+- The sim runs around you: news arrives from distant lands, your settlement changes, events find you
+- You can travel, make small decisions that affect your character's arc
+- A "life sim" inside the world sim — not Dwarf Fortress deity-mode, but a grounded roleplaying experience
+
+Eventual stretch: your character's descendants inherit through generations.
+
+### Checklist
+
+| # | What | Verifiable |
+|---|------|------------|
+| 1 🔲 | Live map animation during simulation | `wyrd run --seed 42 --years 100` renders map that animates tile changes, pop growth/shrink, trade route formation in real-time |
+| 2 🔲 | Textual-based TUI (or equivalent Python framework) | `wyrd` drops into a polished, navigable interface with tabs, help, status bar, modal overlays |
+| 3 🔲 | Embodied character play mode | `wyrd embody --seed 42 --name "Rikard"` lets you play as a character with location, inventory, news, travel, and decisions |
+| 4 🔲 | Event-driven notifications with branching | Sim events arrive as interactive notifications with choice prompts ("A stranger arrives at your door. Let them in? y/n") |
+| 5 🔲 | Year-diff view | After any sim advance, show a diff: what changed, what grew, what fell |
+| 6 🔲 | Multi-generational play | Your character lives, dies, has children who inherit the world state |

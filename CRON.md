@@ -23,48 +23,22 @@ This is YOUR project. Make it beautiful and deep.
 
 ## Current state (2026-07-23)
 
-**Phase 16 (Trade Route Map Visualization) at 4/6 complete.** Roads are live.
+**All 16 phases complete.** wyrd generates worlds, simulates 1000+ years of history, renders trade routes with roads, and has a gateway TUI, web dashboard, and TTRPG export.
 
-### What was built (this session)
+### What Jacob wants next: Phase 17 — Living Worlds
 
-**Road Infrastructure (Phase 16.4)** — Persistent trade routes now become roads:
+The project is feature-complete but *passive*. Running the sim dumps text — you watch events scroll by, the map sits still, you can't interact with the world as anything other than an observer. Jacob's feedback:
 
-- `src/economy.py` — `TradeRoute` gains `years_active` (tracks consecutive years) and `is_road` (true at 50+). `_simulate_economy_tick` increments age each tick, upgrades at 50. Road volume boost (1.5x). Road construction events emitted on upgrade. Road prosperity bonus (+0.01 flat) for connected settlements. Inactive routes reset `years_active` to 0. Serialization updated for both fields.
-- `src/render.py` — `render_trade_route_map()` draws roads as golden `━` vs regular `·`. Road indicator in route listings (`🛤️`, `, road` in details). Legend updated with road entry.
-- `tests/test_economy.py` — 6 new tests for road upgrade threshold, 50-year gate, disruption reset, serialization round-trip, old-data defaults, road prosperity bonus.
+1. **"The map is not animated"** — watching the sim is like watching events, not watching the world change. Tiles should animate: borders pulse, settlements grow/shrink, trade routes light up, cataclysm scars spread.
+2. **"The TUI is hard to use and kinda messy"** — Bubbletea is the inspiration but that's Go. Options: Textual (Python, reactive widgets), better curses architecture, or a hybrid.
+3. **"Do you plan to have a mode where the user plays as a character?"** — Embodied play mode. Not god-mode watching, but *living in* the world as a character.
 
-**Test fix:** `test_war_exhaustion_decays_in_peace` assertion tightened to use `200 - years_of_peace + 5` bound (accounts for 200-year sim wars producing exhaustion >100, which decays at 1/year during peace).
+### Mandate
 
-### Phase 15 — The Weirding (DONE ✅)
+Steer toward **Phase 17 — Living Worlds**. The three pillars:
 
-All 6 checklist items complete on 2026-07-23:
-1. ✅ Gateway TUI — world selection with generate/load from file
-2. ✅ Integrated navigation — consistent keybinds across views
-3. ✅ Meld explorer + viewer into one seamless experience
-4. ✅ Inline help panel — press `?` from anywhere
-5. ✅ World persists in session — navigate without re-passing `--seed`
-6. ✅ Beautiful ASCII splash on launch
+1. **Animated simulation maps** — render tile transitions live, population changes as visual grow/shrink, roads forming tile by tile
+2. **TUI overhaul** — Bubbletea-inspired clean layout (Textual or better curses), modal panels, status bar, discoverable keybinds
+3. **Embodied play mode** — `wyrd embody` lives inside the sim as a character. News arrives, you travel, decisions matter. Multi-generational stretch.
 
-### Phase 16 — Trade Route Map Visualization (4/6 ✅)
-
-| # | What | Status |
-|---|------|--------|
-| 1 ✅ | `render_trade_route_map()` in render.py | Done |
-| 2 ✅ | `--map` flag on `wyrd economy --routes` CLI | Done |
-| 3 ✅ | Gateway TUI `t` key integration | Done |
-| 4 ✅ | Road infrastructure (roads at 50+ years) | **Done this session** |
-| 5 🔲 | Economic specialization titles | Next |
-| 6 🔲 | HTML export of trade routes | Pending |
-
-### What's next: Economic Specialization & HTML Export
-
-Items still open in Phase 16:
-
-5. **Economic specialization** — Settlements with 100+ years of same economy type get specialist titles ("Breadbasket of the Realm", "The Iron City"). Show in route listings, trade map, and exports.
-
-6. **HTML export of trade routes** — Economy data in `wyrd export --seed 42` HTML output. Show route network, economy types, road markers, and specialization titles on the web dashboard.
-
-### Alternative directions
-
-A. **Diplomacy & Espionage** — Factions get diplomatic relationships beyond war/alliance. Espionage, sabotage, trade sanctions. Natural extension of the political sim.
-B. **Dungeon Master Tools** — Flesh out the TTRPG export with encounter tables, NPC generators, plot hooks from world data. Make wyrd an actual campaign prep tool.
+Full checklist in PLAN.md. Read it.
