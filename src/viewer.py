@@ -141,8 +141,10 @@ def _fill_line(stdscr, y, cp):
 # ── Rendering ────────────────────────────────────────────────────────
 
 def _render_map(stdscr, world: World, smap: dict,
-                mh: int, mw: int, new_founds: set):
+                mh: int, mw: int, new_founds: set,
+                flash_tiles: dict | None = None):
     """Render terrain + settlements into the map area (starting at line 2)."""
+    flash_tiles = flash_tiles or {}
     for sy in range(mh):
         wy = sy  # no vertical offset in viewer — show top-left
         if wy >= world.height:
@@ -157,6 +159,13 @@ def _render_map(stdscr, world: World, smap: dict,
                 char = info["char"]
                 if key in new_founds:
                     c = _CP["new_found"]
+                elif key in flash_tiles:
+                    # Flash between yellow and bright green
+                    frames = flash_tiles[key]
+                    if frames % 3 < 2:
+                        c = _CP["new_found"]  # bright green flash
+                    else:
+                        c = _CP["settlement"]  # normal yellow
                 elif info.get("active", True):
                     c = _CP["settlement"]
                 else:
@@ -165,7 +174,15 @@ def _render_map(stdscr, world: World, smap: dict,
                 if wx < world.width and wy < world.height:
                     t = world.terrain[wy][wx]
                     char = TERRAIN[t]["char"]
-                    c = _cp(t)
+                    # Terrain flash animation (cataclysm-changed tiles)
+                    if key in flash_tiles:
+                        frames = flash_tiles[key]
+                        if frames % 3 < 2:
+                            c = _CP["accent"]  # bright flash for terrain
+                        else:
+                            c = _cp(t)
+                    else:
+                        c = _cp(t)
                 else:
                     char = " "
                     c = 4
@@ -184,7 +201,7 @@ def _draw_header(stdscr, seed, year, total, paused, speed, w):
     fmt += "⏸ PAUSED" if paused else "▶ RUNNING"
     fmt += f"  {speed:.1f}x/yr"
     _draw(stdscr, 0, 0, fmt, _CP["header"], bold=True)
-    hint = " [Space]pause [+/-]speed [→]step [p]chart [?]help [q]quit "
+    hint = " [Space]pause [+/-]speed [→]step [d]diff [p]chart [?]help [q]quit "
     _draw(stdscr, 0, max(0, w - len(hint) - 1), hint, _CP["dim"])
 
 
@@ -223,7 +240,7 @@ def _draw_events(stdscr, events: list, max_events: int, start_y: int, w: int):
 def _draw_footer(stdscr, h, w):
     controls = (
         " [Space] pause/resume  [+/-] speed  [→] step  "
-        "[p] pop chart  [?] help  [q] quit"
+        "[d] diff  [p] pop chart  [?] help  [q] quit"
     )
     _fill_line(stdscr, h - 1, _CP["dim"])
     _draw(stdscr, h - 1, 0, controls[:w - 1], _CP["dim"])
@@ -302,6 +319,190 @@ def _draw_chart(stdscr, state: SimState, h, w):
     _draw(stdscr, sy + ch, sx, " Press [p] to close ", _CP["dim"])
 
 
+# ── Year-diff overlay ───────────────────────────────────────────────
+
+
+def _snapshot_populations(state) -> dict:
+    """Snapshot settlement populations and prosperity for diff computation."""
+    return {
+        name: {"pop": ss.population, "pros": ss.prosperity, "active": ss.is_active}
+        for name, ss in state.settlements.items()
+    }
+
+
+def _compute_diff(prev: dict, state) -> dict:
+    """Compare prev snapshot to current SimState; return structured diff."""
+    grew = []
+    shrank = []
+    new_settlements = []
+    abandoned = []
+    rebuilt = []
+    pros_up = []
+    pros_down = []
+
+    current = {
+        name: {"pop": ss.population, "pros": ss.prosperity, "active": ss.is_active}
+        for name, ss in state.settlements.items()
+    }
+
+    # Settlements in current state
+    for name, cur in current.items():
+        if name in prev:
+            prev_info = prev[name]
+            if not prev_info["active"] and cur["active"]:
+                rebuilt.append(name)
+            elif prev_info["active"] and not cur["active"]:
+                abandoned.append(name)
+            elif cur["active"]:
+                pop_diff = cur["pop"] - prev_info["pop"]
+                if pop_diff > 0:
+                    grew.append((name, prev_info["pop"], cur["pop"], pop_diff))
+                elif pop_diff < 0:
+                    shrank.append((name, prev_info["pop"], cur["pop"], pop_diff))
+                pros_diff = cur["pros"] - prev_info["pros"]
+                if pros_diff > 0.05:
+                    pros_up.append((name, cur["pros"], pros_diff))
+                elif pros_diff < -0.05:
+                    pros_down.append((name, cur["pros"], pros_diff))
+        else:
+            if cur["active"]:
+                new_settlements.append((name, cur["pop"], cur["pros"]))
+
+    # Sort by magnitude (most changed first)
+    grew.sort(key=lambda x: -abs(x[3]))
+    shrank.sort(key=lambda x: -abs(x[3]))
+    pros_up.sort(key=lambda x: -abs(x[2]))
+    pros_down.sort(key=lambda x: -abs(x[2]))
+
+    return {
+        "grew": grew[:15],
+        "shrank": shrank[:15],
+        "new": new_settlements[:10],
+        "abandoned": abandoned[:10],
+        "rebuilt": rebuilt[:10],
+        "pros_up": pros_up[:10],
+        "pros_down": pros_down[:10],
+        "year": state.year,
+    }
+
+
+def _draw_diff(stdscr, diff: dict | None, h: int, w: int):
+    """Draw the year-diff overlay panel."""
+    if diff is None:
+        return
+
+    box_lines = []
+    box_lines.append(f" ══ Year {diff['year']} Changes ══")
+    box_lines.append("")
+
+    had_any = False
+
+    if diff["new"]:
+        had_any = True
+        box_lines.append("  ◆ New Settlements:")
+        for name, pop, pros in diff["new"][:6]:
+            box_lines.append(f"    +{name} (pop {pop:,}, pros {pros:.0%})")
+        if len(diff["new"]) > 6:
+            box_lines.append(f"    … and {len(diff['new']) - 6} more")
+
+    if diff["grew"]:
+        had_any = True
+        box_lines.append("  ↑ Population Growth:")
+        for name, old, new_, delta in diff["grew"][:6]:
+            box_lines.append(f"    {name}: {old:,} → {new_,:} (+{delta:,})")
+        if len(diff["grew"]) > 6:
+            box_lines.append(f"    … and {len(diff['grew']) - 6} more")
+
+    if diff["shrank"]:
+        had_any = True
+        box_lines.append("  ↓ Population Decline:")
+        for name, old, new_, delta in diff["shrank"][:6]:
+            box_lines.append(f"    {name}: {old:,} → {new_:,} ({delta:,})")
+        if len(diff["shrank"]) > 6:
+            box_lines.append(f"    … and {len(diff['shrank']) - 6} more")
+
+    if diff["abandoned"]:
+        had_any = True
+        box_lines.append("  ✗ Abandoned Settlements:")
+        for name in diff["abandoned"][:4]:
+            box_lines.append(f"    ✗ {name}")
+        if len(diff["abandoned"]) > 4:
+            box_lines.append(f"    … and {len(diff['abandoned']) - 4} more")
+
+    if diff["rebuilt"]:
+        had_any = True
+        box_lines.append("  ↻ Rebuilt Settlements:")
+        for name in diff["rebuilt"][:4]:
+            box_lines.append(f"    ↻ {name}")
+
+    if diff["pros_up"]:
+        had_any = True
+        box_lines.append("  📈 Prosperity Rising:")
+        for name, pros, delta in diff["pros_up"][:4]:
+            box_lines.append(f"    {name}: {pros:.0%} (+{delta:.0%})")
+
+    if diff["pros_down"]:
+        had_any = True
+        box_lines.append("  📉 Prosperity Falling:")
+        for name, pros, delta in diff["pros_down"][:4]:
+            box_lines.append(f"    {name}: {pros:.0%} ({delta:.0%})")
+
+    if not had_any:
+        box_lines.append("  (no significant changes this year)")
+        box_lines.append("  The world sleeps.")
+
+    box_lines.append("")
+    box_lines.append(" [d] close ")
+
+    # Calculate box dimensions
+    box_h = len(box_lines) + 2
+    box_w = max(len(l) for l in box_lines) + 4
+    max_h = h - 2
+    max_w = w - 2
+    if box_h > max_h:
+        box_h = max_h
+    if box_w > max_w:
+        box_w = max_w
+
+    start_y = max(0, (h - box_h) // 2)
+    start_x = max(0, (w - box_w) // 2)
+
+    # Draw background box
+    for y in range(box_h):
+        for x in range(box_w):
+            try:
+                if y in (0, box_h - 1) or x in (0, box_w - 1):
+                    stdscr.addch(start_y + y, start_x + x, " ",
+                                 curses.color_pair(_CP["header"]))
+                else:
+                    stdscr.addch(start_y + y, start_x + x, " ",
+                                 curses.color_pair(_CP["info"]))
+            except curses.error:
+                pass
+
+    # Draw text
+    for i, line in enumerate(box_lines):
+        y = start_y + 1 + i
+        if y >= h:
+            break
+        if i == 0:
+            cp = _CP["header"]
+            bold = True
+        elif line.startswith("  ◆") or line.startswith("  ↑") or \
+             line.startswith("  ↓") or line.startswith("  ✗") or \
+             line.startswith("  ↻") or line.startswith("  📈") or \
+             line.startswith("  📉"):
+            cp = _CP["accent"]
+            bold = False
+        elif "close" in line:
+            cp = _CP["dim"]
+            bold = False
+        else:
+            cp = _CP["info"]
+            bold = False
+        _draw(stdscr, y, start_x + 2, line[:max_w - 2], cp, bold=bold)
+
+
 # ── Help overlay ─────────────────────────────────────────────────────
 
 
@@ -313,6 +514,7 @@ VIEWER_HELP = [
     "    →              Step one year forward",
     "    + / =          Speed up simulation",
     "    - / _          Slow down simulation",
+    "    d              Toggle year-diff overlay",
     "    p              Toggle population chart overlay",
     "",
     "  General",
@@ -321,6 +523,7 @@ VIEWER_HELP = [
     "",
     "  Tip: Watch the map evolve as centuries pass.",
     "       New settlements appear in green.",
+    "       Press 'd' to see exactly what changed each year.",
 ]
 
 
@@ -380,6 +583,8 @@ def _handle_key(key, state):
         return "toggle_chart", None
     if key in (ord("?"), ord("h")):
         return "help", None
+    if key == ord("d"):
+        return "toggle_diff", None
     return None, None
 
 
@@ -404,11 +609,20 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
     speed = 2.0
     show_chart = False
     show_help = False
+    show_diff = False
     running = True
     last = time.monotonic()
     accum = 0.0
     new_founds: set = set()
     total_simmed = 0
+
+    # Year-diff tracking
+    prev_snapshot: dict | None = None
+    last_diff: dict | None = None
+
+    # Tile animation state: (x,y) -> remaining frames
+    flash_tiles: dict[tuple[int, int], int] = {}
+    FLASH_DURATION = 12  # frames to flash
 
     # Cache terrain for fast map rendering
     terrain = [[TERRAIN[world.terrain[y][x]]["char"]
@@ -430,11 +644,18 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
             while accum >= 1.0 and cur_year < years:
                 accum -= 1.0
                 cur_year += 1
+                # Snapshot before tick for diff computation
+                if prev_snapshot is None:
+                    prev_snapshot = _snapshot_populations(state)
                 tick_events = _simulate_tick(world, state, rng,
                                              cur_year, chaos)
                 events.extend(tick_events)
                 total_simmed += 1
-                # Track new foundings
+                # Compute diff after tick
+                last_diff = _compute_diff(prev_snapshot, state)
+                prev_snapshot = _snapshot_populations(state)
+
+                # Track new foundings and changed settlements for animation
                 new_founds = set()
                 for ev in tick_events:
                     if ev.event_type == "founding":
@@ -442,6 +663,32 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
                             ss = state.settlements.get(sn)
                             if ss:
                                 new_founds.add((ss.x, ss.y))
+                                flash_tiles[(ss.x, ss.y)] = FLASH_DURATION
+
+                # Add growing/shrinking settlements to flash animation
+                if last_diff:
+                    for name, old, new_, delta in last_diff["grew"]:
+                        ss = state.settlements.get(name)
+                        if ss:
+                            flash_tiles[(ss.x, ss.y)] = FLASH_DURATION
+                    for name, old, new_, delta in last_diff["shrank"]:
+                        ss = state.settlements.get(name)
+                        if ss:
+                            flash_tiles[(ss.x, ss.y)] = FLASH_DURATION
+                    for name in last_diff["abandoned"]:
+                        ss = state.settlements.get(name)
+                        if ss:
+                            flash_tiles[(ss.x, ss.y)] = FLASH_DURATION
+
+        # ── Decay flash animation ────────────────────────────────────
+        faded: list[tuple[int, int]] = []
+        for pos, frames in flash_tiles.items():
+            if frames <= 1:
+                faded.append(pos)
+        for pos in faded:
+            del flash_tiles[pos]
+        # Decay remaining
+        flash_tiles = {pos: f - 1 for pos, f in flash_tiles.items() if f > 1}
 
         # ── Build render world ───────────────────────────────────────
         sim_world = apply_sim_state_to_world(world, state)
@@ -456,12 +703,15 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
         _draw_header(stdscr, world.seed, cur_year, years,
                      paused, speed, w)
         _draw_stats(stdscr, state)
-        _render_map(stdscr, sim_world, smap, map_h, w, new_founds)
+        _render_map(stdscr, sim_world, smap, map_h, w, new_founds, flash_tiles)
 
         ev_start = 2 + map_h
         _draw_events(stdscr, events, events_h, ev_start, w)
         _draw_footer(stdscr, h, w)
 
+        # Overlays (last = on top)
+        if show_diff:
+            _draw_diff(stdscr, last_diff, h, w)
         if show_chart:
             _draw_chart(stdscr, state, h, w)
         if show_help:
@@ -487,11 +737,37 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
                     paused = True
                 if cur_year < years:
                     cur_year += 1
+                    # Snapshot before tick
+                    prev_snapshot = _snapshot_populations(state)
                     tick_events = _simulate_tick(world, state, rng,
                                                  cur_year, chaos)
                     events.extend(tick_events)
+                    # Compute diff
+                    last_diff = _compute_diff(prev_snapshot, state)
+                    # Track new foundings for flash
+                    for ev in tick_events:
+                        if ev.event_type == "founding":
+                            for sn in ev.affected_settlements:
+                                ss = state.settlements.get(sn)
+                                if ss:
+                                    flash_tiles[(ss.x, ss.y)] = FLASH_DURATION
+                    if last_diff:
+                        for name, old, new_, delta in last_diff["grew"]:
+                            ss = state.settlements.get(name)
+                            if ss:
+                                flash_tiles[(ss.x, ss.y)] = FLASH_DURATION
+                        for name, old, new_, delta in last_diff["shrank"]:
+                            ss = state.settlements.get(name)
+                            if ss:
+                                flash_tiles[(ss.x, ss.y)] = FLASH_DURATION
+                        for name in last_diff["abandoned"]:
+                            ss = state.settlements.get(name)
+                            if ss:
+                                flash_tiles[(ss.x, ss.y)] = FLASH_DURATION
             elif act == "toggle_chart":
                 show_chart = not show_chart
+            elif act == "toggle_diff":
+                show_diff = not show_diff
             elif act == "help":
                 show_help = not show_help
             key = stdscr.getch()
