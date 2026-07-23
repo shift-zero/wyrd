@@ -23,12 +23,18 @@ This is YOUR project. Make it beautiful and deep.
 
 ## Current state (2026-07-23)
 
-**All 17 phases complete. 625 tests pass.**
+**Phase 18 (Depth & Quality) in progress. 690 tests pass (+65).**
 
 ### What was done this session
-1. **Bug fix** — `wyrd generate` crashed with `UnboundLocalError` because two local `from .render import render_map` imports shadowed the module-level import. Removed them. (0126c85)
+1. **Bestiary tests (65 new)** — The bestiary module had 597 lines of content but zero tests. Now covered: determinism, creature structure, habitats, faction integration, unique creatures, tier/CR calculations, stat blocks, loot tables, name generation, creature type selection, zone-specific creatures, rendering, serialization round-trip, body plans, and edge cases.
 
-### All 17 phases are complete and working
+2. **Bugfix: render_creature_detail() returned None** — The function was missing a `return "\n".join(lines)` at the end, so `wyrd bestiary --seed 42 --id 0` silently produced no output. (c69d349)
+
+3. **Bugfix: creature name collisions** — Creature names could duplicate across habitats (e.g. "Chimera" in both temperate + faction), and faction creatures bypassed the per-habitat name check. Fixed with global `seen_names_global` set in `generate_bestiary()`. (c69d349)
+
+4. **Creature encounters during travel** — When traveling in embodied play mode (`wyrd embody --seed 42`), there's a 30% chance of encountering a creature from the world's bestiary matching your region's biome. Fight / flee / distract choices with consequences scaled by creature tier and behavior. Unique creatures get ★ markers. Encounters consume the travel year with deeds and legacy tracking. (c69d349)
+
+### Phase 18: Depth & Quality — remaining candidates
 
 | Phase | What | Status |
 |-------|------|--------|
