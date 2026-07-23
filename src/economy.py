@@ -46,6 +46,35 @@ ECONOMY_COLORS = {
     "pastoral": 40,   # fresh green
 }
 
+# Specialization titles — awarded after 100+ consecutive years with the same economy type
+# Each entry is a list of templates (rng-chosen for variety)
+SPECIALIZATION_TITLES = {
+    "farming": [
+        "The Granary", "The Breadbasket", "The Harvest Realm",
+        "The Golden Fields", "The Amber Valley",
+    ],
+    "logging": [
+        "The Timber Heart", "The Woodland Crown", "The Forest's Bounty",
+        "The Ironwood Domain", "The Sawmill Throne",
+    ],
+    "mining": [
+        "The Iron City", "The Deep Earth's Gift", "The Hammer's Home",
+        "The Ore-Giver", "The Mountain's Core",
+    ],
+    "fishing": [
+        "The Silver Catch", "The Tide's Bounty", "The Net's Harvest",
+        "The Salt-Rich Coast", "The Mariner's Haven",
+    ],
+    "trading": [
+        "The Merchant's Gate", "The Coin of the Realm", "The Silk Exchange",
+        "The Bazaar of Wonders", "The Golden Crossroads",
+    ],
+    "pastoral": [
+        "The Wool Kingdom", "The Green Pastures", "The Shepherd's Delight",
+        "The Herder's Realm", "The Flock's Haven",
+    ],
+}
+
 # Complementary economy pairs: which economies trade with which
 # (source → list of complementary targets)
 COMPLEMENTARY_ECONOMIES = {
@@ -198,6 +227,22 @@ def _assign_economy(
     return rng.choice(["farming", "pastoral", "fishing"])
 
 
+def _get_specialization_title(economy_type: str, years_specialized: int) -> str | None:
+    """Return a specialization title if the settlement qualifies.
+
+    Titles are awarded after 100+ consecutive years with the same economy type.
+    The same economy type always gets the same title (seed-deterministic by economy type).
+    """
+    if years_specialized < 100:
+        return None
+    titles = SPECIALIZATION_TITLES.get(economy_type)
+    if not titles:
+        return None
+    # Use economy_type as a deterministic index so the title is stable
+    idx = sum(ord(c) for c in economy_type) % len(titles)
+    return titles[idx]
+
+
 def assign_economies(
     world,
     state: "SimState",  # noqa: F821
@@ -206,7 +251,11 @@ def assign_economies(
     """Assign economy types to all active settlements."""
     for s in state.settlements.values():
         if s.is_active:
-            s.economy_type = _assign_economy(world, s, rng)
+            old_type = s.economy_type
+            new_type = _assign_economy(world, s, rng)
+            if new_type != old_type or s.economy_since_year == 0:
+                s.economy_since_year = state.year
+            s.economy_type = new_type
 
 
 # ── Trade Route Generation ────────────────────────────────────────────
@@ -523,7 +572,13 @@ def _simulate_economy_tick(
     """
     events: list[tuple[str, str, str]] = []
 
-    # 0. Track route age, upgrade persistent routes to roads
+    # 0a. Assign economy types to new settlements that don't have one yet
+    for s in state.settlements.values():
+        if s.is_active and s.economy_type is None:
+            s.economy_type = _assign_economy(world, s, rng)
+            s.economy_since_year = year
+
+    # 0b. Track route age, upgrade persistent routes to roads
     for route in routes:
         if route.is_active:
             route.years_active += 1

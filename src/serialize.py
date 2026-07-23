@@ -623,6 +623,7 @@ def sim_state_to_dict(state: 'SimState') -> dict:
                 "health": s.health,
                 "religion": s.religion,
                 "economy_type": s.economy_type,
+                "economy_since_year": s.economy_since_year,
             }
             for name, s in state.settlements.items()
         },

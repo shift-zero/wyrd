@@ -17,7 +17,7 @@ from typing import Optional
 from .world import World, Region, Settlement, TERRAIN
 from .faction_sim import initialize_faction_state, _simulate_political_tick
 from .cataclysm import _simulate_cataclysm_tick, cataclysm_to_sim_event
-from .economy import assign_economies, _simulate_economy_tick, _generate_trade_routes
+from .economy import assign_economies, _simulate_economy_tick, _generate_trade_routes, _get_specialization_title
 
 
 # ── Terrain Resource Values ───────────────────────────────────────────
@@ -1571,6 +1571,9 @@ def render_sim_detailed(result: SimResult, world) -> str:
             f"☕ {s.food_stores:.0f}   "
             f"{health_str} health"
             + (f" {_color(220)}[{s.economy_type or '?'}]{ANSI_RESET}" if s.economy_type else "")
+            + (f" {_color(28)}‹{_get_specialization_title(s.economy_type, max(0, state.year - s.economy_since_year))}›{ANSI_RESET}"
+               if s.economy_type and s.economy_since_year and _get_specialization_title(s.economy_type, max(0, state.year - s.economy_since_year))
+               else "")
         )
     
     if len(active) > 10:
