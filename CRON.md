@@ -23,14 +23,14 @@ This is YOUR project. Make it beautiful and deep.
 
 ## Current state (2026-07-24)
 
-**Phase 20 — Living Gazetteer complete. All 6 checklist items ✅.** 794+ tests pass.
+**Phase 21 — Living Gateway complete. All 3 checklist items ✅.** 796+ tests pass.
 
-### What was built this session (Phase 20 — Living Gazetteer)
+### What was built this session (Phase 21 — Living Gateway)
 
-1. **Settlement inspection in viewer** — Added cursor-driven settlement navigation (`[` and `]` keys) that cycles through active settlements on the map. Press `i` to open a detail popup showing: type, region, population, prosperity bar (█░), health bar, food stores, economy type, religion, and founding year. Cursor shows as reverse-video highlight. Status bar and help updated.
+1. **World detail card & mini-map** — When a world is selected in the gateway, a detail card appears to the right of the list showing a scaled ASCII terrain map (colored by biome using 12 terrain color pairs), key stats (settlements, population, regions), and feature badges (Lore, Narrative, Magic, Pantheon, Factions, Bestiary, Adventure Zones). The map is lazily loaded and cached per world path, so navigation between worlds is snappy.
 
-2. **Gazetteer mode in gateway** — Press `G` in the gateway to open a unified entity browser. Collects all 7 entity types: settlements, characters, factions, faction relationships, creatures (bestiary), adventure zones, and deities (pantheon). Filter by type with number keys [1] All [2] S [3] C [4] F [5] B [6] Z [7] D. Up/down navigation, Enter for detail popup with full stats. Persistent filter bar and status bar.
+2. **Interactive world list** — Press **Tab** to cycle the sort key through seed → population → name. The list reorders immediately. Current sort key is shown in the status bar (`[Tab] sort:seed`).
 
-3. **`wyrd lookup <name>` CLI command** — New `src/lookup.py` module with fuzzy-matching engine that scores results by: exact match (1.0), prefix match (0.9), word overlap, sequence similarity, and substring. Searches across settlements, regions, characters (first/surname/full), factions, creatures, zones, and deities. Returns top 8 results with score bars. ANSI-colored output with type icons.
+3. **Compact splash** — The full ASCII art splash is shown only when no worlds exist. Once worlds are detected (even one), it collapses to just the tagline "generative fantasy sandbox". This frees ~10 lines for the world list and detail card, making the gateway feel less cramped.
 
-### What to tackle next — Phase 21: ???
+### What to tackle next — Phase 22: Deepening the Surface

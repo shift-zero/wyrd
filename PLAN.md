@@ -103,6 +103,18 @@ The simulation engine (`sim.py`) currently ticks in whole years. This is a deep 
 | 4 ✅ | Faction viewer — browse factions with relationships, holdings | View shows allies, rivals, territory, recent history | 2026-07-24 |
 | 5 ✅ | Bestiary browser — filter by habitat/tier, view full stats | Creature cards with tier, habitat, behavior, loot table | 2026-07-24 |
 | 6 ✅ | `wyrd lookup <name>` — CLI quick-lookup across all data types | Searches settlements, chars, creatures, zones, returns best match | 2026-07-24 |
+|
+|## Phase 21 — Living Gateway (complete ✅)|
+|
+|**Thesis:** The gateway world picker was a flat text table — functional but not visual. The surface matters because it's the first thing you see.|
+|
+|### Items|
+|
+|| # | What | Verifiable |
+||---|------|------------|
+|| 1 ✅ | World detail card with mini-ASCII map — shows terrain preview, stats, features | Select a world in the gateway → detail panel appears with a colored mini-map of the terrain, settlement/region/population stats, and feature badges | 2026-07-24 |
+|| 2 ✅ | Interactive world list — sort by seed/population/name | Press Tab to cycle sort keys (seed→population→name), world list reorders immediately | 2026-07-24 |
+|| 3 ✅ | Compact gateway splash when worlds exist | ASCII splash art hidden when worlds are present, giving more room for the world list and detail card | 2026-07-24 |
 
 ## Design Principles
 

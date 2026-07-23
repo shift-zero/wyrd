@@ -83,6 +83,26 @@ def _init_colors():
     curses.init_pair(CP["badge_s"], 196, -1)   # red
     curses.init_pair(CP["badge_m"], 99, -1)    # magenta
     curses.init_pair(CP["badge_p"], 220, -1)   # gold — player/saved character
+    # Pairs 16-27: mini-map terrain colors
+    curses.init_pair(16, 27, -1)    # deep_water
+    curses.init_pair(17, 33, -1)    # shallow
+    curses.init_pair(18, 223, -1)   # sand
+    curses.init_pair(19, 28, -1)    # grass
+    curses.init_pair(20, 22, -1)    # forest
+    curses.init_pair(21, 94, -1)    # hills
+    curses.init_pair(22, 130, -1)   # mountains
+    curses.init_pair(23, 255, -1)   # snow
+    curses.init_pair(24, 45, -1)    # river
+    curses.init_pair(25, 226, -1)   # settlement
+    curses.init_pair(26, 64, -1)    # swamp
+    curses.init_pair(27, 179, -1)   # desert
+
+
+_MINI_TERRAIN_CP = {
+    "deep_water": 16, "shallow": 17, "sand": 18, "grass": 19,
+    "forest": 20, "hills": 21, "mountains": 22, "snow": 23,
+    "river": 24, "swamp": 26, "desert": 27,
+}
 
 
 def _draw(stdscr, y, x, text, cp, bold=False):
@@ -224,6 +244,155 @@ def draw_help_panel(stdscr, lines: list[str]):
             _draw(stdscr, y, start_x + 2, line, CP["normal"])
         else:
             _draw(stdscr, y, start_x + 2, line, CP["title"], bold=True)
+
+
+# ── World detail card helpers (Phase 21) ─────────────────────────────────
+
+
+def _load_world_for_detail(path: str) -> dict | None:
+    """Load world data for the detail card. Returns cached metadata + terrain."""
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        w = data.get("width", 0)
+        h = data.get("height", 0)
+        terrain = data.get("terrain", [])
+        regions = data.get("regions", [])
+        total_pop = sum(
+            s.get("population", 0)
+            for r in regions
+            for s in r.get("settlements", [])
+        )
+        total_settlements = sum(
+            len(r.get("settlements", []))
+            for r in regions
+        )
+        # Count feature flags
+        features = []
+        if data.get("lore"): features.append("📜 Lore")
+        if data.get("narrative"): features.append("🎭 Narrative")
+        if data.get("chronicles"): features.append("📖 Chronicles")
+        if data.get("magic"): features.append("🔮 Magic")
+        if data.get("pantheon"): features.append("⛪ Pantheon")
+        if data.get("factions"): features.append("🏴 Factions")
+        if data.get("bestiary"): features.append("🐾 Bestiary")
+        if data.get("adventure_zones"): features.append("⚔ Zones")
+        return {
+            "seed": data.get("seed", 0),
+            "terrain": terrain,
+            "width": w,
+            "height": h,
+            "regions_count": len(regions),
+            "settlements_count": total_settlements,
+            "total_population": total_pop,
+            "features": features,
+            "has_landmarks": bool(data.get("landmarks")),
+        }
+    except Exception:
+        return None
+
+
+def _render_mini_map(stdscr, terrain: list[list[str]],
+                     detail_y: int, detail_x: int,
+                     max_h: int, max_w: int) -> int:
+    """Render a mini ASCII terrain map at (detail_y, detail_x).
+
+    Scales the full terrain to fit within max_h x max_w.
+    Returns the number of rows actually rendered.
+    """
+    if not terrain or not terrain[0]:
+        return 0
+
+    full_h = len(terrain)
+    full_w = len(terrain[0])
+    map_h = min(max_h, full_h)
+    map_w = min(max_w, full_w)
+
+    # Sampling step to scale down if needed
+    step_y = max(1, full_h // map_h) if full_h > map_h else 1
+    step_x = max(1, full_w // map_w) if full_w > map_w else 1
+
+    rendered_rows = 0
+    for ty in range(0, full_h, step_y):
+        if rendered_rows >= map_h:
+            break
+        row = ""
+        colors = []
+        for tx in range(0, full_w, step_x):
+            t = terrain[ty][tx]
+            ch = TERRAIN.get(t, {}).get("char", " ")
+            cp = _MINI_TERRAIN_CP.get(t, 19)
+            row += ch
+            colors.append(cp)
+        # Trim to fit
+        if len(row) > map_w:
+            row = row[:map_w]
+            colors = colors[:map_w]
+        # Draw the row
+        for ci, ch in enumerate(row):
+            try:
+                stdscr.addch(detail_y + rendered_rows, detail_x + ci, ch,
+                             curses.color_pair(colors[ci]))
+            except curses.error:
+                break
+        rendered_rows += 1
+    return rendered_rows
+
+
+def _draw_world_detail_panel(stdscr, data: dict | None,
+                              start_y: int, start_x: int,
+                              max_h: int, max_w: int):
+    """Draw a world detail card with mini-map and stats."""
+    if not data:
+        return
+
+    # ── Frame ────────────────────────────────────────────────────────
+    map_w = min(30, max_w - 2)
+    map_h = min(12, max_h - 6)
+
+    # Draw a border around the detail card
+    card_h = map_h + 7 + max(0, len(data.get("features", [])) - 2)
+    card_h = min(card_h, max_h)
+    card_w = map_w + 4
+    card_w = min(card_w, max_w)
+
+    for y in range(card_h):
+        for x in range(card_w):
+            try:
+                if y == 0 or y == card_h - 1 or x == 0 or x == card_w - 1:
+                    stdscr.addch(start_y + y, start_x + x, " ",
+                                 curses.color_pair(CP["border"]))
+                else:
+                    stdscr.addch(start_y + y, start_x + x, " ",
+                                 curses.color_pair(CP["normal"]))
+            except curses.error:
+                pass
+
+    # ── Title ─────────────────────────────────────────────────────────
+    title = f" wyrd #{data['seed']} "
+    _draw(stdscr, start_y + 1, start_x + 2, title,
+          CP["seed"], bold=True)
+    _draw(stdscr, start_y + 1, start_x + 2 + len(title),
+          f"({data['width']}×{data['height']})",
+          CP["dim"])
+
+    # ── Mini-map ──────────────────────────────────────────────────────
+    rows = _render_mini_map(stdscr, data["terrain"],
+                            start_y + 2, start_x + 2,
+                            map_h, map_w)
+
+    # ── Stats ─────────────────────────────────────────────────────────
+    stats_y = start_y + 2 + rows + 1
+    pop_str = f"{data['total_population']:,}" if data['total_population'] else "—"
+    _draw(stdscr, stats_y, start_x + 2,
+          f"  🏘 {data['settlements_count']} settlements  👥 {pop_str} souls  🌍 {data['regions_count']} regions",
+          CP["info"])
+
+    # ── Features list ─────────────────────────────────────────────────
+    feat_y = stats_y + 1
+    if data.get("features"):
+        feat_str = "  " + " ".join(data["features"][:6])
+        _draw(stdscr, feat_y, start_x + 2, feat_str, CP["accent"])
 
 
 # ── Sub-view launchers (end/restart curses) ────────────────────────────
@@ -653,6 +822,12 @@ def _gateway_loop(stdscr):
     status_time = 0
     running = True
     world_in_session = None
+    # Phase 21: sort state & detail cache
+    sort_key = "seed"  # "seed", "population", "name"
+    sort_reverse = False
+    sorted_worlds = list(worlds)
+    detail_cache: dict = {}  # path -> detail data
+    update_sort = True
 
     while running:
         h, w = stdscr.getmaxyx()
@@ -668,12 +843,23 @@ def _gateway_loop(stdscr):
         stdscr.clear()
 
         # ── Draw splash ──────────────────────────────────────────────
-        for i, line in enumerate(SPLASH):
-            x = max(0, (w - len(line)) // 2)
-            cp = CP["accent"] if "━━━" in line else CP["title"]
-            _draw(stdscr, i, x, line, cp, bold=True)
-
-        splash_bottom = len(SPLASH)
+        # Compact splash when worlds exist — just the title line
+        if worlds:
+            for i, line in enumerate(SPLASH):
+                if i == 10:  # Only show "generative fantasy sandbox" line
+                    x = max(0, (w - len(line)) // 2)
+                    _draw(stdscr, 0, x, line, CP["accent"], bold=True)
+                elif i == 11:  # The blank line after
+                    pass
+                else:
+                    pass  # Skip ASCII art
+            splash_bottom = 1
+        else:
+            for i, line in enumerate(SPLASH):
+                x = max(0, (w - len(line)) // 2)
+                cp = CP["accent"] if "━━━" in line else CP["title"]
+                _draw(stdscr, i, x, line, cp, bold=True)
+            splash_bottom = len(SPLASH)
 
         # ── Session indicator ────────────────────────────────────────
         if world_in_session:
@@ -682,6 +868,21 @@ def _gateway_loop(stdscr):
             _draw(stdscr, splash_bottom, 0, ws_line, CP["accent"], bold=True)
 
         list_start_y = splash_bottom + (2 if not world_in_session else 1)
+
+        # ── Sort worlds ────────────────────────────────────────────────
+        if update_sort and worlds:
+            if sort_key == "seed":
+                sorted_worlds = sorted(worlds, key=lambda w: w["seed"], reverse=sort_reverse)
+            elif sort_key == "population":
+                sorted_worlds = sorted(worlds, key=lambda w: w["population"], reverse=not sort_reverse)
+            elif sort_key == "name":
+                sorted_worlds = sorted(worlds, key=lambda w: str(w["seed"]), reverse=sort_reverse)
+            else:
+                sorted_worlds = list(worlds)
+            update_sort = False
+            # Keep selection in bounds
+            if selected_idx >= len(sorted_worlds):
+                selected_idx = max(0, len(sorted_worlds) - 1)
 
         # ── World list ───────────────────────────────────────────────
         if not worlds:
@@ -698,7 +899,7 @@ def _gateway_loop(stdscr):
 
             max_visible = h - list_start_y - 5
             scroll_offset = max(0, selected_idx - max_visible + 1) if max_visible > 0 else 0
-            visible_worlds = worlds[scroll_offset:scroll_offset + max_visible]
+            visible_worlds = sorted_worlds[scroll_offset:scroll_offset + max_visible]
 
             for i, w_info in enumerate(visible_worlds):
                 abs_idx = scroll_offset + i
@@ -749,6 +950,21 @@ def _gateway_loop(stdscr):
                 if w_info["has_lore"]:
                     _draw(stdscr, y, bx, "L", CP["badge_l"], bold=True)
 
+        # ── World detail card (right side, if space permits) ───────────
+        if worlds and 0 <= selected_idx < len(sorted_worlds) and w >= 70:
+            w_info = sorted_worlds[selected_idx]
+            # Lazy-load detail data for the selected world
+            if w_info["path"] not in detail_cache:
+                detail_cache[w_info["path"]] = _load_world_for_detail(w_info["path"])
+            detail_data = detail_cache.get(w_info["path"])
+            if detail_data and w >= 70:
+                # Position the detail card to the right of the world list
+                detail_x = min(55, w - 36)
+                detail_y = list_start_y - 2  # Start above the list header
+                _draw_world_detail_panel(stdscr, detail_data,
+                                          detail_y, detail_x,
+                                          h - list_start_y - 3, w - detail_x - 1)
+
         # ── Status message ────────────────────────────────────────────
         if status_msg and time_module.monotonic() - status_time < 4:
             _fill_line(stdscr, h - 3, CP["border"])
@@ -761,18 +977,19 @@ def _gateway_loop(stdscr):
         # Determine mode indicator
         if world_in_session:
             mode_str = f" ▶ Session: wyrd #{world_in_session.seed}"
-        elif worlds and 0 <= selected_idx < len(worlds):
-            w_info = worlds[selected_idx]
+        elif sorted_worlds and 0 <= selected_idx < len(sorted_worlds):
+            w_info = sorted_worlds[selected_idx]
             mode_str = f" wyrd #{w_info['seed']} — {w_info['population']:,} souls"
         else:
             mode_str = " No world selected"
 
         # Build context-sensitive key hints (right-aligned)
+        sort_hint = f"  [Tab] sort:{sort_key}"
         if worlds:
-            hints = " [↑↓/k j] sel  [g] gen  [l] load  [e] explore  [v] view  [p] play  [G] gazetteer  [d] desc  [s] sim  [t] routes"
+            hints = " [↑↓/k j] sel  [g] gen  [l] load  [e] explore  [v] view  [p] play  [G] gazetteer"
         else:
             hints = " [g] generate  [l] load"
-        hints += "  [?] help  [q] quit"
+        hints += sort_hint + "  [?] help  [q] quit"
 
         _fill_line(stdscr, status_y, CP["border"])
         _draw(stdscr, status_y, 0, mode_str, CP["accent"], bold=True)
@@ -797,9 +1014,24 @@ def _gateway_loop(stdscr):
         elif key == ord("?") or key == ord("h"):
             show_help = True
 
+        elif key == 9:  # Tab: cycle sort key
+            # Tab: cycle sort key
+            sort_keys = ["seed", "population", "name"]
+            try:
+                idx = sort_keys.index(sort_key)
+                sort_key = sort_keys[(idx + 1) % len(sort_keys)]
+            except ValueError:
+                sort_key = "seed"
+            sort_reverse = False
+            update_sort = True
+            selected_idx = 0
+            status_msg = f"Sort: {sort_key}"
+            status_time = time_module.monotonic()
+
         elif key == ord("r"):
             worlds = scan_worlds(".")
             selected_idx = min(selected_idx, max(0, len(worlds) - 1))
+            update_sort = True
             status_msg = f"\u231b Scanned {len(worlds)} worlds"
             status_time = time_module.monotonic()
 
@@ -811,6 +1043,7 @@ def _gateway_loop(stdscr):
             status_msg = f"\u2705 Generated wyrd #{seed} \u2014 press [e] to explore"
             status_time = time_module.monotonic()
             worlds = scan_worlds(".")
+            update_sort = True
             for i, w in enumerate(worlds):
                 if w["seed"] == seed:
                     selected_idx = i
@@ -844,16 +1077,16 @@ def _gateway_loop(stdscr):
                 status_time = time_module.monotonic()
 
         elif key in (curses.KEY_UP, ord("k")):
-            if worlds:
+            if sorted_worlds:
                 selected_idx = max(0, selected_idx - 1)
 
         elif key in (curses.KEY_DOWN, ord("j")):
-            if worlds:
-                selected_idx = min(len(worlds) - 1, selected_idx + 1)
+            if sorted_worlds:
+                selected_idx = min(len(sorted_worlds) - 1, selected_idx + 1)
 
         elif key in (10, 13, ord(" "), curses.KEY_ENTER):
-            if worlds and 0 <= selected_idx < len(worlds):
-                w_info = worlds[selected_idx]
+            if sorted_worlds and 0 <= selected_idx < len(sorted_worlds):
+                w_info = sorted_worlds[selected_idx]
                 try:
                     world_in_session = load_world(w_info["path"])
                     status_msg = f"\u2705 Loaded wyrd #{world_in_session.seed}"
@@ -863,9 +1096,9 @@ def _gateway_loop(stdscr):
 
         elif key == ord("e"):
             world = world_in_session
-            if world is None and worlds and 0 <= selected_idx < len(worlds):
+            if world is None and sorted_worlds and 0 <= selected_idx < len(sorted_worlds):
                 try:
-                    world = load_world(worlds[selected_idx]["path"])
+                    world = load_world(sorted_worlds[selected_idx]["path"])
                 except Exception:
                     status_msg = "\u274c Could not load world"
                     status_time = time_module.monotonic()
@@ -880,9 +1113,9 @@ def _gateway_loop(stdscr):
 
         elif key == ord("v"):
             world = world_in_session
-            if world is None and worlds and 0 <= selected_idx < len(worlds):
+            if world is None and sorted_worlds and 0 <= selected_idx < len(sorted_worlds):
                 try:
-                    world = load_world(worlds[selected_idx]["path"])
+                    world = load_world(sorted_worlds[selected_idx]["path"])
                 except Exception:
                     status_msg = "\u274c Could not load world"
                     status_time = time_module.monotonic()
@@ -898,9 +1131,9 @@ def _gateway_loop(stdscr):
 
         elif key == ord("d"):
             world = world_in_session
-            if world is None and worlds and 0 <= selected_idx < len(worlds):
+            if world is None and sorted_worlds and 0 <= selected_idx < len(sorted_worlds):
                 try:
-                    world = load_world(worlds[selected_idx]["path"])
+                    world = load_world(sorted_worlds[selected_idx]["path"])
                 except Exception:
                     status_msg = "\u274c Could not load world"
                     status_time = time_module.monotonic()
@@ -919,9 +1152,9 @@ def _gateway_loop(stdscr):
 
         elif key == ord("c"):
             world = world_in_session
-            if world is None and worlds and 0 <= selected_idx < len(worlds):
+            if world is None and sorted_worlds and 0 <= selected_idx < len(sorted_worlds):
                 try:
-                    world = load_world(worlds[selected_idx]["path"])
+                    world = load_world(sorted_worlds[selected_idx]["path"])
                 except Exception:
                     status_msg = "\u274c Could not load world"
                     status_time = time_module.monotonic()
@@ -945,9 +1178,9 @@ def _gateway_loop(stdscr):
 
         elif key == ord("s"):
             world = world_in_session
-            if world is None and worlds and 0 <= selected_idx < len(worlds):
+            if world is None and sorted_worlds and 0 <= selected_idx < len(sorted_worlds):
                 try:
-                    world = load_world(worlds[selected_idx]["path"])
+                    world = load_world(sorted_worlds[selected_idx]["path"])
                 except Exception:
                     status_msg = "\u274c Could not load world"
                     status_time = time_module.monotonic()
@@ -976,9 +1209,9 @@ def _gateway_loop(stdscr):
 
         elif key == ord("x"):
             world = world_in_session
-            if world is None and worlds and 0 <= selected_idx < len(worlds):
+            if world is None and sorted_worlds and 0 <= selected_idx < len(sorted_worlds):
                 try:
-                    world = load_world(worlds[selected_idx]["path"])
+                    world = load_world(sorted_worlds[selected_idx]["path"])
                 except Exception:
                     status_msg = "\u274c Could not load world"
                     status_time = time_module.monotonic()
@@ -998,9 +1231,9 @@ def _gateway_loop(stdscr):
 
         elif key == ord("t"):
             world = world_in_session
-            if world is None and worlds and 0 <= selected_idx < len(worlds):
+            if world is None and sorted_worlds and 0 <= selected_idx < len(sorted_worlds):
                 try:
-                    world = load_world(worlds[selected_idx]["path"])
+                    world = load_world(sorted_worlds[selected_idx]["path"])
                 except Exception:
                     status_msg = "❌ Could not load world"
                     status_time = time_module.monotonic()
@@ -1035,9 +1268,9 @@ def _gateway_loop(stdscr):
         elif key == ord("G"):
             """Gazetteer mode — browse all world entities."""
             world = world_in_session
-            if world is None and worlds and 0 <= selected_idx < len(worlds):
+            if world is None and sorted_worlds and 0 <= selected_idx < len(sorted_worlds):
                 try:
-                    world = load_world(worlds[selected_idx]["path"])
+                    world = load_world(sorted_worlds[selected_idx]["path"])
                 except Exception:
                     status_msg = "❌ Could not load world"
                     status_time = time_module.monotonic()
@@ -1053,9 +1286,9 @@ def _gateway_loop(stdscr):
         elif key == ord("p"):
             """Play/embody — launch embodied play mode for the selected world."""
             world = world_in_session
-            if world is None and worlds and 0 <= selected_idx < len(worlds):
+            if world is None and sorted_worlds and 0 <= selected_idx < len(sorted_worlds):
                 try:
-                    world = load_world(worlds[selected_idx]["path"])
+                    world = load_world(sorted_worlds[selected_idx]["path"])
                 except Exception:
                     status_msg = "❌ Could not load world"
                     status_time = time_module.monotonic()
