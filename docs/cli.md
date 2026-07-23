@@ -32,9 +32,10 @@ Entry point: `src/__main__.py`. Registers subcommands via `argparse`.
 | `chronicles` | Era-based world history |
 | `magic` | Show magic system |
 | `pantheon` | Show pantheon and religions |
-| `ask "..."` | Ask a natural-language question |
-| `worlds` | List all generated worlds |
-| `serve` | Start web dashboard |
+| `ask "..."` | Ask a natural-language question | `--snapshot-year N` |
+| `worlds` | List all generated worlds | `--dir PATH`, `--json` |
+| `lookup NAME` | Quick entity lookup across all data types | `--max N` |
+| `serve` | Start web dashboard | `--port N`, `--no-browser` |
 
 ## `generate` Flags
 
