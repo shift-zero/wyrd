@@ -226,6 +226,47 @@ class SimState:
 # ── Simulation Helpers ────────────────────────────────────────────────
 
 
+def _precompute_resource_maps(world: World, radius: int = 5) -> None:
+    """Precompute carrying capacity, food, and wealth maps for the entire world.
+
+    Stores the results on world.capacity_map, world.food_map, and world.wealth_map
+    so that _calculate_carrying_capacity and _resource_availability can do O(1) lookups
+    instead of looping over radius² cells per call.
+
+    Must be called again after any terrain mutation (e.g. cataclysm).
+    """
+    w, h = world.width, world.height
+    cap_map = [[0] * w for _ in range(h)]
+    food_map = [[0.0] * w for _ in range(h)]
+    wealth_map = [[0.0] * w for _ in range(h)]
+
+    for y in range(h):
+        for x in range(w):
+            total_cap = 0
+            total_food = 0.0
+            total_wealth = 0.0
+            cells = 0
+            for dy in range(-radius, radius + 1):
+                for dx in range(-radius, radius + 1):
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < w and 0 <= ny < h:
+                        t = world.terrain[ny][nx]
+                        dist = math.sqrt(dx * dx + dy * dy)
+                        if dist <= radius:
+                            falloff = 1 - (dist / (radius + 1))
+                            total_cap += TERRAIN_CAPACITY.get(t, 50) * falloff
+                            total_food += TERRAIN_FOOD.get(t, 20) * falloff
+                            total_wealth += TERRAIN_WEALTH.get(t, 20) * falloff
+                            cells += 1
+            cap_map[y][x] = int(total_cap)
+            food_map[y][x] = min(1.0, total_food / (cells * 40)) if cells else 0.1
+            wealth_map[y][x] = min(1.0, total_wealth / (cells * 40)) if cells else 0.1
+
+    world.capacity_map = cap_map
+    world.food_map = food_map
+    world.wealth_map = wealth_map
+
+
 def _logistic_growth(current: float, carrying_capacity: float, growth_rate: float = 0.02) -> float:
     """Logistic growth model with carrying capacity."""
     if carrying_capacity <= 0:
@@ -238,8 +279,10 @@ def _logistic_growth(current: float, carrying_capacity: float, growth_rate: floa
 def _calculate_carrying_capacity(world: World, sx: int, sy: int, radius: int = 5) -> int:
     """
     Calculate carrying capacity for a settlement based on surrounding terrain.
-    The settlement draws resources from a radius around it.
+    Uses precomputed map if available, otherwise computes from scratch.
     """
+    if world.capacity_map is not None and 0 <= sy < len(world.capacity_map) and 0 <= sx < len(world.capacity_map[0]):
+        return world.capacity_map[sy][sx]
     total_capacity = 0
     for dy in range(-radius, radius + 1):
         for dx in range(-radius, radius + 1):
@@ -259,7 +302,10 @@ def _resource_availability(world: World, sx: int, sy: int, radius: int = 5) -> t
     """
     Calculate food and wealth availability for a settlement location.
     Returns (food_availability, wealth_availability) as 0.0-1.0 values.
+    Uses precomputed maps if available, otherwise computes from scratch.
     """
+    if world.food_map is not None and world.wealth_map is not None and 0 <= sy < len(world.food_map) and 0 <= sx < len(world.food_map[0]):
+        return (world.food_map[sy][sx], world.wealth_map[sy][sx])
     total_food = 0
     total_wealth = 0
     cells = 0
@@ -1275,7 +1321,10 @@ def initialize_sim_state(world: World) -> SimState:
     
     # Initialize faction simulation state
     state.faction_state = initialize_faction_state(world)
-    
+
+    # Precompute resource maps for O(1) lookups in sim tick
+    _precompute_resource_maps(world)
+
     return state
 
 

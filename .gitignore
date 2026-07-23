@@ -21,6 +21,7 @@ Thumbs.db
 
 # Temp
 _check_*
+_profile_*
 _test_*.py
 _test_*.json.gz
 /uv.lock

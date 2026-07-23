@@ -187,6 +187,9 @@ class World:
     magic: Optional['MagicSystem'] = None
     pantheon: Optional['PantheonSystem'] = None
     landmarks: list['Landmark'] = field(default_factory=list)
+    capacity_map: list[list[int]] | None = None  # Precomputed carrying capacity per cell
+    food_map: list[list[float]] | None = None    # Precomputed food availability per cell
+    wealth_map: list[list[float]] | None = None  # Precomputed wealth availability per cell
 
     @property
     def tiles(self) -> int:

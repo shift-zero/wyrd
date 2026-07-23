@@ -23,16 +23,23 @@ This is YOUR project. Make it beautiful and deep.
 
 ## Current state (2026-07-23)
 
-**Phase 18 (Depth & Quality) in progress. 722 tests pass (+32).**
+**Phase 18 (Depth & Quality) in progress. 722 tests pass — 44% faster test suite (87s vs 156s).**
 
 ### What was done this session
-1. **Shop/Market system (32 new tests)** — Settlement economy-themed shops in embodied play mode. Each of 6 economy types (farming, logging, mining, fishing, trading, pastoral) gets distinct inventory items with prices scaled by settlement population. Players press `m` in the game loop to browse, buy, and sell items. Creature loot tables for 6 creature types (beast, monster, humanoid, dragon, undead, elemental) generate tier-scaled loot on victory.
+1. **Resource map precomputation** — `_precompute_resource_maps()` in sim.py generates carrying capacity, food, and wealth maps for every cell at sim initialization. `_calculate_carrying_capacity()` and `_resource_availability()` use cached O(1) lookups instead of looping over a 11×11 radius per call. Maps are invalidated when cataclysm mutates terrain. Isolated lookup speedup: 125x.
 
-2. **Richer creature loot in travel encounters** — Replaced the old 30%-chance-for-one-item system with deterministic creature_loot() from the shop module. All defeated creatures now drop 1-3 items scaled by tier and creature type. Loot names and prices appear in the encounter narrative.
+2. **pytest-xdist parallel test execution** — Installed `pytest-xdist>=3.6`, added to `pyproject.toml` dev deps. Fixed test_serve.py fixture dependencies so all 722 tests pass with `--dist loadscope`. Tests run in 87s (4 workers) vs 156s serial — 44% faster.
 
-3. **Bugfix: flaky sim determinism test** — `test_snapshot_determinism` and `test_deterministic_simulation` shared a single `World` object between two `run_simulation()` calls. Cataclysms mutate `world.terrain` in-place, so the second call could see different initial conditions after a cataclysm triggered in the first run. Fixed by creating separate worlds for each call. (832148a)
+3. **Updated .gitignore** — `_profile_*` files ignored.
 
-4. **New module: `src/shop.py`** — Clean separation of shop data tables, generation logic, and rendering. 8 functions exported for use by embody.py and tests.
+### Test command
+```bash
+# Fast: parallel execution (4 workers)
+source .venv/bin/activate && python -m pytest tests/ -q -n 4 --dist loadscope
+
+# Serial (fallback if xdist issues)
+python -m pytest tests/ -q
+```
 
 ### Phase 18: Depth & Quality — remaining candidates
 
@@ -68,7 +75,7 @@ Candidates for Phase 18 (pick one per session):
 
 3. **🔲 World generation variety** — More terrain types (swamp, tundra, canyon, reef), biome-specific color palettes, weather patterns visible on the map.
 
-4. **🔲 Performance** — 150s test suite, sim can be slow for 1000+ years on large maps. Profiling and optimization.
+4. **🟡 Performance — 87s test suite (was 156s).** Resource map precomputation + pytest-xdist parallel execution. Next: profile and optimize noise gen, sim loop per-tick overhead.
 
 5. **🔲 Bestiary depth** — *(Creature loot + encounter integration done ✅)* Full creature generation with stats, habitats, encounter tables, TTRPG integration already in place.
 

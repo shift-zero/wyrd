@@ -254,6 +254,12 @@ def _mutate_terrain(
                 world.terrain[y][x] = new_terrain
                 changes += 1
 
+    # Invalidate precomputed resource maps since terrain changed
+    if changes > 0:
+        world.capacity_map = None
+        world.food_map = None
+        world.wealth_map = None
+
     return changes
 
 

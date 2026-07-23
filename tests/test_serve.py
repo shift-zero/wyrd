@@ -107,12 +107,12 @@ class TestFindWorlds:
 # ── Tests: _load_world ──────────────────────────────────────────────
 
 class TestLoadWorld:
-    def test_loads_existing_world(self):
+    def test_loads_existing_world(self, world):
         w = _load_world(12345)
         assert w is not None
         assert w.seed == 12345
 
-    def test_returns_none_for_missing(self):
+    def test_returns_none_for_missing(self, world):
         w = _load_world(999999)
         assert w is None
 
@@ -120,7 +120,7 @@ class TestLoadWorld:
 # ── Tests: _get_snapshot_years ──────────────────────────────────────
 
 class TestGetSnapshotYears:
-    def test_empty_for_no_sim(self):
+    def test_empty_for_no_sim(self, world):
         years = _get_snapshot_years(999999)
         assert years == []
 
