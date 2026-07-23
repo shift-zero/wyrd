@@ -237,3 +237,18 @@ Settlements don't exist in isolation — they trade. Farming villages produce gr
 | 6 🔲 | Economy display in sim detailed view | Economy icons and trade route count in settlement listings |
 | 7 🔲 | Serialization: economy data survives save/load | Economy types and trade routes persist through serialization |
 | 8 🔲 | Tests for determinism, route generation, economy assignment, disruption | 15+ tests in test_economy.py |
+
+## Phase 15 — The Weirding (UX transformation — next major)
+
+The CLI is a dev tool's face. wyrd wants a *human* face — a single unified curses interface where you don't need to remember 20 subcommands.
+
+**Vision:** `wyrd` with no subcommand drops into a curses TUI. From there, everything is reachable — world selection, generate, explore, simulate, chronicles, export. The subcommands stay for scripting, but the default experience is a single discoverable gateway.
+
+| # | What | Verifiable |
+|---|------|------------|
+| 1 🔲 | Gateway TUI — world selection screen showing recent worlds, generate new, load from file | `wyrd` (no args) opens a world picker with recent worlds, a "Generate New" option, and "Load File" |
+| 2 🔲 | Integrated navigation — consistent keybinds across all views | Tab/numbers switch sections; `q` quits; `?` shows help — works everywhere |
+| 3 🔲 | Meld explorer + viewer into one seamless experience | Explore a world, then press a key to start simulation and watch it change in place — no relaunch |
+| 4 🔲 | Inline help panel — shows all keybinds, contextual | Press `?` from anywhere and see available actions for the current view |
+| 5 🔲 | World persists in session — generate once, then explore/sim/export without re-passing `--seed` | Navigate between views without re-typing flags |
+| 6 🔲 | Beautiful splash screen with wyrd ASCII art on launch | A taste of what wyrd can do before you even pick a world |
