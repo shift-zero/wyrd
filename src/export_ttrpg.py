@@ -487,22 +487,69 @@ def _npc_to_ttrpg_stats(c) -> dict:
     return base
 
 
-def _build_faction_relationships(world: World) -> list[dict]:
-    """Build faction relationships from the world's lore."""
-    if not world.lore:
-        return []
-    return [
-        {
-            "source": rel.get("source"),
-            "source_region": rel.get("source_region"),
-            "target": rel.get("target"),
-            "target_region": rel.get("target_region"),
-            "type": rel.get("type"),
-            "description": rel.get("description"),
-            "ttrpg_disposition": _relationship_to_disposition(rel.get("type", "trade")),
-        }
-        for rel in world.lore.relationships
-    ]
+def _build_factions_section(world: World) -> dict:
+    """Build comprehensive faction section from world.factions and world.faction_relationships.
+
+    Returns structured dict with faction entries (full stats) and inter-faction
+    relationships. Falls back to world.lore.relationships if no modern faction
+    data exists.
+    """
+    factions_data = []
+    if world.factions:
+        for f in world.factions:
+            ft = f.type_info if hasattr(f, 'type_info') else {}
+            factions_data.append({
+                "name": f.name,
+                "faction_type": f.faction_type,
+                "type_description": ft.get("desc", ""),
+                "type_icon": ft.get("icon", "?"),
+                "leader": {
+                    "name": f.leader_name,
+                    "title": f.leader_title,
+                } if f.leader_name else None,
+                "territory": f.territory,
+                "stats": {
+                    "influence": f.influence,
+                    "wealth": f.wealth,
+                    "military": f.military,
+                    "stability": f.stability,
+                    "power_score": f.power_score,
+                },
+                "reputation": f.reputation,
+                "goals": f.goals,
+                "description": f.description,
+            })
+
+    # Inter-faction relationships (modern FactionRelationship objects)
+    relationships_data = []
+    if world.faction_relationships:
+        for r in world.faction_relationships:
+            relationships_data.append({
+                "faction_a": r.faction_a,
+                "faction_b": r.faction_b,
+                "relationship_type": r.rel_type,
+                "description": r.description,
+                "ttrpg_disposition": _relationship_to_disposition(r.rel_type),
+            })
+    # Fallback to legacy lore.relationships
+    elif world.lore and world.lore.relationships:
+        for rel in world.lore.relationships:
+            relationships_data.append({
+                "source": rel.get("source"),
+                "source_region": rel.get("source_region"),
+                "target": rel.get("target"),
+                "target_region": rel.get("target_region"),
+                "relationship_type": rel.get("type"),
+                "description": rel.get("description"),
+                "ttrpg_disposition": _relationship_to_disposition(rel.get("type", "trade")),
+            })
+
+    return {
+        "factions": factions_data,
+        "relationships": relationships_data,
+        "total_factions": len(factions_data),
+        "total_relationships": len(relationships_data),
+    }
 
 
 def _relationship_to_disposition(rel_type: str) -> str:
@@ -728,8 +775,8 @@ def export_world_ttrpg(
         # NPC Roster
         "npcs": _build_npc_roster(world),
 
-        # Faction Relationships
-        "factions": _build_faction_relationships(world),
+        # Factions
+        "factions": _build_factions_section(world),
 
         # Quest Hooks
         "quests": _build_quest_hooks(world),

@@ -18,7 +18,7 @@ from src.export_ttrpg import (
     _build_random_tables,
     _build_settlement_statblocks,
     _build_npc_roster,
-    _build_faction_relationships,
+    _build_factions_section,
     _build_quest_hooks,
     _build_geography,
 )
@@ -175,12 +175,16 @@ class TestExportEdgeCases:
         # campaign_settings should still function
         assert doc["campaign_settings"]["total_population"] > 0
 
-    def test_no_lore(self):
-        """Export should work when lore is None."""
+    def test_no_factions(self):
+        """Export should work when factions list is empty."""
         world = generate_world(42)
-        world.lore = None
+        world.factions = []
+        world.faction_relationships = []
+        world.lore.relationships = []
         doc = json.loads(export_world_ttrpg(world))
-        assert doc["factions"] == []
+        assert doc["factions"]["factions"] == []
+        assert doc["factions"]["relationships"] == []
+        assert doc["factions"]["total_factions"] == 0
 
     def test_tiny_world(self):
         """Export should work on very small worlds."""
@@ -247,12 +251,16 @@ class TestExportHelperFunctions:
         assert geo["map"]["dimensions"] == "80×40"
         assert 0 < geo["map"]["land_percentage"] < 100
 
-    def test_factions_empty_when_no_lore(self):
-        """With no lore, faction relationships should be empty."""
+    def test_factions_empty_when_no_factions(self):
+        """With no factions, the section should be empty."""
         world = generate_world(42)
-        world.lore = None
-        factions = _build_faction_relationships(world)
-        assert factions == []
+        world.factions = []
+        world.faction_relationships = []
+        world.lore.relationships = []
+        factions = _build_factions_section(world)
+        assert factions["factions"] == []
+        assert factions["relationships"] == []
+        assert factions["total_factions"] == 0
 
     def test_quest_hooks_without_narrative(self):
         """With no narrative, quest hooks should be empty."""
