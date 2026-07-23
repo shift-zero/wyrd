@@ -18,7 +18,7 @@ import random
 import re
 import time as time_module
 
-from .world import World
+from .world import TERRAIN, World
 from .generate import generate_world
 from .serialize import load_world
 
@@ -96,12 +96,34 @@ def _init_colors():
     curses.init_pair(25, 226, -1)   # settlement
     curses.init_pair(26, 64, -1)    # swamp
     curses.init_pair(27, 179, -1)   # desert
+    # Pairs 28-34: trade route overlay colors
+    curses.init_pair(28, 226, -1)   # route_trade / settlement (yellow)
+    curses.init_pair(29, 220, -1)   # route_road (gold)
+    curses.init_pair(30, 220, -1)   # economy_farming (gold)
+    curses.init_pair(31, 28, -1)    # economy_logging (green)
+    curses.init_pair(32, 130, -1)   # economy_mining (brown)
+    curses.init_pair(33, 33, -1)    # economy_fishing (blue)
+    curses.init_pair(34, 40, -1)    # economy_pastoral (lime)
 
 
 _MINI_TERRAIN_CP = {
     "deep_water": 16, "shallow": 17, "sand": 18, "grass": 19,
     "forest": 20, "hills": 21, "mountains": 22, "snow": 23,
     "river": 24, "swamp": 26, "desert": 27,
+}
+
+_ROUTE_CP = {
+    "trading": 28,    # yellow
+    "farming": 30,    # gold
+    "logging": 31,    # green
+    "mining": 32,     # brown
+    "fishing": 33,    # blue
+    "pastoral": 34,   # lime
+}
+
+_ROUTE_ICONS = {
+    "trading": "$", "farming": "W", "logging": "T",
+    "mining": "&", "fishing": "~", "pastoral": "P",
 }
 
 
@@ -393,6 +415,237 @@ def _draw_world_detail_panel(stdscr, data: dict | None,
     if data.get("features"):
         feat_str = "  " + " ".join(data["features"][:6])
         _draw(stdscr, feat_y, start_x + 2, feat_str, CP["accent"])
+
+
+
+# ── Trade route curses overlay (Phase 23.5) ────────────────────────────
+
+def _trade_routes_curses_overlay(stdscr, world):
+    """Show trade route map as a full-screen curses overlay. No endwin needed."""
+    h, w = stdscr.getmaxyx()
+
+    # ── Run sim to get trade routes ────────────────────────────
+    msg = " Simulating trade routes… "
+    _draw(stdscr, h // 2, max(0, (w - len(msg)) // 2), msg, CP["accent"])
+    stdscr.refresh()
+
+    from .sim import run_simulation
+    from .serialize import save_sim_state
+    from .economy import reconstruct_routes
+    sim_chars = world.narrative.characters if world.narrative else None
+    result = run_simulation(world, num_years=100, seed_offset=0,
+                            chaos_factor=0.1, snapshot_interval=50,
+                            characters=sim_chars)
+    save_sim_state(result, f"wyrd-{world.seed}-sim.json")
+    routes = reconstruct_routes(result.trade_routes)
+
+    # ── Build settlement lookup ─────────────────────────────────
+    s_info: dict[str, tuple[int, int, str]] = {}
+    for name, snap in result.settlements.items():
+        s_info[name] = (snap.x, snap.y, getattr(snap, 'economy_type', None) or "unknown")
+
+    connected: set[str] = set()
+    for r in routes:
+        if getattr(r, 'is_active', True):
+            connected.add(getattr(r, 'source', ''))
+            connected.add(getattr(r, 'destination', ''))
+
+    # ── Build terrain grid with TERRAIN char + CP mapping ───────
+    grid_chars: list[list[str]] = []
+    grid_cp: list[list[int]] = []
+    for y in range(world.height):
+        rc: list[str] = []
+        rcp: list[int] = []
+        for x in range(world.width):
+            tk = world.terrain[y][x]
+            info = TERRAIN.get(tk, {"char": "?", "color": 240})
+            rc.append(info["char"])
+            rcp.append(_MINI_TERRAIN_CP.get(tk, 19))
+        grid_chars.append(rc)
+        grid_cp.append(rcp)
+
+    # ── Overlay settlements with economy icons ──────────────────
+    settlement_positions: set[tuple[int, int]] = set()
+    for region in world.regions:
+        for s in region.settlements:
+            settlement_positions.add((s.x, s.y))
+            if 0 <= s.y < world.height and 0 <= s.x < world.width:
+                if s.name in connected and s.name in s_info:
+                    _, _, etype = s_info[s.name]
+                    icon = _ROUTE_ICONS.get(etype, "S")
+                    grid_chars[s.y][s.x] = icon
+                    grid_cp[s.y][s.x] = _ROUTE_CP.get(etype, 28)
+                else:
+                    grid_chars[s.y][s.x] = s.char
+                    grid_cp[s.y][s.x] = 28  # yellow
+
+    # ── Draw route lines (Bresenham dots, skip water & settlements) ─
+    route_layer: dict[tuple[int, int], tuple[int, str]] = {}
+    for r in routes:
+        if not getattr(r, 'is_active', True):
+            continue
+        src = getattr(r, 'source', '')
+        dst = getattr(r, 'destination', '')
+        if src not in s_info or dst not in s_info:
+            continue
+        sx, sy, stype = s_info[src]
+        dx, dy, dtype = s_info[dst]
+        etype = stype if stype in _ROUTE_CP else (dtype if dtype in _ROUTE_CP else "trading")
+        dot_cp = _ROUTE_CP.get(etype, 28)
+        is_road = getattr(r, 'is_road', False)
+        dot_char = "=" if is_road else "·"
+
+        for px, py in _bresenham_line(sx, sy, dx, dy):
+            if (px, py) in [(sx, sy), (dx, dy)]:
+                continue
+            if 0 <= py < world.height and 0 <= px < world.width:
+                tk = world.terrain[py][px]
+                if tk in ("deep_water", "shallow", "ocean"):
+                    continue
+                clr = 29 if is_road else dot_cp
+                if (px, py) not in settlement_positions:
+                    route_layer[(px, py)] = (clr, dot_char)
+
+    for (x, y), (clr, ch) in route_layer.items():
+        if 0 <= y < world.height and 0 <= x < world.width:
+            grid_chars[y][x] = ch
+            grid_cp[y][x] = clr
+
+    # ── Build legend + route listing ────────────────────────────
+    title = f" wyrd #{world.seed} — Trade Routes (Year {result.year}) "
+    subtitle = f" {world.width}×{world.height} | {sum(1 for r in routes if getattr(r, 'is_active', True))} active routes "
+    legend_lines = []
+    legend_lines.append(("", 0, False))
+    seen_types: set[str] = set()
+    for r in routes:
+        for name in (getattr(r, 'source', ''), getattr(r, 'destination', '')):
+            if name in s_info:
+                et = s_info[name][2]
+                if et in _ROUTE_ICONS:
+                    seen_types.add(et)
+    if seen_types:
+        legend_lines.append((" Economy Types:", CP["title"], True))
+        for etype in ["farming", "logging", "mining", "fishing", "trading", "pastoral"]:
+            if etype in seen_types:
+                icon = _ROUTE_ICONS[etype]
+                cp = _ROUTE_CP[etype]
+                legend_lines.append((f"  {icon}  {etype}", cp, False))
+        legend_lines.append(("  ·  Trade route path", 28, False))
+        legend_lines.append(("  =  Road (persistent route, 50+ years)", 29, False))
+        legend_lines.append(("", 0, False))
+
+    # Route listings (top 20)
+    active = [r for r in routes if getattr(r, 'is_active', True)]
+    if active:
+        legend_lines.append((" Active Routes:", CP["title"], True))
+        for r in active[:20]:
+            src = getattr(r, 'source', '?')
+            dst = getattr(r, 'destination', '?')
+            st = s_info.get(src, ("?", "?", "?"))[2]
+            dt = s_info.get(dst, ("?", "?", "?"))[2]
+            si = _ROUTE_ICONS.get(st, "?")
+            di = _ROUTE_ICONS.get(dt, "?")
+            sicp = _ROUTE_CP.get(st, 28)
+            dicp = _ROUTE_CP.get(dt, 28)
+            road_flag = " =road" if getattr(r, 'is_road', False) else ""
+            legend_lines.append((f"  {si} {src} ↔ {di} {dst}{road_flag}", CP["normal"], False))
+            goods_str = getattr(r, 'goods', 'goods')
+            vol = getattr(r, 'volume', 0.5)
+            dist = getattr(r, 'distance', 0)
+            legend_lines.append((f"    {goods_str}  (vol: {vol:.0%}, dist: {dist:.0f})", CP["dim"], False))
+        if len(active) > 20:
+            legend_lines.append((f"  … and {len(active) - 20} more", CP["dim"], False))
+
+    pad_total_h = 1 + 1 + 1 + world.height + len(legend_lines) + 2
+
+    # ── Event loop ─────────────────────────────────────────────
+    scroll_y = 0
+    running = True
+    while running:
+        stdscr.erase()
+
+        # Title bar
+        _draw(stdscr, 0, 0, title, CP["seed"], bold=True)
+        _draw(stdscr, 1, 0, subtitle, CP["dim"])
+
+        # Map viewport
+        view_h = h - 3  # leave room for footer
+        
+        # Draw map rows
+        map_row = 0
+        while map_row < world.height and map_row < view_h:
+            sy = scroll_y + map_row
+            if sy >= world.height:
+                break
+            line = ""
+            col_cps: list[int] = []
+            for x in range(min(world.width, w - 1)):
+                line += grid_chars[sy][x]
+                col_cps.append(grid_cp[sy][x])
+            # Draw with correct colors
+            try:
+                for ci, ch in enumerate(line):
+                    if map_row + 2 < h and ci < w:
+                        stdscr.addch(map_row + 2, ci, ch, curses.color_pair(col_cps[ci]) | curses.A_BOLD)
+            except curses.error:
+                pass
+            map_row += 1
+
+        # Legend below map
+        legend_start = min(map_row + 2, h - 1)
+        legend_y = legend_start
+        li = scroll_y - world.height
+        if li < 0:
+            li = 0
+        while li < len(legend_lines) and legend_y < h - 1:
+            text, cp, bold = legend_lines[li]
+            _draw(stdscr, legend_y, 0, text, cp, bold=bold)
+            legend_y += 1
+            li += 1
+
+        # Footer
+        footer = " ↑↓ scroll | q/ESC close "
+        _draw(stdscr, h - 1, max(0, (w - len(footer)) // 2), footer, CP["dim"])
+        stdscr.refresh()
+
+        key = stdscr.getch()
+        if key in (ord('q'), ord('Q'), 27, ord('\n')):
+            running = False
+        elif key == curses.KEY_DOWN:
+            scroll_y = min(scroll_y + 1, max(0, pad_total_h - view_h))
+        elif key == curses.KEY_UP:
+            scroll_y = max(0, scroll_y - 1)
+        elif key == curses.KEY_NPAGE:
+            scroll_y = min(scroll_y + view_h, max(0, pad_total_h - view_h))
+        elif key == curses.KEY_PPAGE:
+            scroll_y = max(0, scroll_y - view_h)
+        elif key == ord('g'):  # top
+            scroll_y = 0
+        elif key == ord('G'):  # bottom
+            scroll_y = max(0, pad_total_h - view_h)
+
+
+def _bresenham_line(x0: int, y0: int, x1: int, y1: int) -> list[tuple[int, int]]:
+    """Bresenham's line algorithm — returns points on the line."""
+    points: list[tuple[int, int]] = []
+    dx = abs(x1 - x0)
+    dy = -abs(y1 - y0)
+    sx = 1 if x0 < x1 else -1
+    sy = 1 if y0 < y1 else -1
+    err = dx + dy
+    x, y = x0, y0
+    while True:
+        points.append((x, y))
+        if x == x1 and y == y1:
+            break
+        e2 = 2 * err
+        if e2 >= dy:
+            err += dy
+            x += sx
+        if e2 <= dx:
+            err += dx
+            y += sy
+    return points
 
 
 # ── Sub-view launchers (end/restart curses) ────────────────────────────
@@ -1223,27 +1476,8 @@ def _gateway_loop(stdscr):
                 status_time = time_module.monotonic()
                 continue
             world_in_session = world
-            curses.endwin()
-            # Run a quick sim to get trade routes
-            from .sim import run_simulation
-            from .serialize import save_sim_state
-            from .economy import reconstruct_routes
-            from .render import render_trade_route_map
-            sim_chars = world.narrative.characters if world.narrative else None
-            result = run_simulation(world, num_years=100, seed_offset=0,
-                                    chaos_factor=0.1, snapshot_interval=50,
-                                    characters=sim_chars)
-            save_sim_state(result, f"wyrd-{world.seed}-sim.json")
-            routes = reconstruct_routes(result.trade_routes)
-            print(render_trade_route_map(world, routes, result.settlements,
-                                         title=f"wyrd {world.seed} — Trade Routes (Year {result.year})"))
-            input(f"\n── Press Enter to return to wyrd gateway...")
-            stdscr = curses.initscr()
-            curses.start_color()
-            curses.use_default_colors()
-            _init_colors()
-            stdscr.keypad(True)
-            curses.curs_set(0)
+            _trade_routes_curses_overlay(stdscr, world)
+            stdscr.erase()
 
         elif key == ord("G"):
             world, err = _resolve_world(world_in_session, sorted_worlds, selected_idx)

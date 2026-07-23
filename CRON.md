@@ -23,16 +23,26 @@ This is YOUR project. Make it beautiful and deep.
 
 ## Current state (2026-07-27)
 
-### Phase 19 — TTRPG export completeness + Gateway sort UX
+### Phase 23.5 — Bug fixes + Trade route curses overlay
 
-Two fixes this session:
+#### Bug fixed: `TERRAIN` not imported in gateway.py
+`_render_mini_map()` at line 323 used `TERRAIN.get(t, {}).get("char", " ")` but gateway.py only imported `World` and `generate_world`/`load_world`, not `TERRAIN` from `.world`. Pressing `g` in the gateway would crash when the detail panel rendered the mini-map for a newly generated world. Fixed by adding `TERRAIN` to the import.
 
-1. **TTRPG export: Added proper Faction dataclass data.** The `_build_faction_relationships` helper only read from `world.lore.relationships` (old region dicts), missing the full `Faction` dataclass in `world.factions`. Replaced with `_build_factions_section` that extracts influence, wealth, military, stability, goals, leader info, power_score, reputation, territory from proper Faction objects. Also extracts `FactionRelationship` objects from `world.faction_relationships`. Falls back to legacy `world.lore.relationships` for backward compatibility. All 24 TTRPG export tests pass.
+#### Trade route overlay: endwin cycle replaced with curses inline overlay
+The `t` key in the gateway previously used the destructive `curses.endwin()` → `print()` → `input()` → `curses.initscr()` cycle to show the trade route map. Replaced with `_trade_routes_curses_overlay()` which:
+- Stays entirely within curses — no terminal mode switch
+- Runs the sim (unavoidable for generating trade data)
+- Renders the map terrain directly with `addch()` using color pairs 16-27 (same as viewer)
+- Overlays settlement economy icons (`$`, `W`, `T`, `&`, `~`, `P`) with distinct color pairs 28-34
+- Draws route lines via Bresenham with `·` (trade) and `=` (road) characters
+- Shows legend and top 20 active routes below the map
+- Arrow keys, Page Up/Down, `g`/`G` for scroll navigation; `q`/Enter/ESC to close
+- Returns cleanly to the gateway — no curses restart needed
 
-2. **Gateway sort UX.** Added sort direction indicators (↑/↓ arrows) in the gateway status bar hint. Added Shift+Backtab (curses.KEY_BTAB) to toggle sort direction without resetting selection. Tab still cycles through sort keys (seed/population/name) and resets to natural order.
+Added 7 new color pairs (28-34) in `_init_colors()` for route overlay colors.
 
 ### What to tackle next
-- **Fix: `TERRAIN` not imported in gateway.py** — `_render_mini_map()` at line 323 uses `TERRAIN.get(...)` but gateway.py only imports `World`, `generate_world`, and `load_world`, not `TERRAIN` from `.world`. Pressing `g` in the gateway generates a world then crashes when the detail panel renders the mini-map.
-- **Explore alternative renderers (SDL, terminal graphic modes)** — biggest open item mentioned in CRON.md. Sixel graphics or a GTK/Qt viewer would give real map rendering instead of ASCII characters.
-- **Gateway trade route overlay** — replace the current `t` key `endwin()`→print→`initscr()` cycle with a curses inline overlay showing trade routes on a map.
-- **Look for remaining visual bugs** — check viewer, explorer, and embody TUI for overlay/rendering issues similar to the gateway fix in the previous session.
+- **Explore alternative renderers (SDL, terminal graphic modes)** — Sixel graphics or a GTK/Qt viewer would give real map rendering instead of ASCII characters
+- **Overlay issues in explorer/viewer** — check for any remaining rendering artifacts at edge cases (terminal resize, very large worlds)
+- **Gateway: sort direction indicator in status bar** — consider adding ↑/↓ arrows directly in the column headers rather than only in the status bar hint
+- **Gateway: confirm-on-quit safeguard** — prevent accidental `q` press from dropping the session
