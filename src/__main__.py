@@ -23,6 +23,61 @@ def _get_world(args) -> 'World':
     return generate_world(seed, width=args.width, height=args.height)
 
 
+def _get_world_and_state(args):
+    """Get world and optionally load sim state."""
+    world = _get_world(args)
+
+    # Try to load sim state
+    snapshot_year = getattr(args, 'snapshot_year', None)
+    from .serialize import load_sim_state
+    from .sim import SimState
+
+    sim_file = f"wyrd-{world.seed}-sim.json"
+    sim_data = load_sim_state(sim_file)
+    if sim_data is None:
+        sim_data = load_sim_state(sim_file + ".gz")
+    if sim_data is None:
+        return world, None
+
+    if snapshot_year is not None:
+        # Load specific snapshot year
+        raw = sim_data.get("snapshots", {}).get(str(snapshot_year), None)
+        if raw is not None:
+            state = SimState(year=raw["year"])
+            for name, sd in raw.get("settlements", {}).items():
+                from .sim import SettlementSnapshot
+                state.settlements[name] = SettlementSnapshot(**sd)
+            state.world_modifiers = raw.get("world_modifiers", [])
+            state.trade_routes = raw.get("trade_routes", [])
+            return world, state
+        return world, None
+
+    # Load final state
+    final = sim_data.get("final_state")
+    if final:
+        state = SimState(year=final.get("year", 0))
+        for name, sd in final.get("settlements", {}).items():
+            from .sim import SettlementSnapshot
+            try:
+                state.settlements[name] = SettlementSnapshot(**sd)
+            except TypeError:
+                # Handle older save format with missing fields
+                ss = SettlementSnapshot(name=sd.get("name", name), region=sd.get("region", ""),
+                                        x=sd.get("x", 0), y=sd.get("y", 0),
+                                        population=sd.get("population", 0), kind=sd.get("kind", "hamlet"))
+                ss.is_active = sd.get("is_active", True)
+                ss.founded_year = sd.get("founded_year", 0)
+                ss.prosperity = sd.get("prosperity", 0.5)
+                ss.food_stores = sd.get("food_stores", 100.0)
+                ss.health = sd.get("health", 1.0)
+                state.settlements[name] = ss
+        state.world_modifiers = final.get("world_modifiers", [])
+        state.trade_routes = final.get("trade_routes", [])
+        return world, state
+
+    return world, None
+
+
 def _apply_snapshot_if_needed(world: 'World', args) -> 'World':
     """If the command supports --snapshot-year and it's set, apply sim state."""
     snapshot_year = getattr(args, 'snapshot_year', None)
@@ -228,7 +283,18 @@ def main():
     bestiary_cmd.add_argument("--habitat", type=str, default=None,
                                help="Filter creatures by habitat (temperate, arid, tundra, tropical)")
     bestiary_cmd.add_argument("--tier", type=int, default=None,
-                               help="Filter creatures by tier (1-5)")
+                              help="Filter creatures by tier (1-5)")
+
+    # ── economy ────────────────────────────────────────────────────
+    economy_cmd = sub.add_parser("economy",
+                                 help="Show trade routes and economies")
+    _add_load_arg(economy_cmd)
+    economy_cmd.add_argument("--routes", action="store_true",
+                             help="Show active trade routes")
+    economy_cmd.add_argument("--settlement", type=str, default=None,
+                             help="Show economy detail for a specific settlement")
+    economy_cmd.add_argument("--snapshot-year", type=int, default=None,
+                             help="Load sim state at a specific year")
 
     # ── chronicles ─────────────────────────────────────────────────
     chron_cmd = sub.add_parser("chronicles",
@@ -492,6 +558,98 @@ def main():
                 world.bestiary = old
             else:
                 print(render_bestiary(world))
+
+    # ── economy ────────────────────────────────────────────────────
+    elif args.command == "economy":
+        world, state = _get_world_and_state(args)
+        from .render import ANSI_RESET, ANSI_BOLD, ANSI_DIM, _color
+        from .economy import ECONOMY_ICONS, ECONOMY_COLORS, ECONOMY_TYPES, reconstruct_routes
+
+        if args.settlement:
+            # Show economy for a specific settlement
+            s = state.settlements.get(args.settlement) if state else None
+            if not s:
+                # Check world settlements
+                found = False
+                for region in world.regions:
+                    for s_obj in region.settlements:
+                        if s_obj.name.lower() == args.settlement.lower():
+                            print(f"{ANSI_BOLD}{s_obj.name}{ANSI_RESET}")
+                            print(f"  Kind: {s_obj.kind} (pop {s_obj.population})")
+                            print(f"  Economy type: no simulation data — run `wyrd run` first")
+                            found = True
+                            break
+                    if found:
+                        break
+                if not found:
+                    print(f"Settlement '{args.settlement}' not found.")
+            else:
+                econ_type = s.economy_type or "unknown"
+                icon = ECONOMY_ICONS.get(econ_type, "?")
+                color = _color(ECONOMY_COLORS.get(econ_type, 255))
+                print(f"{ANSI_BOLD}{s.name}{ANSI_RESET}")
+                print(f"  Kind: {color}{icon} {econ_type}{ANSI_RESET}")
+                print(f"  Population: {s.population}")
+                print(f"  Prosperity: {s.prosperity:.2f}")
+                # Show trade routes to/from this settlement
+                if state and state.trade_routes:
+                    routes = reconstruct_routes(state.trade_routes)
+                    relevant = [r for r in routes if r.is_active and (r.source == s.name or r.destination == s.name)]
+                    if relevant:
+                        print(f"  Trade routes ({len(relevant)}):")
+                        for r in relevant:
+                            partner = r.destination if r.source == s.name else r.source
+                            print(f"    ↔ {partner}: {r.goods} (vol: {r.volume:.0%}, dist: {r.distance:.0f})")
+        elif args.routes:
+            # Show all active trade routes
+            if not state or not state.trade_routes:
+                print("No trade routes available. Run `wyrd run --seed X --years N` first.")
+            else:
+                routes = reconstruct_routes(state.trade_routes)
+                active = [r for r in routes if r.is_active]
+                if not active:
+                    print(f"{ANSI_DIM}No active trade routes.{ANSI_RESET}")
+                else:
+                    print(f"{ANSI_BOLD}Trade Routes ({len(active)}):{ANSI_RESET}")
+                    for r in active:
+                        color = _color(220)
+                        print(f"  {color}↔{ANSI_RESET} {r.source} → {r.destination}")
+                        print(f"      Goods: {r.goods}  Volume: {r.volume:.0%}  Distance: {r.distance:.0f}")
+            # Show economy type summary
+            if state:
+                type_counts: dict[str, int] = {}
+                for s in state.settlements.values():
+                    if s.is_active and s.economy_type:
+                        type_counts[s.economy_type] = type_counts.get(s.economy_type, 0) + 1
+                if type_counts:
+                    print(f"\n{ANSI_BOLD}Economy Distribution:{ANSI_RESET}")
+                    for etype in ECONOMY_TYPES:
+                        count = type_counts.get(etype, 0)
+                        icon = ECONOMY_ICONS.get(etype, "?")
+                        color = _color(ECONOMY_COLORS.get(etype, 255))
+                        bar = "█" * count if count > 0 else "░"
+                        print(f"  {color}{icon} {etype:<10}{ANSI_RESET} {bar} {count}")
+        else:
+            # Default: show economy overview
+            if not state:
+                print("No simulation data. Run `wyrd run --seed X --years N` first.")
+            else:
+                type_counts = {}
+                for s in state.settlements.values():
+                    if s.is_active and s.economy_type:
+                        type_counts[s.economy_type] = type_counts.get(s.economy_type, 0) + 1
+                print(f"{ANSI_BOLD}Economy Overview (Year {state.year}):{ANSI_RESET}")
+                routes = reconstruct_routes(state.trade_routes) if state.trade_routes else []
+                active_routes = [r for r in routes if r.is_active]
+                print(f"  Active trade routes: {len(active_routes)}")
+                print(f"  Settlements with economies: {sum(type_counts.values())}")
+                print(f"\n{ANSI_BOLD}Economy Distribution:{ANSI_RESET}")
+                for etype in ECONOMY_TYPES:
+                    count = type_counts.get(etype, 0)
+                    icon = ECONOMY_ICONS.get(etype, "?")
+                    color = _color(ECONOMY_COLORS.get(etype, 255))
+                    bar = "█" * count if count > 0 else "░"
+                    print(f"  {color}{icon} {etype:<10}{ANSI_RESET} {bar} {count}")
 
     # ── chronicles ─────────────────────────────────────────────────
     elif args.command == "chronicles":
