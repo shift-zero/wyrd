@@ -1144,26 +1144,46 @@ def _handle_combat(
             lines.append(f"You attack {npc_name} the {npc_title}!")
             lines.append("")
 
-            # Combat round
-            round_damage = player_damage + rng.randint(-3, 3)  # slight variance
-            round_damage = max(1, round_damage)
-            npc_hp -= round_damage
+            # Multi-round combat — loop until one side falls (max 20 rounds)
+            round_num = 0
+            total_player_dealt = 0
+            total_player_took = 0
+            player_ko = False
 
-            # NPC retaliates
-            player_takes = npc_damage + rng.randint(-2, 2)  # slight variance
-            player_takes = max(1, player_takes)
-            char.health -= player_takes
+            while npc_hp > 0 and char.health > 0 and round_num < 20:
+                round_num += 1
 
-            lines.append(f"You strike for {round_damage} damage! (NPC has {max(0, npc_hp)} HP remaining)")
-            lines.append(f"{npc_name} hits back for {player_takes} damage!")
+                # Player attacks
+                round_damage = player_damage + rng.randint(-3, 3)
+                round_damage = max(1, round_damage)
+                npc_hp -= round_damage
+                total_player_dealt += round_damage
 
-            if char.health <= 0:
+                lines.append(f"Round {round_num}: You strike for {round_damage} damage! "
+                             f"(NPC has {max(0, npc_hp)} HP remaining)")
+
+                if npc_hp <= 0:
+                    break
+
+                # NPC retaliates
+                player_takes = npc_damage + rng.randint(-2, 2)
+                player_takes = max(1, player_takes)
+                char.health -= player_takes
+                total_player_took += player_takes
+
+                lines.append(f"           {npc_name} hits back for {player_takes} damage! "
+                             f"(You have {char.health} HP)")
+
+                if char.health <= 0:
+                    player_ko = True
+                    break
+
+            if player_ko:
                 char.health = 5  # Don't kill, but nearly dead
                 lines.append("")
                 lines.append("You are nearly dead! You barely manage to retreat.")
                 return "\n".join(lines)
-
-            if npc_hp <= 0:
+            else:
                 # Victory!
                 room.npcs.remove(npc)
 
@@ -1190,9 +1210,6 @@ def _handle_combat(
                 lines.append(f"You slay {npc_name}!")
                 lines.append(f"They drop {gold_reward} gold and: {', '.join(loot)}.")
                 lines.append(f"Your combat skill improves (+{combat_xp} XP).")
-            else:
-                lines.append("")
-                lines.append(f"{npc_name} still stands, wounded but defiant.")
 
             return "\n".join(lines)
 
