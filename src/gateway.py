@@ -340,6 +340,7 @@ GATEWAY_HELP = [
     "    x                  Export world to HTML",
     "    t                  Show trade route map",
     "    r                  Refresh the world list",
+    "    Del                Delete selected world permanently",
     "",
     "  General",
     "    ? / h              Toggle this help screen",
@@ -1408,7 +1409,7 @@ def _gateway_loop(stdscr):
         sort_hint = f"  [Tab] sort:{sort_key}"
         sort_hint += " ↑" if not actual_descending else " ↓"
         if worlds:
-            hints = " [↑↓/k j] sel  [g] gen  [l] load  [e] explore  [v] view  [p] play  [G] gazetteer"
+            hints = " [↑↓/k j] sel  [g] gen  [l] load  [e] explore  [v] view  [p] play  [G] gaz  [Del] del"
         else:
             hints = " [g] generate  [l] load"
         hints += sort_hint + "  [?] help  [q] quit"
@@ -1573,6 +1574,53 @@ def _gateway_loop(stdscr):
             stdscr.refresh()
             stdscr.getch()
 
+        elif key == curses.KEY_DC:  # Delete key: delete selected world
+            if sorted_worlds and 0 <= selected_idx < len(sorted_worlds):
+                w_info = sorted_worlds[selected_idx]
+                seed = w_info["seed"]
+                msg = f" Delete wyrd #{seed}: \"{w_info.get('name', '')}\"? Press Del again to confirm, any other key to cancel."
+                confirm_x = max(0, (w - len(msg)) // 2)
+                confirm_y = h // 2
+                popup_w = len(msg) + 4
+                popup_x = max(0, (w - popup_w) // 2)
+                for py in range(confirm_y - 1, confirm_y + 2):
+                    if 0 <= py < h:
+                        _fill_line(stdscr, py, CP["border"])
+                        _draw(stdscr, py, popup_x, " " * popup_w, CP["normal"])
+                _draw(stdscr, confirm_y, confirm_x, msg, CP["error"], bold=True)
+                curses.doupdate()
+                confirm_key = stdscr.getch()
+                if confirm_key == curses.KEY_DC:
+                    # Delete world file
+                    path = w_info["path"]
+                    deleted = []
+                    if os.path.exists(path):
+                        os.remove(path)
+                        deleted.append(path)
+                    # Delete associated files
+                    char_save = f"saves/wyrd-{seed}-char.json"
+                    if os.path.exists(char_save):
+                        os.remove(char_save)
+                        deleted.append(char_save)
+                    sim_file = f"wyrd-{seed}-sim.json"
+                    if os.path.exists(sim_file):
+                        os.remove(sim_file)
+                        deleted.append(sim_file)
+                    # Clear from session if this was the active world
+                    if world_in_session and world_in_session.seed == seed:
+                        world_in_session = None
+                    # Rescan and reselect
+                    worlds = scan_worlds(".")
+                    update_sort = True
+                    if selected_idx >= len(sorted_worlds) or selected_idx >= (len(worlds) if worlds else 0):
+                        selected_idx = max(0, len(worlds) - 1 if worlds else 0)
+                    # Clear detail cache for deleted path
+                    detail_cache.pop(path, None)
+                    status_msg = f"\u2705 Deleted wyrd #{seed} ({len(deleted)} file{'s' if len(deleted) != 1 else ''})"
+                else:
+                    status_msg = "\u274c Deletion cancelled"
+                status_time = time_module.monotonic()
+
         elif key == ord("c"):
             world, err = _resolve_world(world_in_session, sorted_worlds, selected_idx)
             if err:
@@ -1677,14 +1725,20 @@ def _gateway_loop(stdscr):
                 continue
             world_in_session = world
             curses.endwin()
-            from .embody_tui import embody_tui_play
-            embody_tui_play(world, years=100, chaos=0.3, load_save=True)
+            try:
+                from .embody_tui import embody_tui_play
+                embody_tui_play(world, years=100, chaos=0.3, load_save=True)
+            except Exception as e:
+                print(f"\n⚠ Embodied play error: {e}")
             print("\n── Press Enter to return to wyrd gateway...")
             input()
             stdscr = curses.initscr()
             curses.start_color()
             curses.use_default_colors()
-            _init_colors()
+            try:
+                _init_colors()
+            except curses.error:
+                pass
             stdscr.keypad(True)
             curses.curs_set(0)
 

@@ -1306,8 +1306,10 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
             cursor_idx = 0
 
         # ── Layout ──────────────────────────────────────────────────
-        events_h = max(3, h - 7 - 2)  # header(1)+stats(1)+map+events+footer(1)
-        map_h = max(1, h - 7 - events_h - 1)
+        # Available height: header(1) + stats(1) + map + events + footer(1) = h
+        avail = h - 3  # after subtracting header, stats, footer
+        events_h = min(max(3, avail // 3), avail - 4)  # at most 1/3 of avail, or leave 4 for map
+        map_h = max(3, avail - events_h)  # map takes remaining space
 
         # ── Draw ─────────────────────────────────────────────────────
         stdscr.erase()  # erase() marks dirty without flash-to-blank
@@ -1444,6 +1446,8 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
 
         if not paused:
             time.sleep(0.008)
+        else:
+            time.sleep(0.033)  # ~30fps when paused, prevents busy-spin
 
 
 def view_simulation(world: World, num_years: int | None = None,

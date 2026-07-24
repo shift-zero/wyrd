@@ -102,6 +102,14 @@ Tests: 799 passed, no regressions.
 
 ### What to tackle next
 
+**🐛 `p` (play mode) crashes when launching** — gateway.py:1672 calls `curses.endwin()` then imports `embody_tui_play` and starts a new curses session. Likely culprits: (1) the `endwin()`/`initscr()` terminal state dance, or (2) `_init_colors()` in `_tui_main` failing after a prior curses session. No traceback provided — needs reproduction.
+
+**🆕 Feature request: delete worlds from gateway** — no way to delete a generated world file from within the TUI. User must `rm` the JSON file manually. Add a `d` (delete) key in the world list that prompts for confirmation before deleting the world file and its associated saves.
+
+**🐛 View mode map renders as only 1 row** — viewer.py:1309-1310 layout math is broken. `events_h = max(3, h - 7 - 2)` eats the whole terminal height, leaving `map_h = max(1, h - 7 - events_h - 1)` always = 1 regardless of terminal size. Fix: cap events_h to reserve room for the map, e.g. `events_h = min(max(3, h // 3), h - 10)`.
+
+**🐛 View mode burns 100% CPU when paused** — viewer.py:1445-1446 puts `time.sleep(0.008)` only in the `not paused` branch. When paused (the entry state), the main loop spins with zero throttle, rendering the same static frame at full CPU speed. Fix: add `time.sleep(0.03)` (~30fps) in the paused branch too, or replace `nodelay(True)` with `stdscr.timeout(16)`. MacBook fans kicked on immediately.
+
 **Ambient mode is now natively in the TUI curses loop** — no terminal takeovers needed. ✅
 
 **Next directions (pick any):**
