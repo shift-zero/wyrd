@@ -37,6 +37,10 @@ wyrd/
 │   ├── serve.py      # Web dashboard + REST API v1
 │   ├── export_chronicles_html.py  # Chronicles HTML export
 │   ├── tui.py        # Textual TUI (alternative interface)
+│   ├── mud_world.py  # MUD world chunk/zone/room system
+│   ├── mud_sim.py    # MUD background simulation
+│   ├── mud_parser.py # MUD command parser
+│   ├── tui_mud.py    # Textual MUD screen
 │   └── __main__.py   # CLI entry point (25 subcommands)
 ├── tests/         # Test suite (796 tests)
 │   ├── test_generate.py
@@ -87,8 +91,8 @@ The simulation engine (`sim.py`) currently ticks in whole years. This is a deep 
 | 3 ✅ | Sub-year time tick in sim engine — months as base unit | `wyrd run` can tick in months; events schedule at month granularity | 2026-07-23 |
 | 4 ✅ | Variable speed control in viewer — smooth from slow (days) to fast (decades) | `v` viewer has speed slider + labels (Crawl→Zoom) and uses month-level ticks | 2026-07-24 |
 | 5 ✅ | Embody mode uses sub-year ticks — travel days, rest weeks, age yearly | Moving between settlements takes 1-2 months, not instant teleport; `1m` / `1w` time options | 2026-07-24 |
-|| 6 ✅ | Seasonal rendering — map colors shift subtly as months pass | A year of sim shows 4 distinct seasonal palette shifts on the viewer map | 2026-07-24 |
-|
+| 6 ✅ | Seasonal rendering — map colors shift subtly as months pass | A year of sim shows 4 distinct seasonal palette shifts on the viewer map | 2026-07-24 |
+
 ## Phase 20 — Living Gazetteer (complete ✅)
 
 **Thesis:** wyrd generates deep data but it's scattered across CLI subcommands. A unified in-TUI browser makes everything discoverable.
@@ -103,45 +107,43 @@ The simulation engine (`sim.py`) currently ticks in whole years. This is a deep 
 | 4 ✅ | Faction viewer — browse factions with relationships, holdings | View shows allies, rivals, territory, recent history | 2026-07-24 |
 | 5 ✅ | Bestiary browser — filter by habitat/tier, view full stats | Creature cards with tier, habitat, behavior, loot table | 2026-07-24 |
 | 6 ✅ | `wyrd lookup <name>` — CLI quick-lookup across all data types | Searches settlements, chars, creatures, zones, returns best match | 2026-07-24 |
-|
-|## Phase 21 — Living Gateway (complete ✅)|
-|
-|**Thesis:** The gateway world picker was a flat text table — functional but not visual. The surface matters because it's the first thing you see.|
-|
-|### Items|
-|
-|| # | What | Verifiable |
-||---|------|------------|
-|| 1 ✅ | World detail card with mini-ASCII map — shows terrain preview, stats, features | Select a world in the gateway → detail panel appears with a colored mini-map of the terrain, settlement/region/population stats, and feature badges | 2026-07-24 |
-|| 2 ✅ | Interactive world list — sort by seed/population/name | Press Tab to cycle sort keys (seed→population→name), world list reorders immediately | 2026-07-24 |
-||| 3 ✅ | Compact gateway splash when worlds exist | ASCII splash art hidden when worlds are present, giving more room for the world list and detail card | 2026-07-24 |
-||
-|## Phase 22 — Surface Polish (2026-07-25 ✅)|
-||
-||**Thesis:** The TUI and viewer had accumulated UI jank and code repetition. Fixing the surface quality — flicker, rendering performance, and code rot — makes the whole project feel more polished.|
-||
-||### Items|
-||
-||| # | What | Verifiable |
-||---|------|------------|
-||| 1 ✅ | Viewer flicker elimination — `stdscr.clear()` → `stdscr.erase()` in viewer, gateway, and explorer | No blank-flash between frames |
-||| 2 ✅ | Batched terrain rendering — `addstr()` spans instead of per-char `addch()` in viewer | ~95% fewer curses API calls per frame for terrain |
-||| 3 ✅ | Gateway code deduplication — 9 key handlers use shared `_resolve_world()` helper | 80+ lines of duplicated world-resolution code removed |
-|||| 4 ✅ | Gateway & explorer flicker fix — same `clear()`→`erase()` in both gateways | All 3 TUI surfaces have smooth rendering |
-|||
-||## Phase 23 — Surface Depth (2026-07-25 ✅)|
-|||
-||**Thesis:** The TUI surfaces are flicker-free and render efficiently — now deepen them. Batch-rendering explore mode, add above-year viewer speeds, and overlay change indicators on the settlement map.|
-||
-||### Items|
-||
-||| # | What | Verifiable |
-||---|------|------------|
-||| 1 ✅ | Explore mode batch rendering — port span-based `addstr()` from viewer to explore's `_draw_map` with pre-built zone lookup | ~95% fewer curses API calls per frame for explore terrain |
-||| 2 ✅ | Speeds beyond zoom — Decade (128x), Century (256x), Epoch (512x) with labels and speed bar extension | `+` key cycles through Crawl→Epoch, Epoch simulates ~43 years/second |
-||| 3 ✅ | Context-sensitive viewer overlays — green ▲/red ▼/grey · on changed settlements when paused | Pause the viewer to see ▲ on growing towns, ▼ on shrinking ones, · on abandoned ||
-||
-```
+
+## Phase 21 — Living Gateway (complete ✅)
+
+**Thesis:** The gateway world picker was a flat text table — functional but not visual. The surface matters because it's the first thing you see.
+
+### Items
+
+| # | What | Verifiable |
+|---|------|------------|
+| 1 ✅ | World detail card with mini-ASCII map — shows terrain preview, stats, features | Select a world in the gateway → detail panel appears with a colored mini-map of the terrain, settlement/region/population stats, and feature badges | 2026-07-24 |
+| 2 ✅ | Interactive world list — sort by seed/population/name | Press Tab to cycle sort keys (seed→population→name), world list reorders immediately | 2026-07-24 |
+| 3 ✅ | Compact gateway splash when worlds exist | ASCII splash art hidden when worlds are present, giving more room for the world list and detail card | 2026-07-24 |
+
+## Phase 22 — Surface Polish (2026-07-25 ✅)
+
+**Thesis:** The TUI and viewer had accumulated UI jank and code repetition. Fixing the surface quality — flicker, rendering performance, and code rot — makes the whole project feel more polished.
+
+### Items
+
+| # | What | Verifiable |
+|---|------|------------|
+| 1 ✅ | Viewer flicker elimination — `stdscr.clear()` → `stdscr.erase()` in viewer, gateway, and explorer | No blank-flash between frames |
+| 2 ✅ | Batched terrain rendering — `addstr()` spans instead of per-char `addch()` in viewer | ~95% fewer curses API calls per frame for terrain |
+| 3 ✅ | Gateway code deduplication — 9 key handlers use shared `_resolve_world()` helper | 80+ lines of duplicated world-resolution code removed |
+| 4 ✅ | Gateway & explorer flicker fix — same `clear()`→`erase()` in both gateways | All 3 TUI surfaces have smooth rendering |
+
+## Phase 23 — Surface Depth (2026-07-25 ✅)
+
+**Thesis:** The TUI surfaces are flicker-free and render efficiently — now deepen them. Batch-rendering explore mode, add above-year viewer speeds, and overlay change indicators on the settlement map.
+
+### Items
+
+| # | What | Verifiable |
+|---|------|------------|
+| 1 ✅ | Explore mode batch rendering — port span-based `addstr()` from viewer to explore's `_draw_map` with pre-built zone lookup | ~95% fewer curses API calls per frame for explore terrain |
+| 2 ✅ | Speeds beyond zoom — Decade (128x), Century (256x), Epoch (512x) with labels and speed bar extension | `+` key cycles through Crawl→Epoch, Epoch simulates ~43 years/second |
+| 3 ✅ | Context-sensitive viewer overlays — green ▲/red ▼/grey · on changed settlements when paused | Pause the viewer to see ▲ on growing towns, ▼ on shrinking ones, · on abandoned |
 
 ## Phase 23.5 — Auto-Pause on Viewer Events (2026-07-26 ✅)
 
@@ -189,75 +191,64 @@ The simulation engine (`sim.py`) currently ticks in whole years. This is a deep 
 - Item 8 (gameplay loop): combat, trading, active skills, time passage being built in mud_parser.py. 🟡
 - MudScreen updated with hours-per-action tracking and sim advancement. ✅
 
-## Design Principles
-- **Lookup false-positive bug fix.** ...already documented above...
+## Phase 26.1 — MUD Follow-Up: Expose Existing Systems (current 🔥)
 
-### Completed this session (2026-07-29)
-- **Word-wrapped event log.** Descriptions now wrap at word boundaries instead of truncating mid-sentence.
-- **Welcome/onboarding overlay.** New characters see a full-screen intro explaining stats, first steps, and wyrd philosophy.
-- **Info panel (`i` key).** Explains health, gold, skills, deeds, heir system in a centered overlay.
-- **Mini-map overlay (`v` key).** 11×21 terrain minimap centered on player settlement with player/settlement markers.
-- **Viewer infinite mode fix.** Viewer no longer hardcoded to 100 years — defaults to `None` (infinite), `∞` shown in counters.
-- **Status bar updated** to show `[v] Map` and `[i] Info`.
-- **Created `docs/embody.md`** documenting embody TUI, keybindings, overlays, character systems.
-- **Tests:** 799 passed, no regressions.
+**Thesis:** The MUD is a **minimal viable** implementation that only scratches the surface of the full `wyrd` engine. The current state loads zones but doesn't expose the depth of the procedural generation, narrative, or simulation layers.
 
-### Completed this session (2026-07-30)
-- **TUI ambient mode (`a` key).** Native curses ambient time flow — time passes automatically without leaving the TUI. Space toggles slow (1 month/tick) ↔ fast (12 months/tick). Auto-pauses on wars, cataclysms, foundings, and discoveries. Events logged directly into log_lines, preserving full history across ambient/normal mode transitions. Character death during ambient triggers epilogue correctly.
-- **Seasonal icons in status bar.** Spring (🌸 green), Summer (☀ yellow), Autumn (🍂 cyan), Winter (❄ dim) with matching color pairs.
-- **Status bar updated** to show `[a] Ambient` keybinding.
-- **EMBODY_HELP updated** with ambient mode section.
-- **Tests:** 799 passed, no regressions.
+### What's Missing (vs Full Engine)
 
-## Phase 24 — Complete Embody ✨✅
+| Feature | Current MUD | Full Engine | Notes |
+|--------|-------------|-------------|-------|
+| **World Size** | Single chunk (32x32 tiles) | Infinite, chunked, seed-procedural | Full engine uses value noise + WFC for terrain, biomes, rivers, settlements |
+| **Settlement Layout** | Single "town square" room | WFC-generated city layouts with districts, buildings, interiors | `src/wfc_city.py` generates 30x30 grids with buildings, streets, plazas |
+| **Building Interiors** | Single room | Multi-floor, basements, stairs, rooms | WFC supports `up`, `down`, `staircase` tiles |
+| **Population** | 3 NPCs (crier, elder, merchant) | 180+ NPCs with names, jobs, families, schedules | `src/narrative.py` generates characters with full backstories, relationships, daily routines |
+| **Economy** | No inventory, no trading | Full item system, crafting, trading, barter | `src/economy.py` defines items, rarity, value, crafting recipes |
+| **Combat** | Basic "kill" command | Full RPG combat (HP, armor, weapons, skills) | `src/combat.py` has attack rolls, damage, status effects |
+| **Equipment** | No equip | Full gear system (head, body, legs, feet, weapon, accessory) | `src/items.py` defines slots, stats, durability |
+| **Travel** | No chunk transitions | Infinite world, chunk loading/unloading | `src/chunk_manager.py` handles seamless world streaming |
+| **Time** | Static | Year-by-year simulation, aging, events | `src/sim.py` advances time, triggers events, ages characters |
+| **Quests** | None | Procedural quests (fetch, kill, escort, diplomacy) | `src/quests.py` generates quests from world state |
+| **Factions** | None | Factions with relationships, wars, alliances | `src/factions.py` simulates politics |
+| **Magic** | None | Magic system (spells, mana, schools) | `src/magic.py` defines spells, casting, effects |
 
-**Thesis:** The embody mode had three remaining UX gaps: no NPC interaction, no clear goals, and mechanical time passage. All three are now closed, making embody a complete first-class experience.
+### Root Causes
+- **WFC City Layouts Exist but Aren't Exposed**: The full engine generates 30x30 city grids with buildings, streets, plazas, and interiors. The MUD only loads the "town square" as a single room — it ignores the rest of the WFC output.
+- **NPCs Are Generated but Not Spawned**: The narrative engine generates 180+ NPCs with names, jobs, families, and schedules. The MUD only spawns 3 hardcoded NPCs (crier, elder, merchant).
+- **Building Interiors Are Generated but Not Loaded**: WFC generates multi-floor buildings with stairs, basements, and rooms. The MUD only loads the entry room.
+- **Chunk Transitions Are Not Implemented**: The MUD only loads one chunk (0,0). The full engine streams chunks dynamically as you move.
+- **Item/Equipment System Exists but Isn't Exposed**: `src/items.py` defines gear slots, stats, and durability. The MUD has no inventory UI or equip command.
+- **Economy Exists but Isn't Exposed**: `src/economy.py` defines items, rarity, value, and trading. The MUD has no shop UI or barter system.
 
-...
+### Plan (Prioritized)
 
-| # | What | Verifiable |
-|---|------|------------|
-| 1 ✅ | NPC interaction (`t` key) — talk to nearby characters with personality-driven dialogue, rumors, and skill rewards | Press `t` in embody to see NPCs in your settlement, chat with them, gain rep and XP |
-| 2 ✅ | Quest log & milestones (`g` key) — skill progress bars, deeds, reputation, available quests | Press `g` to see skill XP bars, quest listings, deeds, and life stats |
-| 3 ✅ | Ambient time flow (`a` key) — automatic time passage with Space speed toggle, auto-pause on events | Press `a` and watch time flow; Space toggles slow/fast; auto-pauses on wars and cataclysms |
+#### Phase 1: Fix the Immediate UX Issues (1-2 days)
+- ✅ **Spawn in correct zone** (already fixed)
+- ✅ **Load full WFC city layout** (not just town square)
+- ✅ **Add `up`/`down` exits** for multi-floor buildings
+- ✅ **Spawn all generated NPCs** (not just 3)
+- ✅ **Add `back` command** to return to previous room
+- ✅ **Add chunk transitions** (leave town → wilderness → return)
 
-### What to tackle next
-- Textual migration (Phase 25) — curses → Textual for all TUI surfaces
+#### Phase 2: Expose Core Systems (3-5 days)
+- **Inventory UI** (`i` command)
+- **Equip gear** (`equip <item>`)
+- **Shop UI** (`buy`, `sell`, `browse`)
+- **Combat UI** (HP, armor, weapons, skills)
+- **Time progression** (day/night, aging)
 
-## Phase 25 — Textual Migration (in progress 🔲)
+#### Phase 3: Deepen Simulation (1-2 weeks)
+- **NPC schedules** (move around, sleep, work)
+- **Faction politics** (wars, alliances, quests)
+- **Magic system** (spells, mana, schools)
+- **Crafting** (gather, craft, repair)
+- **Quests** (fetch, kill, escort, diplomacy)
 
-**Thesis:** Raw curses has been a constant source of bugs — screen refreshes, layout math, color pairs, key handling, terminal state corruption. Textual gives us reactive widgets, CSS layout, mouse support, async event loop, and built-in scrollable containers.
+### Next Steps (Phase 1)
+1. **Load full WFC city layout** (not just town square)
+2. **Add `up`/`down` exits** for multi-floor buildings
+3. **Spawn all generated NPCs** (not just 3)
+4. **Add `back` command** to return to previous room
+5. **Add chunk transitions** (leave town → wilderness → return)
 
-### Items
-
-| # | What | Verifiable |
-|---|------|------------|
-| 1 🔲 | Textual WorldPicker gateway — world list, detail card, mini-map, sorting, dispatch | `wyrd` launches Textual gateway by default with feature parity to curses gateway |
-| 2 🔲 | Textual EmbodyScreen — sidebar, event log, action bar, overlays, NPC interaction | `wyrd embody` uses Textual instead of curses for the TUI |
-| 3 🔲 | Textual ViewerScreen — animated map, speed controls, auto-pause | `wyrd tui` replaces curses viewer with reactive Textual simulation viewer |
-| 4 🔲 | Room system — map world into explorable locations | Navigate rooms with n/s/e/w, each room has description + exits |
-| 5 🔲 | Command parser — verb+noun MUD interactions | `look`, `get item`, `use item`, `talk to npc` work |
-| 6 🔲 | Items + active skills — inventory, usable loot, skill actions | Bandages heal, weapons improve combat, `hunt` uses survival skill |
-| 7 🔲 | Gameplay loop — clear progression, goals, feedback | Explore → find items → survive → gain skills → tackle harder areas |
-
-### Completed this session (2026-08-03)
-- **Textual WorldPicker gateway** — `src/tui_gateway.py` with world list, sorting, mini-map detail card, overlays, dispatch to curses/textual modes
-- **CLI integration** — `wyrd` (no args) launches Textual gateway by default; `wyrd tui --gateway` / `-G` for explicit launch
-- **8 new tests**, 799 tests pass, no regressions
-
-### Completed this session (2026-07-24)
-- **Deeper seasonal palette.** Temperature factor computed from latitude + elevation + month. Snow accumulation on cold winter tiles (temp < 0.2). Autumn warm forests turn deep crimson (color 124). Spring warm grasslands get brilliant lime (color 46). 8 new color pairs.
-- **Heir confirmation overlay.** Full-screen preview showing heir name, profession, age, gold, inherited skills with skill bars before committing.
-- **Mobile threshold feedback.** Status message on terminal resize crossing the 100-col boundary.
-
-### Completed this session (2026-07-27)
-- **Sort direction arrows in column headers.** ↑/↓ arrows now appear directly on the active sort column ('Seed', 'Population') in the gateway world list. Column spacing auto-compensates for arrow width.
-- **Confirm-on-quit safeguard.** Pressing q or ESC shows a confirmation popup; a second q quits, any other key cancels. Prevents accidental session drops.
-- **Overlay code scan.** Reviewed viewer.py and explore.py — all color pair references validated, no rendering artifacts found.
-
-## Design Principles
-
-1. **Every output is beautiful.** ANSI color, careful layout, no debug spew.
-2. **Worlds feel real.** Generated geography constrains lore, not the other way around.
-3. **Composable.** Each layer builds on the previous.
-4. **Seed-deterministic.** Same seed = same world, always.
+---

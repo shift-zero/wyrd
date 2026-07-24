@@ -260,103 +260,6 @@ class MudWorld:
             "chunk_y": cy,
         }
 
-    def _city_to_zones(self, settlement: dict, cx: int, cy: int, name_override: str | None = None) -> dict[str, Zone]:
-        """Convert a WFC city layout into MUD zones and rooms."""
-        zones = {}
-        zone_name = name_override or settlement["name"]
-        zone = Zone(
-            name=zone_name,
-            zone_type="settlement",
-            entry_room="town_square",
-            rooms={},
-        )
-
-        rng = random.Random(self.seed + cx * 3001 + cy * 5003)
-        name = settlement["name"]
-        economy = settlement["economy"]
-        pop = settlement["population"]
-
-        # Town square (always)
-        zone.rooms["town_square"] = Room(
-            room_id="town_square",
-            name=f"{name} Town Square",
-            description=(f"The heart of {name}, a bustling square where traders hawk their wares "
-                         f"and townsfolk gather. The cobblestones are worn smooth by countless feet. "
-                         f"{name} has a {economy}-based economy and a population of about {pop:,}."),
-            exits={"n": "market_row", "s": "tavern", "e": "leader_hall", "w": "wilderness"},
-            contents=[],
-            npcs=[
-                {"name": "Town Crier", "title": "gossip", "dialog": f"Hear ye! News from {name}!"},
-            ],
-            tags=["outdoors", "town_square"],
-        )
-
-        # Market row
-        zone.rooms["market_row"] = Room(
-            room_id="market_row",
-            name=f"{name} Market Row",
-            description=f"A lively street lined with stalls and shops. Merchants call out their wares. "
-                        f"The air smells of fresh bread, spices, and smoke.",
-            exits={"s": "town_square"},
-            contents=[],
-            npcs=[
-                {"name": "Merchant", "title": "trader", "dialog": "Fine wares! Best prices in town!"},
-            ],
-            tags=["outdoors", "market", "shop"],
-        )
-
-        # Tavern
-        tavern_name = rng.choice(["The Sleeping Fox", "The Rusty Anchor", "The Golden Tankard",
-                                    "The Wanderer's Rest", "The Velvet Rose", "The Tipsy Dragon"])
-        zone.rooms["tavern"] = Room(
-            room_id="tavern",
-            name=tavern_name,
-            description=f"A warm, smoky tavern filled with the murmur of conversation and the clink of mugs. "
-                        f"The hearth crackles, casting dancing shadows across timbered walls.",
-            exits={"n": "town_square"},
-            contents=[],
-            npcs=[
-                {"name": "Barkeep", "title": "innkeeper", "dialog": "What'll it be, traveler?"},
-            ],
-            tags=["indoors", "tavern"],
-        )
-
-        # Leader hall
-        zone.rooms["leader_hall"] = Room(
-            room_id="leader_hall",
-            name=f"{name} Council Hall",
-            description=f"A sturdy stone building that serves as the seat of local governance. "
-                        f"Decrees and maps cover the walls. The air smells of old parchment.",
-            exits={"w": "town_square"},
-            contents=[],
-            npcs=[
-                {"name": "Elder", "title": "settlement leader", "dialog": f"Welcome to {name}. We're a peaceful folk."},
-            ],
-            tags=["indoors", "civic"],
-        )
-
-        # Add buildings from WFC city layout
-        buildings = settlement.get("buildings", [])
-        for i, (bx, by, bw, bh) in enumerate(buildings):
-            if i >= 6:  # Limit to 6 extra buildings
-                break
-            bid = f"building_{i}"
-            room_name = rng.choice(["Armory", "Smithy", "Granary", "Temple", "Library", "Guild Hall",
-                                     "Warehouse", "Barracks", "Apothecary", "Stable"])
-            zone.rooms[bid] = Room(
-                room_id=bid,
-                name=room_name,
-                description=f"A {room_name.lower()} in {name}. The building looks well-used and functional.",
-                exits={"s": "town_square"},
-                contents=[],
-                npcs=[],
-                tags=["indoors", room_name.lower()],
-            )
-
-        zone.entry_room = "town_square"
-        zones[settlement["name"]] = zone
-        return zones
-
     def _generate_chunk_dungeon(self, cx: int, cy: int) -> dict | None:
         """Generate a dungeon in a chunk using WFC."""
         from .wfc import generate_dungeon_layout
@@ -474,3 +377,433 @@ class MudWorld:
                     names.append(s.name)
         names.extend([n for n in self.settlements.keys() if n not in names])
         return names
+        # Parse WFC grid and buildings
+        grid = settlement["grid"]
+        buildings = settlement.get("buildings", [])
+        
+        # Create rooms for every WFC tile
+        rooms = {}
+        rng = random.Random(self.seed + cx * 3001 + cy * 5003)
+        
+        # Group buildings by type for room generation
+        building_map = {}
+        for b in buildings:
+            bx, by, bw, bh = b
+            # Infer building type from WFC code
+            # (This is a simplification — real WFC should include type)
+            btype = "house"  # Default
+            if bx == 15 and by == 1: btype = "gate"
+            elif bx == 8 and by == 13: btype = "temple"
+            elif bx == 21 and by == 13: btype = "guildhall"
+            elif bx < 10: btype = "shop"
+            elif bx > 20: btype = "farm"
+            building_map[(bx, by)] = {"type": btype, "floors": rng.randint(1, 3)}
+        for y in range(len(grid)):
+            for x in range(len(grid[y])):
+                # Map WFC numeric codes to tile types
+                tile_map = {
+                    0: "empty",
+                    1: "street",
+                    2: "plaza",
+                    3: "wall",
+                    4: "house",
+                    5: "shop",
+                    6: "tavern",
+                    7: "inn",
+                    8: "temple",
+                    9: "guildhall",
+                    10: "manor",
+                    11: "farm",
+                    12: "docks",
+                    13: "gate",
+                }
+                tile = grid[y][x]
+                tile_type = tile_map.get(tile, "alley")
+                room_id = f"r_{x}_{y}"
+                room_name = f"{x},{y}"
+                
+                # Determine room type and exits
+                exits = {}
+                if x > 0: exits["west"] = f"r_{x-1}_{y}"
+                if x < len(grid[y]) - 1: exits["east"] = f"r_{x+1}_{y}"
+                if y > 0: exits["north"] = f"r_{x}_{y-1}"
+                if y < len(grid) - 1: exits["south"] = f"r_{x}_{y+1}"
+                
+                # Check for building
+                building = building_map.get((x, y))
+                contents = []
+                tags = []
+                if building:
+                    btype = building["type"]
+                    if btype == "house":
+                        room_type = "house"
+                        room_name = f"House {x},{y}"
+                        tags = ["indoors", "house"]
+                        contents = [{"name": "wooden table", "type": "furniture"}, {"name": "straw bed", "type": "furniture"}]
+                    elif btype == "shop":
+                        room_type = "shop"
+                        room_name = f"{rng.choice(['General Store', 'Blacksmith', 'Apothecary', 'Tavern'])} {x},{y}"
+                        tags = ["indoors", "shop"]
+                        contents = [{"name": "counter", "type": "furniture"}, {"name": "shelves of wares", "type": "item"}]
+                    elif btype == "tavern":
+                        room_type = "tavern"
+                        room_name = f"{rng.choice(['The Prancing Pony', 'The Rusty Nail', 'The Tipsy Griffin'])} {x},{y}"
+                        tags = ["indoors", "tavern"]
+                        contents = [{"name": "bar", "type": "furniture"}, {"name": "tables and chairs", "type": "furniture"}]
+                    elif btype == "inn":
+                        room_type = "inn"
+                        room_name = f"{rng.choice(['The Sleeping Dragon', 'The Cozy Hearth'])} {x},{y}"
+                        tags = ["indoors", "inn"]
+                        contents = [{"name": "reception desk", "type": "furniture"}, {"name": "stairs to rooms", "type": "furniture"}]
+                    elif btype == "temple":
+                        room_type = "temple"
+                        room_name = f"Temple of {rng.choice(['Light', 'Darkness', 'Nature', 'Storm'])} {x},{y}"
+                        tags = ["indoors", "temple"]
+                        contents = [{"name": "altar", "type": "furniture"}, {"name": "candles", "type": "item"}]
+                    elif btype == "guildhall":
+                        room_type = "guildhall"
+                        room_name = f"{rng.choice(['Mages Guild', 'Thieves Guild', 'Fighters Guild'])} {x},{y}"
+                        tags = ["indoors", "guildhall"]
+                        contents = [{"name": "training dummy", "type": "item"}, {"name": "notice board", "type": "furniture"}]
+                    elif btype == "manor":
+                        room_type = "manor"
+                        room_name = f"Manor of {rng.choice(['Lord Blackthorn', 'Lady Silverstream'])} {x},{y}"
+                        tags = ["indoors", "manor"]
+                        contents = [{"name": "grand table", "type": "furniture"}, {"name": "painting", "type": "decoration"}]
+                    elif btype == "farm":
+                        room_type = "farm"
+                        room_name = f"Farmstead {x},{y}"
+                        tags = ["outdoors", "farm"]
+                        contents = [{"name": "plow", "type": "tool"}, {"name": "hay bale", "type": "item"}]
+                    elif btype == "docks":
+                        room_type = "docks"
+                        room_name = f"Docks {x},{y}"
+                        tags = ["outdoors", "docks"]
+                        contents = [{"name": "fishing boat", "type": "vehicle"}, {"name": "net", "type": "tool"}]
+                    elif btype == "gate":
+                        room_type = "gate"
+                        room_name = f"{zone_name} Gate"
+                        tags = ["outdoors", "gate"]
+                        # Add exit to wilderness
+                        exits["out"] = "wilderness"
+                    else:
+                        room_type = "building"
+                        room_name = f"Building {x},{y}"
+                        tags = ["indoors", "building"]
+                        contents = [{"name": "table", "type": "furniture"}]
+                else:
+                    # Street or plaza
+                    if tile_type == "street":
+                        room_type = "street"
+                        room_name = f"Street {x},{y}"
+                        tags = ["outdoors", "street"]
+                        contents = [{"name": "cobblestones", "type": "ground"}]
+                    elif tile_type == "plaza":
+                        room_type = "plaza"
+                        room_name = f"{zone_name} Plaza"
+                        tags = ["outdoors", "plaza"]
+                        contents = [{"name": "statue", "type": "decoration"}]
+                    elif tile_type == "wall":
+                        room_type = "wall"
+                        room_name = f"{zone_name} Wall"
+                        tags = ["outdoors", "wall"]
+                        contents = [{"name": "stone wall", "type": "structure"}]
+                    else:
+                        room_type = "alley"
+                        room_name = f"Alley {x},{y}"
+                        tags = ["outdoors", "alley"]
+                        contents = [{"name": "mud", "type": "ground"}]
+                
+                # Add stairs for multi-floor buildings
+                if building and building.get("floors", 1) > 1:
+                    if "up" not in exits:
+                        exits["up"] = f"r_{x}_{y}_up"
+                
+                # Create room
+                rooms[room_id] = Room(
+                    room_id=room_id,
+                    name=room_name,
+                    description=self._generate_room_description(room_type, zone_name, settlement["economy"]),
+                    exits=exits,
+                    contents=contents,
+                    npcs=[],
+                    tags=tags,
+                )
+        
+        # Set entry room (town square or main plaza)
+        entry_room = "r_15_15"  # Center of 30x30 grid
+        if entry_room not in rooms:
+            # Find first plaza or street
+            for room_id, room in rooms.items():
+                if "plaza" in room.tags or "street" in room.tags:
+                    entry_room = room_id
+                    break
+        
+        # Create zone
+        zone = Zone(
+            name=zone_name,
+            zone_type="settlement",
+            entry_room=entry_room,
+            rooms=rooms,
+        )
+        zones[zone_name] = zone
+        
+        return zones
+
+    def _generate_room_description(self, room_type: str, zone_name: str, economy: str) -> str:
+        """Generate a description for a room based on its type and zone."""
+        rng = random.Random(hash(room_type) + hash(zone_name) + hash(economy))
+        
+        if room_type == "plaza":
+            return (
+                f"The heart of {zone_name}, a bustling plaza where traders hawk their wares "
+                f"and townsfolk gather. The cobblestones are worn smooth by countless feet. "
+                f"{zone_name} has a {economy}-based economy. The air smells of fresh bread, spices, and smoke."
+            )
+        elif room_type == "street":
+            return (
+                f"A lively street in {zone_name}. Merchants call out their wares. "
+                f"The air smells of fresh bread, spices, and smoke. "
+                f"The town has a {economy}-based economy."
+            )
+        elif room_type == "house":
+            return (
+                f"A modest house in {zone_name}. The walls are made of timber and plaster. "
+                f"A small hearth provides warmth. The town thrives on {economy}."
+            )
+        elif room_type == "shop":
+            return (
+                f"A shop in {zone_name}. Shelves line the walls, filled with goods. "
+                f"The shopkeeper waits behind the counter. The town's economy is based on {economy}."
+            )
+        elif room_type == "tavern":
+            return (
+                f"A warm, smoky tavern in {zone_name}. Patrons drink, laugh, and share stories. "
+                f"The barkeep polishes a mug behind the counter. The town thrives on {economy}."
+            )
+        elif room_type == "inn":
+            return (
+                f"A cozy inn in {zone_name}. Travelers rest here for the night. "
+                f"The reception desk is manned by a friendly innkeeper. The town's economy is based on {economy}."
+            )
+        elif room_type == "temple":
+            return (
+                f"A sacred temple in {zone_name}. The air is thick with incense. "
+                f"An altar stands at the center. The town thrives on {economy}."
+            )
+        elif room_type == "guildhall":
+            return (
+                f"A guildhall in {zone_name}. Members gather here to train and socialize. "
+                f"The walls are lined with trophies and notices. The town's economy is based on {economy}."
+            )
+        elif room_type == "manor":
+            return (
+                f"A grand manor in {zone_name}. The walls are adorned with tapestries and paintings. "
+                f"A grand table dominates the hall. The town thrives on {economy}."
+            )
+        elif room_type == "farm":
+            return (
+                f"A farmstead in {zone_name}. Fields stretch out in all directions. "
+                f"Tools and produce are scattered about. The town's economy is based on {economy}."
+            )
+        elif room_type == "docks":
+            return (
+                f"The docks of {zone_name}. Boats bob in the water, and fishermen mend their nets. "
+                f"The air smells of salt and fish. The town thrives on {economy}."
+            )
+        elif room_type == "gate":
+            return (
+                f"The {zone_name} gate. Guards stand watch, checking travelers. "
+                f"Beyond lies the wilderness. The town's economy is based on {economy}."
+            )
+        elif room_type == "wall":
+            return (
+                f"The {zone_name} wall. Stone ramparts rise high, protecting the town. "
+                f"The town thrives on {economy}."
+            )
+        elif room_type == "alley":
+            return (
+                f"A narrow alley in {zone_name}. The walls are close, and the ground is muddy. "
+                f"The town's economy is based on {economy}."
+            )
+        else:
+            return (
+                f"A nondescript location in {zone_name}. The town thrives on {economy}."
+            )
+    def _city_to_zones(self, settlement: dict, cx: int, cy: int, name_override: str | None = None) -> dict[str, Zone]:
+        """Convert a WFC city layout into MUD zones and rooms."""
+        zones = {}
+        zone_name = name_override or settlement["name"]
+        
+        # Parse WFC grid and buildings
+        grid = settlement["grid"]
+        buildings = settlement.get("buildings", [])
+        
+        # Create rooms for every WFC tile
+        rooms = {}
+        rng = random.Random(self.seed + cx * 3001 + cy * 5003)
+        
+        # Group buildings by type for room generation
+        building_map = {}
+        for b in buildings:
+            bx, by, bw, bh = b
+            # Infer building type from WFC code
+            # (This is a simplification — real WFC should include type)
+            btype = "house"  # Default
+            if bx == 15 and by == 1: btype = "gate"
+            elif bx == 8 and by == 13: btype = "temple"
+            elif bx == 21 and by == 13: btype = "guildhall"
+            elif bx < 10: btype = "shop"
+            elif bx > 20: btype = "farm"
+            building_map[(bx, by)] = {"type": btype, "floors": rng.randint(1, 3)}
+        for y in range(len(grid)):
+            for x in range(len(grid[y])):
+                # Map WFC numeric codes to tile types
+                tile_map = {
+                    0: "empty",
+                    1: "street",
+                    2: "plaza",
+                    3: "wall",
+                    4: "house",
+                    5: "shop",
+                    6: "tavern",
+                    7: "inn",
+                    8: "temple",
+                    9: "guildhall",
+                    10: "manor",
+                    11: "farm",
+                    12: "docks",
+                    13: "gate",
+                }
+                tile = grid[y][x]
+                tile_type = tile_map.get(tile, "alley")
+                room_id = f"r_{x}_{y}"
+                room_name = f"{x},{y}"
+                
+                # Determine room type and exits
+                exits = {}
+                if x > 0: exits["west"] = f"r_{x-1}_{y}"
+                if x < len(grid[y]) - 1: exits["east"] = f"r_{x+1}_{y}"
+                if y > 0: exits["north"] = f"r_{x}_{y-1}"
+                if y < len(grid) - 1: exits["south"] = f"r_{x}_{y+1}"
+                
+                # Check for building
+                building = building_map.get((x, y))
+                contents = []
+                tags = []
+                if building:
+                    btype = building["type"]
+                    if btype == "house":
+                        room_type = "house"
+                        room_name = f"House {x},{y}"
+                        tags = ["indoors", "house"]
+                        contents = [{"name": "wooden table", "type": "furniture"}, {"name": "straw bed", "type": "furniture"}]
+                    elif btype == "shop":
+                        room_type = "shop"
+                        room_name = f"{rng.choice(['General Store', 'Blacksmith', 'Apothecary', 'Tavern'])} {x},{y}"
+                        tags = ["indoors", "shop"]
+                        contents = [{"name": "counter", "type": "furniture"}, {"name": "shelves of wares", "type": "item"}]
+                    elif btype == "tavern":
+                        room_type = "tavern"
+                        room_name = f"{rng.choice(['The Prancing Pony', 'The Rusty Nail', 'The Tipsy Griffin'])} {x},{y}"
+                        tags = ["indoors", "tavern"]
+                        contents = [{"name": "bar", "type": "furniture"}, {"name": "tables and chairs", "type": "furniture"}]
+                    elif btype == "inn":
+                        room_type = "inn"
+                        room_name = f"{rng.choice(['The Sleeping Dragon', 'The Cozy Hearth'])} {x},{y}"
+                        tags = ["indoors", "inn"]
+                        contents = [{"name": "reception desk", "type": "furniture"}, {"name": "stairs to rooms", "type": "furniture"}]
+                    elif btype == "temple":
+                        room_type = "temple"
+                        room_name = f"Temple of {rng.choice(['Light', 'Darkness', 'Nature', 'Storm'])} {x},{y}"
+                        tags = ["indoors", "temple"]
+                        contents = [{"name": "altar", "type": "furniture"}, {"name": "candles", "type": "item"}]
+                    elif btype == "guildhall":
+                        room_type = "guildhall"
+                        room_name = f"{rng.choice(['Mages Guild', 'Thieves Guild', 'Fighters Guild'])} {x},{y}"
+                        tags = ["indoors", "guildhall"]
+                        contents = [{"name": "training dummy", "type": "item"}, {"name": "notice board", "type": "furniture"}]
+                    elif btype == "manor":
+                        room_type = "manor"
+                        room_name = f"Manor of {rng.choice(['Lord Blackthorn', 'Lady Silverstream'])} {x},{y}"
+                        tags = ["indoors", "manor"]
+                        contents = [{"name": "grand table", "type": "furniture"}, {"name": "painting", "type": "decoration"}]
+                    elif btype == "farm":
+                        room_type = "farm"
+                        room_name = f"Farmstead {x},{y}"
+                        tags = ["outdoors", "farm"]
+                        contents = [{"name": "plow", "type": "tool"}, {"name": "hay bale", "type": "item"}]
+                    elif btype == "docks":
+                        room_type = "docks"
+                        room_name = f"Docks {x},{y}"
+                        tags = ["outdoors", "docks"]
+                        contents = [{"name": "fishing boat", "type": "vehicle"}, {"name": "net", "type": "tool"}]
+                    elif btype == "gate":
+                        room_type = "gate"
+                        room_name = f"{zone_name} Gate"
+                        tags = ["outdoors", "gate"]
+                        # Add exit to wilderness
+                        exits["out"] = "wilderness"
+                    else:
+                        room_type = "building"
+                        room_name = f"Building {x},{y}"
+                        tags = ["indoors", "building"]
+                        contents = [{"name": "table", "type": "furniture"}]
+                else:
+                    # Street or plaza
+                    if tile_type == "street":
+                        room_type = "street"
+                        room_name = f"Street {x},{y}"
+                        tags = ["outdoors", "street"]
+                        contents = [{"name": "cobblestones", "type": "ground"}]
+                    elif tile_type == "plaza":
+                        room_type = "plaza"
+                        room_name = f"{zone_name} Plaza"
+                        tags = ["outdoors", "plaza"]
+                        contents = [{"name": "statue", "type": "decoration"}]
+                    elif tile_type == "wall":
+                        room_type = "wall"
+                        room_name = f"{zone_name} Wall"
+                        tags = ["outdoors", "wall"]
+                        contents = [{"name": "stone wall", "type": "structure"}]
+                    else:
+                        room_type = "alley"
+                        room_name = f"Alley {x},{y}"
+                        tags = ["outdoors", "alley"]
+                        contents = [{"name": "mud", "type": "ground"}]
+                
+                # Add stairs for multi-floor buildings
+                if building and building.get("floors", 1) > 1:
+                    if "up" not in exits:
+                        exits["up"] = f"r_{x}_{y}_up"
+                
+                # Create room
+                rooms[room_id] = Room(
+                    room_id=room_id,
+                    name=room_name,
+                    description=self._generate_room_description(room_type, zone_name, settlement["economy"]),
+                    exits=exits,
+                    contents=contents,
+                    npcs=[],
+                    tags=tags,
+                )
+        
+        # Set entry room (town square or main plaza)
+        entry_room = "r_15_15"  # Center of 30x30 grid
+        if entry_room not in rooms:
+            # Find first plaza or street
+            for room_id, room in rooms.items():
+                if "plaza" in room.tags or "street" in room.tags:
+                    entry_room = room_id
+                    break
+        
+        # Create zone
+        zone = Zone(
+            name=zone_name,
+            zone_type="settlement",
+            entry_room=entry_room,
+            rooms=rooms,
+        )
+        zones[zone_name] = zone
+        
+        return zones
