@@ -282,7 +282,7 @@ def _render_welcome(char: PlayerCharacter, world: World,
     lines.append("")
     lines.append(f"  {_color(226)}►{ANSI_RESET} {ANSI_BOLD}n{ANSI_RESET} next year  "
                  f"{ANSI_BOLD}s{ANSI_RESET} status  {ANSI_BOLD}m{ANSI_RESET} market  "
-                 f"{ANSI_BOLD}t{ANSI_RESET} travel  {ANSI_BOLD}q{ANSI_RESET} quit")
+                 f"{ANSI_BOLD}t{ANSI_RESET} talk  {ANSI_BOLD}r{ANSI_RESET} roam  {ANSI_BOLD}q{ANSI_RESET} quit")
     lines.append(f"  {ANSI_DIM}  Skills grow with use — fight, trade, persuade, survive, craft.{ANSI_RESET}")
     lines.append("")
     return "\n".join(lines)
@@ -1174,7 +1174,7 @@ def _render_travel_options(char: PlayerCharacter,
 
 def _prompt(char: PlayerCharacter, world: World, state: SimState,
             events: list[SimEvent], rng: random.Random,
-            chaos: float) -> tuple[bool, int]:
+            chaos: float, max_years: int = 100) -> tuple[bool, int]:
     """One turn of the game loop.
     
     Returns (continue_playing, months_to_advance).
@@ -1194,9 +1194,10 @@ def _prompt(char: PlayerCharacter, world: World, state: SimState,
     date_str = f"{ANSI_DIM}{season}, Year {char.year} — Month {char.month + 1}{ANSI_RESET}"
     print(f"  {date_str}")
 
-    # Prompt
-    print(f"  {ANSI_DIM}[n]ext year  [1m] one month  [1w] one week  "
-          f"[s]tatus  [m]arket  [t]ravel  [q]uit{ANSI_RESET}")
+    # Prompt — two-line layout
+    print(f"  {ANSI_DIM}[n]ext  [1m] month  [1w] week  [s]tatus  [t]alk  [r]oam  "
+          f"[q]uit{ANSI_RESET}")
+    print(f"  {ANSI_DIM}[m]arket  [g]oals  [a]mbient{ANSI_RESET}")
     try:
         cmd = input(f"  {_color(226)}►{ANSI_RESET} ").strip().lower()
     except (EOFError, KeyboardInterrupt):
@@ -1231,8 +1232,17 @@ def _prompt(char: PlayerCharacter, world: World, state: SimState,
                   f"{'…' if len(char.settlements_visited) > 5 else ''}")
         return True, 0
     elif cmd == "t":
+        _handle_talk(char, world, rng)
+        return True, 0
+    elif cmd == "r":  # Roam (travel)
         _handle_travel(char, world, state, rng, chaos)
         return True, 0  # Travel already advanced time internally
+    elif cmd == "g":
+        _handle_quests(char, world)
+        return True, 0
+    elif cmd == "a":
+        _handle_ambient(char, world, state, rng, chaos, max_years)
+        return True, 0
     elif cmd == "m":
         _handle_market(char, world, state)
         return True, 0
@@ -1427,6 +1437,146 @@ def _maybe_travel_encounter(char: PlayerCharacter,
     return True
 
 
+def _handle_quests(char: PlayerCharacter, world: World) -> None:
+    """Show quest log, milestones, and skill progression."""
+    print(f"\n  {ANSI_BOLD}{_color(45)}═══ Quest Log & Milestones ═══{ANSI_RESET}")
+
+    # Available quests from narrative engine
+    narrative = getattr(world, 'narrative', None)
+    quests = narrative.quests if narrative and hasattr(narrative, 'quests') else []
+    local_quests = [q for q in quests if q.is_active and
+                    (q.giver_settlement.lower() == char.settlement.lower())]
+
+    if local_quests:
+        print(f"\n  {ANSI_BOLD}Available Quests:{ANSI_RESET}")
+        for q in local_quests[:5]:
+            diff_color = _color(46) if q.difficulty == "easy" else (
+                _color(226) if q.difficulty == "medium" else _color(196))
+            print(f"    {ANSI_DIM}✦{ANSI_RESET} {ANSI_BOLD}{q.name}{ANSI_RESET}")
+            print(f"      {ANSI_DIM}{q.description[:80]}{ANSI_RESET}")
+            print(f"      {diff_color}{q.difficulty}{ANSI_RESET} "
+                  f"· {ANSI_DIM}Reward: {', '.join(q.rewards[:2])}{ANSI_RESET}")
+    else:
+        print(f"\n  {ANSI_DIM}No quests available nearby. Explore to find opportunities.{ANSI_RESET}")
+
+    # Skills with XP bars
+    print(f"\n  {ANSI_BOLD}Skills:{ANSI_RESET}")
+    for skill_name in SKILL_NAMES:
+        level = char.skills.get(skill_name, 1)
+        xp = char.skill_xp.get(skill_name, 0)
+        next_xp = _xp_to_next_level(level)
+        current_in_level = xp - _xp_for_level(level)
+        bar_len = 10
+        filled = min(bar_len, int((current_in_level / max(1, next_xp)) * bar_len))
+        bar = f"{_color(46)}{'▓' * filled}{ANSI_DIM}{'░' * (bar_len - filled)}{ANSI_RESET}"
+        print(f"    {ANSI_BOLD}{skill_name.capitalize()}:{ANSI_RESET} "
+              f"Level {level} {bar} ({current_in_level}/{next_xp} XP)")
+
+    # Deeds / Milestones
+    if char.deeds:
+        print(f"\n  {ANSI_BOLD}Deeds & Milestones ({len(char.deeds)}):{ANSI_RESET}")
+        for i, deed in enumerate(char.deeds):
+            print(f"    {ANSI_DIM}{'●' if i < 5 else '○'}{ANSI_RESET} {deed}")
+            if i >= 9:
+                print(f"    {ANSI_DIM}... and {len(char.deeds) - 10} more{ANSI_RESET}")
+                break
+
+    # Reputation
+    if char.reputation:
+        print(f"\n  {ANSI_BOLD}Reputation:{ANSI_RESET}")
+        for s, v in sorted(char.reputation.items(), key=lambda x: -abs(x[1]))[:5]:
+            rep_color = _color(46) if v > 0 else (_color(196) if v < 0 else _color(226))
+            print(f"    {ANSI_DIM}{s}:{ANSI_RESET} {rep_color}{v:+d}{ANSI_RESET}")
+
+    # Life stats
+    print(f"\n  {ANSI_BOLD}Life Stats:{ANSI_RESET}")
+    print(f"    Age: {char.age}  |  Year: {char.year}  |  Gold earned: {char.total_gold_earned}")
+    print(f"    Settlements visited: {len(char.settlements_visited)}  "
+          f"|  Legacy events: {len(char.legacy_events)}")
+    print()
+
+
+def _handle_ambient(char: PlayerCharacter, world: World,
+                    state: SimState, rng: random.Random,
+                    chaos: float, max_years: int) -> None:
+    """Ambient time-flow mode — time passes automatically.
+
+    - Space toggles slow (1 month/tick) ↔ fast (12 months/tick)
+    - Auto-pauses on major events (war, founding, cataclysm, discovery)
+    - Any other key returns to normal mode
+    - ESC/q to quit
+    """
+    import sys as _sys
+
+    # Terminal setup for raw input
+    import tty
+    import termios
+    fd = _sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+
+    speed = "slow"  # slow = 1 month/tick, fast = 12 months/tick
+    tick_interval = 1.5  # seconds between ticks
+    running = True
+
+    print(f"\n  {ANSI_BOLD}{_color(45)}═══ Ambient Mode ═══{ANSI_RESET}")
+    print(f"  {ANSI_DIM}Time passes automatically. "
+          f"[Space] toggle speed  [any key] exit{ANSI_RESET}")
+
+    try:
+        tty.setraw(fd)
+        while running and char.alive and char.year < max_years:
+            # Status line
+            seasons = ["Winter", "Spring", "Summer", "Autumn"]
+            season = seasons[char.month // 3] if char.month < 12 else "Unknown"
+            speed_label = f"{_color(46)}SLOW{ANSI_RESET}" if speed == "slow" else f"{_color(196)}FAST{ANSI_RESET}"
+            print(f"\r  {ANSI_DIM}{season}, Y{char.year} M{char.month + 1}  "
+                  f"{char.settlement}  ❤{char.health}  ✦{char.gold}  "
+                  f"Speed: {speed_label}{ANSI_RESET}   ", end="", flush=True)
+
+            # Advance time
+            months = 1 if speed == "slow" else 12
+            new_events = _advance_time(char, world, state, rng, chaos, months=months)
+            _auto_save(char, world)
+
+            # Check for auto-pause events
+            pause_events = [e for e in new_events if e.event_type in (
+                "war", "founding", "abandonment", "earthquake",
+                "volcanic_eruption", "great_plague", "tsunami",
+                "meteor_strike", "great_fire", "magical_cataclysm",
+                "faction_war", "faction_collapse", "discovery",
+            )]
+
+            if pause_events:
+                for ev in pause_events:
+                    icon = _EVENT_ICON.get(ev.event_type, "⚡")
+                    print(f"\n  {ANSI_BOLD}{_color(196)}{icon} EVENT!{ANSI_RESET} "
+                          f"{ev.description[:80]}")
+                    print(f"  {ANSI_DIM}Press any key to continue...{ANSI_RESET}")
+                    # Wait for keypress
+                    if _sys.stdin.read(1):
+                        break
+
+            # Check for keypress (non-blocking)
+            import select
+            dr, _, _ = select.select([_sys.stdin], [], [], tick_interval)
+            if dr:
+                key = _sys.stdin.read(1)
+                if key == " ":
+                    speed = "fast" if speed == "slow" else "slow"
+                    tick_interval = 0.5 if speed == "fast" else 1.5
+                elif key in ("q", "\x1b"):  # q or ESC
+                    running = False
+                else:
+                    # Any other key exits ambient mode
+                    running = False
+    except Exception:
+        pass
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+    _sys.stdout.write(f"\r  {ANSI_DIM}Ambient mode ended.{ANSI_RESET}  \n")
+
+
 def _handle_travel(char: PlayerCharacter, world: World,
                    state: SimState, rng: random.Random,
                    chaos: float) -> None:
@@ -1484,6 +1634,191 @@ def _handle_travel(char: PlayerCharacter, world: World,
         print(f"  You arrive safely. ({travel_months} month{'s' if travel_months != 1 else ''} pass)")
     else:
         print(f"  {ANSI_DIM}You eventually reach {ANSI_BOLD}{dest_name}{ANSI_RESET}{ANSI_DIM}.{ANSI_RESET}")
+
+
+def _handle_talk(char: PlayerCharacter, world: World,
+                 rng: random.Random) -> None:
+    """Talk to NPCs in the current settlement.
+
+    Finds narrative characters in the same settlement, lists them,
+    and lets the player chat with one for flavor dialogue.
+    """
+    npcs = _find_npcs_in_settlement(world, char.settlement)
+    if not npcs:
+        print(f"  {ANSI_DIM}There's no one notable nearby to talk to.{ANSI_RESET}")
+        return
+
+    print(f"\n  {ANSI_BOLD}People nearby in {char.settlement}:{ANSI_RESET}")
+    for i, npc in enumerate(npcs[:8]):
+        traits_str = ", ".join(npc.personality_traits[:2])
+        print(f"    {i+1}. {ANSI_BOLD}{npc.full_name}{ANSI_RESET} — "
+              f"{ANSI_DIM}{npc.occupation} ({traits_str}){ANSI_RESET}")
+    if len(npcs) > 8:
+        print(f"    ... and {len(npcs) - 8} more.")
+
+    try:
+        choice = input(f"  {_color(226)}►{ANSI_RESET} Talk to # (0 to cancel): ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return
+
+    if not choice.isdigit() or int(choice) == 0:
+        print(f"  {ANSI_DIM}You nod politely and move on.{ANSI_RESET}")
+        return
+
+    idx = int(choice) - 1
+    if idx < 0 or idx >= len(npcs):
+        print(f"  {ANSI_DIM}No one by that number.{ANSI_RESET}")
+        return
+
+    npc = npcs[idx]
+    _chat_with_npc(npc, char, rng)
+
+
+def _find_npcs_in_settlement(world: World, settlement_name: str) -> list:
+    """Find narrative characters in a settlement."""
+    narrative = getattr(world, 'narrative', None)
+    if not narrative or not narrative.characters:
+        return []
+    return [
+        c for c in narrative.characters
+        if c.home_settlement.lower() == settlement_name.lower()
+        and c.status == "alive"
+    ]
+
+
+def _chat_with_npc(npc, char: PlayerCharacter,
+                   rng: random.Random) -> None:
+    """Generate a short conversation with an NPC based on personality/occupation."""
+    import random as rnd_mod
+    local_rng = rnd_mod.Random(hash((char.name, npc.full_name, char.year)) & 0xFFFFFFFF)
+
+    # Greeting varies by personality
+    warm_traits = {"kind", "gentle", "cheerful", "generous", "humble", "curious"}
+    cool_traits = {"stern", "brooding", "silent", "proud", "deceitful", "greedy"}
+
+    npc_traits = set(npc.personality_traits)
+    if npc_traits & warm_traits:
+        greetings = [
+            f"\"Ah, a friendly face! Welcome, {char.name}.\"",
+            f"\"Well met, traveler! Pull up a chair.\"",
+            f"\"{ANSI_BOLD}{npc.full_name}{ANSI_RESET} smiles warmly. \"Good day to you!\"",
+            f"\"It's good to see a new face in {char.settlement}.\"",
+        ]
+        tones = "warm"
+    elif npc_traits & cool_traits:
+        greetings = [
+            f"\"{ANSI_BOLD}{npc.full_name}{ANSI_RESET} eyes you carefully. \"State your business.\"",
+            f"\"Hmph. Another stranger. What do you want?\"",
+            f"\"You have the look of someone who asks too many questions.\"",
+        ]
+        tones = "cool"
+    else:
+        greetings = [
+            f"\"{ANSI_BOLD}{npc.full_name}{ANSI_RESET} nods in greeting. \"Afternoon.\"",
+            f"\"Hello there, {char.name}. What brings you my way?\"",
+            f"\"Good to meet you. I don't get many visitors.\"",
+        ]
+        tones = "neutral"
+
+    print(f"\n  {_color(45)}{'─' * 44}{ANSI_RESET}")
+    print(f"  {ANSI_BOLD}{npc.full_name}{ANSI_RESET} — {ANSI_DIM}{npc.occupation}{ANSI_RESET}")
+    print(f"  {ANSI_DIM}{', '.join(npc.personality_traits)}{ANSI_RESET}")
+    print(f"  {_color(45)}{'─' * 44}{ANSI_RESET}")
+    print(f"  {local_rng.choice(greetings)}")
+
+    # Generate occupation-flavored follow-up
+    if tones == "warm":
+        follow_ups = [
+            f"\"I've been working as a {npc.occupation} for nigh on {npc.age - 15} years now. "
+            f"Keeps me busy.\"",
+            f"\"Being a {npc.occupation} in these parts means you see all sorts.\"",
+            f"\"If you need anything from a {npc.occupation}, I'm your person.\"",
+        ]
+    elif tones == "cool":
+        follow_ups = [
+            f"\"I'm a {npc.occupation}. It pays the bills. What's it to you?\"",
+            f"\"Don't let the {npc.occupation} title fool you. This town has its troubles.\"",
+            f"\"You need a {npc.occupation}? Fine. Just don't waste my time.\"",
+        ]
+    else:
+        follow_ups = [
+            f"\"I've been the {npc.occupation} here for a while. It's honest work.\"",
+            f"\"Being a {npc.occupation} means I hear things. People talk.\"",
+            f"\"The life of a {npc.occupation} isn't glamorous, but it's mine.\"",
+        ]
+
+    print(f"  {local_rng.choice(follow_ups)}")
+
+    # Offer a rumor or piece of info
+    rumors = [
+        f"\"I heard tell that {_rumor_topic(local_rng, char)}.\"",
+        f"\"Word on the street is {_rumor_topic(local_rng, char)}.\"",
+        f"\"Between you and me, {_rumor_topic(local_rng, char)}.\"",
+        f"\"If you ask me, {_rumor_topic(local_rng, char)}.\"",
+    ]
+    print(f"  {local_rng.choice(rumors)}")
+
+    # Player response options
+    print(f"\n  {ANSI_DIM}[1] Ask about their work  [2] Ask about the area  [3] Say goodbye{ANSI_RESET}")
+    try:
+        reply = input(f"  {_color(226)}►{ANSI_RESET} ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        reply = "3"
+
+    if reply == "1":
+        work_answers = [
+            f"\"{npc.occupation.capitalize()} work is steady. The harvest was decent, so folks have coin.\"",
+            f"\"It's not always easy. Some days I wonder why I chose this path.\"",
+            f"\"The {npc.occupation} trade has been good to me. Can't complain.\"",
+        ]
+        print(f"  {local_rng.choice(work_answers)}")
+        _gain_skill_xp(char, "persuasion", 2)
+    elif reply == "2":
+        area_answers = [
+            f"\"{char.region} is beautiful this time of year, but trouble brews in the east.\"",
+            f"\"The lands around here are rich, but bandits make the roads dangerous.\"",
+            f"\"There's an old ruin a few days north. Some say it's haunted.\"",
+        ]
+        print(f"  {local_rng.choice(area_answers)}")
+        _gain_skill_xp(char, "survival", 2)
+    else:
+        farewells = [
+            f"\"Safe travels, {char.name}. May the wyrd be kind.\"",
+            f"\"Take care out there. The world is wider than you think.\"",
+            f"\"Farewell! Don't be a stranger.\"",
+        ]
+        print(f"  {local_rng.choice(farewells)}")
+
+    # Small gold/reputation gain for chatting
+    char.gold += local_rng.randint(0, 2)
+    rep_msg = _change_reputation(char, char.settlement, 1)
+    if rep_msg:
+        print(f"  {rep_msg}")
+    char.total_gold_earned += 2
+    print(f"  {_color(45)}You learned a little from the conversation.{ANSI_RESET}")
+
+
+def _rumor_topic(rng: random.Random, char: PlayerCharacter) -> str:
+    """Generate a rumor topic relevant to the world."""
+    topics = [
+        "the old road north is overrun with wolves",
+        "a merchant caravan went missing near the eastern pass",
+        "the baron's daughter is rumored to be a sorceress",
+        "a ghost has been seen walking the battlements at night",
+        "the price of iron is about to triple",
+        "a stranger from across the sea brought strange news",
+        "the harvest festival will be grander than ever this year",
+        "someone's been stealing grain from the storehouses",
+        "a hidden spring was discovered in the hills",
+        "the old king's treasure was never found",
+        "a traveling circus passed through last week",
+        "the watchtower needs repairs but no one will fund it",
+        "the river's been running low — old folk say it's a bad omen",
+        "a marriage alliance is being negotiated with the next valley over",
+    ]
+    return rng.choice(topics)
 
 
 def _handle_market(char: PlayerCharacter, world: World, state: SimState) -> None:
@@ -1828,7 +2163,7 @@ def embody_play(world: World,
     events: list[SimEvent] = []
     running = True
     while running and char.alive and char.year < years:
-        cont, months = _prompt(char, world, state, events, rng, chaos)
+        cont, months = _prompt(char, world, state, events, rng, chaos, years)
         if not cont:
             running = False
             break
