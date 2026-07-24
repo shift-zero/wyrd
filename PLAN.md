@@ -157,7 +157,7 @@ The simulation engine (`sim.py`) currently ticks in whole years. This is a deep 
 
 ### What to tackle next
 - All items complete — this is a maintenance/improvement area going forward.
-- Latest: sort arrows in column headers + confirm-on-quit safeguard (2026-07-27)
+- Latest: TUI ambient mode + seasonal status bar icons (2026-07-30)
 
 ### Completed this session (2026-07-28)
 - **Lookup false-positive bug fix.** ...already documented above...
@@ -170,6 +170,13 @@ The simulation engine (`sim.py`) currently ticks in whole years. This is a deep 
 - **Viewer infinite mode fix.** Viewer no longer hardcoded to 100 years — defaults to `None` (infinite), `∞` shown in counters.
 - **Status bar updated** to show `[v] Map` and `[i] Info`.
 - **Created `docs/embody.md`** documenting embody TUI, keybindings, overlays, character systems.
+- **Tests:** 799 passed, no regressions.
+
+### Completed this session (2026-07-30)
+- **TUI ambient mode (`a` key).** Native curses ambient time flow — time passes automatically without leaving the TUI. Space toggles slow (1 month/tick) ↔ fast (12 months/tick). Auto-pauses on wars, cataclysms, foundings, and discoveries. Events logged directly into log_lines, preserving full history across ambient/normal mode transitions. Character death during ambient triggers epilogue correctly.
+- **Seasonal icons in status bar.** Spring (🌸 green), Summer (☀ yellow), Autumn (🍂 cyan), Winter (❄ dim) with matching color pairs.
+- **Status bar updated** to show `[a] Ambient` keybinding.
+- **EMBODY_HELP updated** with ambient mode section.
 - **Tests:** 799 passed, no regressions.
 
 ## Phase 24 — Complete Embody ✨✅
