@@ -164,6 +164,14 @@ class MudScreen(Screen):
         # Parse and handle
         parsed = parse_command(cmd_text)
 
+        # Safety check — zone must be loaded
+        zone = self.current_zone
+        if zone is None:
+            self._log("[red]You are lost — no zone data loaded for this area.[/]")
+            self._log("[dim]Try pressing q to return to the gateway and re-entering.[/]")
+            self.query_one("#command-input", Input).focus()
+            return
+
         # Estimate hours for this action (for sim advancement)
         verb = parsed.get("verb", "")
         action_hours = {
@@ -177,7 +185,7 @@ class MudScreen(Screen):
         }.get(verb, 1)
 
         result = handle_command(
-            parsed, self.char, self.current_zone,
+            parsed, self.char, zone,
             self.current_room_id or "", self.world, self.seed
         )
 

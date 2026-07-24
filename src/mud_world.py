@@ -103,16 +103,29 @@ class MudWorld:
         w.bestiary = generate_bestiary(w)
         self.base_world = w
 
-        # Register base world settlements
+        # Register base world settlements WITH their zones
         for region in w.regions:
             for s in region.settlements:
                 cx, cy = tile_to_chunk(s.x, s.y)
-                cs = ChunkSettlement(
-                    name=s.name, cx=cx, cy=cy,
-                    pop=s.population if hasattr(s, 'population') and s.population else 300 + (s.x * 7 + s.y * 13) % 2000,
-                    economy=self._infer_economy(w, s.x, s.y),
-                )
-                self.settlements[s.name] = cs
+                # Generate zones for this settlement using WFC city layout
+                settlement_data = self._generate_chunk_settlement(cx, cy)
+                if settlement_data:
+                    zones = self._city_to_zones(settlement_data, cx, cy)
+                    self.loaded_zones.update(zones)
+                    cs = ChunkSettlement(
+                        name=s.name, cx=cx, cy=cy,
+                        pop=settlement_data["population"],
+                        economy=settlement_data["economy"],
+                    )
+                    cs.zones = zones
+                    self.settlements[s.name] = cs
+                else:
+                    cs = ChunkSettlement(
+                        name=s.name, cx=cx, cy=cy,
+                        pop=s.population if hasattr(s, 'population') and s.population else 300 + (s.x * 7 + s.y * 13) % 2000,
+                        economy=self._infer_economy(w, s.x, s.y),
+                    )
+                    self.settlements[s.name] = cs
 
         return w
 
