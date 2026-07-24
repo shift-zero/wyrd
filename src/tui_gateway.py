@@ -435,12 +435,14 @@ class GenerateScreen(ModalScreen):
     def compose(self) -> ComposeResult:
         with Vertical(id="generate-box"):
             yield Static("[bold cyan]Generate New World[/]", id="gen-title")
-            yield Static("Enter a seed (number) or leave blank for random:")
-            yield Input(placeholder="42", id="seed-input")
+            yield Static("World name (or leave blank for auto-generated):")
+            yield Input(placeholder="e.g. Aeloria", id="world-name-input")
+            yield Static("")
+            yield Static("Seed (leave blank for random):")
+            yield Input(placeholder="random", id="seed-input")
             yield Static("")
             with Vertical(id="gen-buttons"):
                 yield Button("Generate", variant="primary", id="gen-go-btn")
-                yield Button("Generate + Lore", variant="default", id="gen-lore-btn")
                 yield Button("Cancel", variant="default", id="gen-cancel-btn")
 
     BINDINGS = [
@@ -449,23 +451,25 @@ class GenerateScreen(ModalScreen):
     ]
 
     def action_submit(self) -> None:
-        input_widget = self.query_one("#seed-input", Input)
-        text = input_widget.value.strip()
-        seed = int(text) if text and text.isdigit() else random.randint(0, 999999)
-        self.dismiss(seed)
+        self._do_generate()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         bid = event.button.id
         if bid == "gen-cancel-btn":
             self.dismiss(None)
             return
-        input_widget = self.query_one("#seed-input", Input)
-        text = input_widget.value.strip()
-        seed = int(text) if text and text.isdigit() else random.randint(0, 999999)
-        if bid == "gen-lore-btn":
-            self.dismiss((seed, True))
+        self._do_generate()
+
+    def _do_generate(self) -> None:
+        name_widget = self.query_one("#world-name-input", Input)
+        seed_widget = self.query_one("#seed-input", Input)
+        name_text = name_widget.value.strip()
+        seed_text = seed_widget.value.strip()
+        if seed_text and seed_text.isdigit():
+            seed = int(seed_text)
         else:
-            self.dismiss(seed)
+            seed = random.randint(100000, 999999999)
+        self.dismiss((seed, name_text if name_text else None))
 
 
 # ── Help Overlay ─────────────────────────────────────────────────────────
@@ -641,7 +645,7 @@ class WorldPickerScreen(Screen):
 
     def _on_generate_result(self, result) -> None:
         if result is not None:
-            seed = result if isinstance(result, int) else result[0]
+            seed = result[0] if isinstance(result, tuple) else result
             self._do_generate(seed)
 
     def _do_generate(self, seed: int) -> None:
