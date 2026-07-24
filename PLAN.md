@@ -155,11 +155,36 @@ The simulation engine (`sim.py`) currently ticks in whole years. This is a deep 
 | 2 ✅ | Flashing notification banner — shows event icon + description, alternates colors for attention | Banner persists ~60 frames with alternating accent/satus colors, then fades |
 | 3 ✅ | Help documentation — new section in viewer help overlay | Press ? in viewer to see Auto-Pause section |
 
-### What to tackle next
-- All items complete — this is a maintenance/improvement area going forward.
-- Latest: TUI ambient mode + seasonal status bar icons (2026-07-30)
+## What to tackle next
+- Textual MUD migration (Phase 26) — strip all CLI, curses dead, wyrd is a Textual MUD
 
-### Completed this session (2026-07-28)
+## Phase 26 — Textual MUD (current 🔥)
+
+**Thesis:** wyrd had 25 CLI subcommands, 4 curses TUIs, a web dashboard, and exporters — all surface noise. Strip it. The only interface is a Textual-based single-user MUD. `wyrd` → pick world → play.
+
+**What dies:**
+- `gateway.py`, `viewer.py`, `explore.py`, `tui.py`, `embody_tui.py` — curses dead
+- `__main__.py` stripped — no subcommands, just `wyrd`
+- `serve.py`, `export_html.py`, `export_svg.py`, `export_ttrpg.py`, `export_chronicles_html.py` — web/export dead
+- `query.py`, `ask.py`, `branch.py` — CLI tools dead
+
+**What lives:**
+- All engine modules — `world.py`, `generate.py`, `sim.py`, `economy.py`, `faction*.py`, `cataclysm.py`, `embody.py`, `shop.py`, `bestiary.py`, `magic.py`, `religion.py`, `narrative.py`, `lore.py`, `chronicles.py`, `serialize.py`, `render.py`, `adventure.py`
+
+**What gets built:**
+
+| # | What | Verifiable |
+|---|------|------------|
+| 1 🔲 | Strip CLI + delete all curses/export/query files | `wyrd` launches Textual MUD; no subcommands exist |
+| 2 🔲 | Textual EmbodyScreen — MUD main interface | Reactive sidebar (stats/inv), scrollable event log, action bar, command input |
+| 3 🔲 | Room system — WFC-based dungeon/world room generation | Each settlement has rooms, each room has exits + description + contents |
+| 4 🔲 | Command parser — `look`, `get`, `use`, `talk`, `n/s/e/w` | Type `look` → see room; `n` → move north; `get sword` → pick up |
+| 5 🔲 | Usable items + active skills | `use bandage` heals, `hunt` uses survival, `bargain` uses trade |
+| 6 🔲 | NPC interaction | `talk` to generated characters, `trade` with merchants, `fight` enemies |
+| 7 🔲 | Background sim | World evolves while you explore; news arrives; events change room states |
+| 8 🔲 | Gameplay loop | Explore → survive → gain skills → tackle harder areas → find better loot |
+
+## Design Principles
 - **Lookup false-positive bug fix.** ...already documented above...
 
 ### Completed this session (2026-07-29)

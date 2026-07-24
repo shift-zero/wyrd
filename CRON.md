@@ -100,52 +100,31 @@ Reviewed viewer.py and explore.py for rendering issues:
 - Terminal resize handling uses `getmaxyx()` correctly in both viewer and explorer
 Tests: 799 passed, no regressions.
 
-### What to tackle next — NEW DIRECTION
+### What to tackle next — TOTAL SHIFT
 
-**👑 NCURSES IS DONE. MOVE TO TEXTUAL.**
+**👑 STRIP THE CLI. DROP THE CURSES. WYRD IS A TEXTUAL MUD.**
 
-Raw curses has been a constant source of bugs: screen refreshes, layout math, color pairs, key handling, the `endwin()`/`initscr()` dance, terminal state corruption. No more. From now on, the TUI is built on [Textual](https://github.com/textualize/textual) — a Python-native TUI framework by the Rich team.
+No more `wyrd generate`, `wyrd explore`, `wyrd run`, `wyrd chronicles`, `wyrd export`, `wyrd lookup`, `wyrd serve`, `wyrd embody`, `wyrd worlds`. No curses gateway, curses viewer, curses explorer. None of it.
 
-Textual gives us:
-- Reactive widgets (no manual `erase()`/`addstr()`/`refresh()`)
-- CSS-like layout (no layout math bugs)
-- Mouse support
-- Async event loop
-- Proper screen diffing (no flicker)
-- Built-in scrollable containers, modals, trees, data tables
+The only entry point: **`wyrd`** → Textual MUD. Pick or generate a world → drop into a single-user MUD. That's it.
 
-**Migration plan:**
-1. Add Textual as a dependency (`uv add textual`)
-2. Rewrite `gateway.py` → Textual `WorldPicker` screen with world list, detail card, mini-map
-3. Rewrite `embody_tui.py` → Textual `EmbodyScreen` with sidebar, event log, action bar, overlays
-4. Rewrite `viewer.py` → Textual `ViewerScreen` with animated map, speed controls
-5. Keep old curses files as fallback until migration is complete
-6. Delete old curses files once everything works
+Keep every internal (world gen, sim, economy, faction sim, cataclysm, embody engine, bestiary, shop, serialization). Strip every surface.
 
-**👑 EMBODY BECOMES A SINGLE-USER MUD.**
+**Migration plan (aggressive):**
+1. ✅ Textual WorldPicker — done
+2. 🔲 **Delete** `gateway.py`, `viewer.py`, `explore.py`, `tui.py`, `embody_tui.py` — all curses dead
+3. 🔲 Strip `__main__.py` — no more 25 subcommands. `wyrd` with no args launches Textual, that's all
+4. 🔲 Strip `serve.py` (web dashboard), HTML/SVG/TTRPG exporters, `query.py`, `ask.py`, `branch.py` — all dead
+5. 🔲 Build Textual EmbodyScreen — the MUD interface
+6. 🔲 Room system — WFC dungeon gen, room descriptions, exits
+7. 🔲 Command parser — `look`, `get`, `use`, `talk`, `n/s/e/w`
+8. 🔲 Usable items + active skills
+9. 🔲 NPC interaction
+10. 🔲 Gameplay loop
 
-Not a passive event-watcher with skills you can't use. A MUD. Rooms, items, commands, progression.
+**What stays:** `world.py`, `generate.py`, `sim.py`, `economy.py`, `faction.py`, `faction_sim.py`, `cataclysm.py`, `embody.py`, `shop.py`, `bestiary.py`, `magic.py`, `religion.py`, `narrative.py`, `lore.py`, `chronicles.py`, `serialize.py`, `render.py`, `adventure.py`.
 
-**Everything seeded, nothing hand-authored.** Rooms are procedurally generated per-world from the seed, not designed. Wave function collapse (WFC) is a strong candidate — feed it the world's terrain/biome as constraints and let it generate coherent room layouts, dungeon floor plans, and settlement interiors that feel organic and replayable.
-
-What this means:
-- **Rooms instead of regions** — the world map gets subdivided into rooms/locations. Each settlement has rooms (tavern, market, temple, town square). Wild zones have rooms (forest path, cave entrance, river crossing).
-- **Directional movement** — `n`, `s`, `e`, `w` (or arrow keys) to move between rooms. Each room has a description, NPCs, items, and exits.
-- **Command parser** — type commands like `look`, `get bandage`, `use bandage`, `kill goblin`, `talk to merchant`, `open door`. Not a complex parser — simple verb+noun.
-- **Usable items** — bandages heal, potions restore, weapons improve combat outcomes. Items exist in the world (shops, loot, crafting) and do things when used.
-- **Active skills** — skills aren't passive % bonuses. You *use* them: `hunt` (survival), `bargain` (trade), `persuade` (persuasion). Each has a success/failure outcome.
-- **NPCs you can interact with** — talk, trade, fight. Generated from the narrative engine.
-- **A clear gameplay loop** — explore rooms → find items → use items to survive → gain skills → tackle harder areas → find better items. Visible progression.
-
-**The sim still runs in the background.** The world evolves while you explore rooms. News arrives via messenger. Events from the sim create new room states (ruins, destroyed buildings, new factions).
-
-**Priority order:**
-1. Textual migration — get the foundation right
-2. Room system — map the world into explorable locations
-3. Command parser — simple verb+noun for MUD interactions
-4. Usable items + active skills — make inventory and skills do things
-5. NPC interaction — talk, trade, fight with generated characters
-6. Gameplay loop — clear progression, goals, and feedback
+**What's tested:** All existing tests for the engines. Delete tests for deleted surfaces. 799 tests → expect ~600-700 after trim.
 
 ### Completed this session (2026-07-30)
 
