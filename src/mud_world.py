@@ -526,7 +526,7 @@ class MudWorld:
                     description=self._generate_room_description(room_type, zone_name, settlement["economy"]),
                     exits=exits,
                     contents=contents,
-                    npcs=[],
+                    npcs=self._generate_npcs_for_room(room_type, zone_name, settlement["economy"]),
                     tags=tags,
                 )
         
@@ -549,6 +549,46 @@ class MudWorld:
         zones[zone_name] = zone
         
         return zones
+
+    def _generate_npcs_for_room(self, room_type: str, zone_name: str, economy: str) -> list[dict]:
+        """Generate NPCs for a room based on its type and zone."""
+        from .room import _generate_npcs as generate_npcs_for_room
+        rng = random.Random(hash(room_type) + hash(zone_name) + hash(economy))
+        
+        # Determine biome for NPC names
+        biome = "temperate"
+        if "farm" in room_type:
+            biome = "rural"
+        elif "docks" in room_type:
+            biome = "coastal"
+        
+        # Generate NPCs based on room type
+        if room_type == "plaza":
+            return generate_npcs_for_room("plaza", biome, 3, rng)
+        elif room_type == "street":
+            return generate_npcs_for_room("street", biome, 2, rng)
+        elif room_type == "house":
+            return generate_npcs_for_room("house", biome, 1, rng)
+        elif room_type == "shop":
+            return generate_npcs_for_room("shop", biome, 1, rng) + [{"name": "Shopkeeper", "title": "merchant", "dialog": "Welcome! How can I help you?"}]
+        elif room_type == "tavern":
+            return generate_npcs_for_room("tavern", biome, 3, rng) + [{"name": "Barkeep", "title": "innkeeper", "dialog": "What'll it be?"}]
+        elif room_type == "inn":
+            return generate_npcs_for_room("inn", biome, 2, rng) + [{"name": "Innkeeper", "title": "host", "dialog": "Room for the night?"}]
+        elif room_type == "temple":
+            return generate_npcs_for_room("temple", biome, 2, rng) + [{"name": "Priest", "title": "cleric", "dialog": "Blessings upon you."}]
+        elif room_type == "guildhall":
+            return generate_npcs_for_room("guildhall", biome, 3, rng) + [{"name": "Guildmaster", "title": "leader", "dialog": "What brings you to the guild?"}]
+        elif room_type == "manor":
+            return generate_npcs_for_room("manor", biome, 2, rng) + [{"name": "Steward", "title": "manager", "dialog": "The lord is not receiving visitors."}]
+        elif room_type == "farm":
+            return generate_npcs_for_room("farm", biome, 1, rng)
+        elif room_type == "docks":
+            return generate_npcs_for_room("docks", biome, 2, rng)
+        elif room_type == "gate":
+            return generate_npcs_for_room("gate", biome, 2, rng) + [{"name": "Guard", "title": "sentry", "dialog": "Halt! Who goes there?"}]
+        else:
+            return generate_npcs_for_room(room_type, biome, 1, rng)
 
     def _generate_room_description(self, room_type: str, zone_name: str, economy: str) -> str:
         """Generate a description for a room based on its type and zone."""
@@ -784,7 +824,7 @@ class MudWorld:
                     description=self._generate_room_description(room_type, zone_name, settlement["economy"]),
                     exits=exits,
                     contents=contents,
-                    npcs=[],
+                    npcs=self._generate_npcs_for_room(room_type, zone_name, settlement["economy"]),
                     tags=tags,
                 )
         
