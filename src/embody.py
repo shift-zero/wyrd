@@ -104,6 +104,8 @@ class PlayerCharacter:
     health: int = 100
     age: int = 18
     year: int = 0
+    x: int = 0  # Added for spawn location
+    y: int = 0  # Added for spawn location
     month: int = 0  # 0-11, for sub-year time tracking
     alive: bool = True
     inventory: list[str] = field(default_factory=list)
