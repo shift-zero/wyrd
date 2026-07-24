@@ -20,9 +20,10 @@ from .embody import (
     PlayerCharacter,
     _generate_character,
 )
-from .room import generate_zones, Zone, Room
+from .room import Zone, Room
 from .mud_parser import parse_command, handle_command, CommandResult
 from .mud_sim import MudSimState
+from .mud_world import MudWorld
 
 
 # ── Help screen ─────────────────────────────────────────────────────────
@@ -83,7 +84,8 @@ class MudScreen(Screen):
         self.world = world
         self.seed = world.seed
         self.rng = random.Random(world.seed + 5000000)
-        self.zones: dict[str, Zone] = {}
+        self.mud_world = MudWorld(world.seed)
+        self.mud_world.init_from_seed()
         self.current_zone_name: str | None = None
         self.current_room_id: str | None = None
 
@@ -93,34 +95,33 @@ class MudScreen(Screen):
         else:
             self.char = _generate_character(world, self.rng)
 
-        # Generate zones
-        self._init_zones()
+        # Set up initial location
+        self._init_location()
 
         # Background sim
         self.sim_state = MudSimState(world, self.seed)
         self._hours_since_sim_update = 0
 
-    def _init_zones(self) -> None:
-        """Generate the room/zones for the world."""
-        self.zones = generate_zones(self.world, self.seed)
-        # Start player in their settlement's entry room
+    def _init_location(self) -> None:
+        """Start player in their settlement."""
         settlement = self.char.settlement
-        if settlement in self.zones:
+        zone = self.mud_world.get_zone_for_location(0, 0, settlement)
+        if zone:
             self.current_zone_name = settlement
-            zone = self.zones[settlement]
             self.current_room_id = zone.entry_room
         else:
-            # Fallback to first zone
-            zone_names = list(self.zones.keys())
-            if zone_names:
-                self.current_zone_name = zone_names[0]
-                zone = self.zones[zone_names[0]]
-                self.current_room_id = zone.entry_room
+            # Try first available zone
+            names = self.mud_world.get_settlement_names()
+            if names:
+                self.current_zone_name = names[0]
+                zone = self.mud_world.get_zone_for_location(0, 0, names[0])
+                if zone:
+                    self.current_room_id = zone.entry_room
 
     @property
     def current_zone(self) -> Zone | None:
-        if self.current_zone_name and self.current_zone_name in self.zones:
-            return self.zones[self.current_zone_name]
+        if self.current_zone_name and self.current_zone_name in self.mud_world.loaded_zones:
+            return self.mud_world.loaded_zones[self.current_zone_name]
         return None
 
     @property
@@ -204,7 +205,7 @@ class MudScreen(Screen):
                 self._log(item)
             self._hours_since_sim_update += action_hours
             if self._hours_since_sim_update >= 168:  # ~1 week
-                self.sim_state.apply_to_rooms(self.zones)
+                self.sim_state.apply_to_rooms(self.mud_world.loaded_zones)
                 self._hours_since_sim_update = 0
                 self._update_room_view()
 
