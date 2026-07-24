@@ -110,7 +110,7 @@ class MudWorld:
                 # Generate zones for this settlement using WFC city layout
                 settlement_data = self._generate_chunk_settlement(cx, cy)
                 if settlement_data:
-                    zones = self._city_to_zones(settlement_data, cx, cy)
+                    zones = self._city_to_zones(settlement_data, cx, cy, name_override=s.name)
                     self.loaded_zones.update(zones)
                     cs = ChunkSettlement(
                         name=s.name, cx=cx, cy=cy,
@@ -241,11 +241,12 @@ class MudWorld:
             "chunk_y": cy,
         }
 
-    def _city_to_zones(self, settlement: dict, cx: int, cy: int) -> dict[str, Zone]:
+    def _city_to_zones(self, settlement: dict, cx: int, cy: int, name_override: str | None = None) -> dict[str, Zone]:
         """Convert a WFC city layout into MUD zones and rooms."""
         zones = {}
+        zone_name = name_override or settlement["name"]
         zone = Zone(
-            name=settlement["name"],
+            name=zone_name,
             zone_type="settlement",
             entry_room="town_square",
             rooms={},

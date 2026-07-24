@@ -159,6 +159,11 @@ class MudScreen(Screen):
         if not cmd_text:
             return
 
+        # Allow quitting from the input
+        if cmd_text.lower() in ("q", "quit", "exit"):
+            self.action_quit_to_gateway()
+            return
+
         self.query_one("#command-input", Input).value = ""
         self._log(f"[dim]> {cmd_text}[/]")
         # Parse and handle
