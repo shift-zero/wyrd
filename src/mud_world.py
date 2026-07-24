@@ -931,4 +931,81 @@ class MudWorld:
         )
         zones[zone_name] = zone
         
-        return zones
+        return zones    def _generate_room_description(self, room_type: str, zone_name: str, economy: str) -> str:
+        """Generate a description for a room based on its type and zone."""
+        rng = random.Random(hash(room_type) + hash(zone_name) + hash(economy))
+        
+        if room_type == "plaza":
+            return (
+                f"The heart of {zone_name}, a bustling plaza where traders hawk their wares "
+                f"and townsfolk gather. The cobblestones are worn smooth by countless feet. "
+                f"{zone_name} has a {economy}-based economy. The air smells of fresh bread, spices, and smoke."
+            )
+        elif room_type == "street":
+            return (
+                f"A lively street in {zone_name}. Merchants call out their wares. "
+                f"The air smells of fresh bread, spices, and smoke. "
+                f"The town has a {economy}-based economy."
+            )
+        elif room_type == "alley":
+            return (
+                f"A narrow alleyway in {zone_name}. The walls loom overhead, casting deep shadows. "
+                f"The air is damp and smells of refuse. The town thrives on {economy}."
+            )
+        elif room_type == "house":
+            return (
+                f"A modest house in {zone_name}. The walls are made of timber and plaster. "
+                f"A small hearth provides warmth. The town thrives on {economy}."
+            )
+        elif room_type == "shop":
+            return (
+                f"A shop in {zone_name}. Shelves line the walls, filled with goods. "
+                f"The shopkeeper waits behind the counter. The town's economy is based on {economy}."
+            )
+        elif room_type == "tavern":
+            return (
+                f"A warm, smoky tavern in {zone_name}. Patrons drink, laugh, and share stories. "
+                f"The barkeep polishes a mug behind the counter. The town thrives on {economy}."
+            )
+        elif room_type == "inn":
+            return (
+                f"A cozy inn in {zone_name}. Travelers rest here for the night. "
+                f"The innkeeper greets guests warmly. The town's economy benefits from {economy}."
+            )
+        elif room_type == "gate":
+            return (
+                f"The city gate of {zone_name}. Guards stand watch, checking travelers. "
+                f"Beyond lies the wilderness. The town's economy is based on {economy}."
+            )
+        elif room_type == "wall":
+            return (
+                f"The city wall of {zone_name}. The stone is weathered but sturdy. "
+                f"Guards patrol the battlements. The town thrives on {economy}."
+            )
+        elif room_type == "tower":
+            return (
+                f"A watchtower in {zone_name}. The view stretches far across the land. "
+                f"Guards keep watch for danger. The town's economy is based on {economy}."
+            )
+        elif room_type == "dungeon_hall":
+            return (
+                f"A dark dungeon hall in {zone_name}. The air is damp and cold. "
+                f"Torches flicker on the walls. The town's economy is based on {economy}."
+            )
+        elif room_type == "dungeon_room":
+            return (
+                f"A dungeon chamber in {zone_name}. The walls are rough stone. "
+                f"The air smells of mildew. The town thrives on {economy}."
+            )
+        elif room_type == "basement":
+            return (
+                f"A basement in {zone_name}. The air is cool and damp. "
+                f"Crates and barrels line the walls. The town's economy is based on {economy}."
+            )
+        elif room_type == "attic":
+            return (
+                f"An attic in {zone_name}. The air is warm and dusty. "
+                f"Old furniture and trunks fill the space. The town thrives on {economy}."
+            )
+        else:
+            return f"A {room_type} in {zone_name}. The town's economy is based on {economy}."
