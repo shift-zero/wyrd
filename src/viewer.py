@@ -399,7 +399,8 @@ def _draw_header(stdscr, seed, year, total, paused, speed, w, month=None):
     mode = "⏸ PAUSED" if paused else "▶ RUNNING"
     mode_color = _CP["status"] if paused else _CP["accent"]
     season_str = _season_name(month) if month is not None else ""
-    yr_str = f" {season_str} Year {year:,}/{total:,}"
+    total_str = f"{total:,}" if total is not None else "∞"
+    yr_str = f" {season_str} Year {year:,}/{total_str}"
     lbl = _speed_label(speed)
     speed_str = f" {lbl} {speed:.1f}x"
     _fill_line(stdscr, 0, _CP["header"])
@@ -454,11 +455,12 @@ def _draw_status_bar(stdscr, h, w, seed, year, total, paused, speed, month=None)
     """Persistent status bar showing mode, season, progress, speed label, and keybind hints."""
     season_str = _season_name(month) if month is not None else ""
     lbl = _speed_label(speed)
+    total_str = f"{total:,}" if total is not None else "∞"
     # Left: mode indicator
     if paused:
-        mode_str = f" ⏸ PAUSED  Seed {seed}  {season_str} Year {year:,}/{total:,}  {lbl} {speed:.1f}x"
+        mode_str = f" ⏸ PAUSED  Seed {seed}  {season_str} Year {year:,}/{total_str}  {lbl} {speed:.1f}x"
     else:
-        mode_str = f" ▶ RUNNING  Seed {seed}  {season_str} Year {year:,}/{total:,}  {lbl} {speed:.1f}x"
+        mode_str = f" ▶ RUNNING  Seed {seed}  {season_str} Year {year:,}/{total_str}  {lbl} {speed:.1f}x"
 
     # Right: context-sensitive key hints
     if paused:
@@ -1211,7 +1213,7 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
         frame_count += 1
 
         # ── Advance sim (month-level ticks) ────────────────────────────
-        if not paused and cur_year < years:
+        if not paused and (years is None or cur_year < years):
             now = time.monotonic()
             dt = now - last
             last = now
@@ -1221,7 +1223,7 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
             if month_accum > 60.0:
                 month_accum = 60.0
             accum += month_accum
-            while accum >= 1.0 and cur_year < years:
+            while accum >= 1.0 and (years is None or cur_year < years):
                 accum -= 1.0
                 cur_month += 1
                 if cur_month >= 12:
@@ -1365,10 +1367,10 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
             elif act == "step":
                 if not paused:
                     paused = True
-                if cur_year < years:
+                if years is None or cur_year < years:
                     # Advance 12 months (one full year)
                     for _ in range(12):
-                        if cur_year >= years:
+                        if years is not None and cur_year >= years:
                             break
                         cur_month += 1
                         if cur_month >= 12:
@@ -1444,7 +1446,7 @@ def _loop(stdscr, world: World, years: int, chaos: float, offset: int):
             time.sleep(0.008)
 
 
-def view_simulation(world: World, num_years: int = 100,
+def view_simulation(world: World, num_years: int | None = None,
                     chaos_factor: float = 0.3, seed_offset: int = 0):
     """Run the interactive simulation viewer.
 

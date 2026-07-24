@@ -160,7 +160,22 @@ The simulation engine (`sim.py`) currently ticks in whole years. This is a deep 
 - Latest: sort arrows in column headers + confirm-on-quit safeguard (2026-07-27)
 
 ### Completed this session (2026-07-28)
-- **Lookup false-positive bug fix.** `wyrd lookup <query>` was returning irrelevant results for unrelated queries because `_score()` accepted any SequenceMatcher ratio >0.4 even when the longest matching block was a short accidental trigram (e.g. "one" matching between "nonexistent" and "Fallen Bones"). Now requires at least 4 contiguous matching characters for the SM path. Removed unused `import re`.
+- **Lookup false-positive bug fix.** ...already documented above...
+
+### Completed this session (2026-07-29)
+- **Word-wrapped event log.** Descriptions now wrap at word boundaries instead of truncating mid-sentence.
+- **Welcome/onboarding overlay.** New characters see a full-screen intro explaining stats, first steps, and wyrd philosophy.
+- **Info panel (`i` key).** Explains health, gold, skills, deeds, heir system in a centered overlay.
+- **Mini-map overlay (`v` key).** 11×21 terrain minimap centered on player settlement with player/settlement markers.
+- **Viewer infinite mode fix.** Viewer no longer hardcoded to 100 years — defaults to `None` (infinite), `∞` shown in counters.
+- **Status bar updated** to show `[v] Map` and `[i] Info`.
+- **Created `docs/embody.md`** documenting embody TUI, keybindings, overlays, character systems.
+- **Tests:** 799 passed, no regressions.
+
+### What to tackle next
+- NPC interaction (`t` to talk to nearby characters)
+- Ambient time flow / idle passage
+- Quest system / milestone visibility
 
 ### Completed this session (2026-07-24)
 - **Deeper seasonal palette.** Temperature factor computed from latitude + elevation + month. Snow accumulation on cold winter tiles (temp < 0.2). Autumn warm forests turn deep crimson (color 124). Spring warm grasslands get brilliant lime (color 46). 8 new color pairs.

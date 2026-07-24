@@ -96,6 +96,22 @@ def _init_colors():
     curses.init_pair(_CP["header_bg"], -1, 236)
     curses.init_pair(_CP["status_bar"], 15, 238)
 
+    # Mini-map terrain color pairs (21-31)
+    _MM_TERRAIN = ["deep_water", "shallow", "sand", "grass", "forest",
+                   "hills", "mountains", "snow", "river", "swamp", "desert"]
+    _MM_COLORS = [27, 33, 223, 28, 22, 94, 130, 255, 45, 64, 179]
+    from .world import TERRAIN as _TERRAIN
+    for i, t in enumerate(_MM_TERRAIN):
+        if t in _TERRAIN:
+            curses.init_pair(21 + i, _MM_COLORS[i], -1)
+
+
+_MM_PAIR = {
+    "deep_water": 21, "shallow": 22, "sand": 23, "grass": 24,
+    "forest": 25, "hills": 26, "mountains": 27, "snow": 28,
+    "river": 29, "swamp": 30, "desert": 31,
+}
+
 
 def _draw(stdscr, y, x, text, cp, bold=False):
     """Safe text drawing at (y, x) with color pair."""
@@ -162,6 +178,30 @@ def _health_bar(health: int, width: int = 10) -> tuple[str, int]:
     return bar, cp
 
 
+def _wrap_text(text: str, max_width: int) -> list[str]:
+    """Wrap text at word boundaries to fit within max_width."""
+    if max_width < 10:
+        return [text[:max(max_width - 1, 1)]]
+    words = text.split()
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        if len(current) + len(word) + 1 <= max_width:
+            current = (current + " " + word).strip()
+        else:
+            if current:
+                lines.append(current)
+            if len(word) >= max_width:
+                for i in range(0, len(word), max_width):
+                    lines.append(word[i:i + max_width])
+                current = ""
+            else:
+                current = word
+    if current:
+        lines.append(current)
+    return lines if lines else [text[:max(max_width, 1)]]
+
+
 # ── Help overlay ───────────────────────────────────────────────────────
 
 EMBODY_HELP = [
@@ -176,6 +216,8 @@ EMBODY_HELP = [
     "    t                Travel to another settlement",
     "    m                Open market / shop",
     "    s                Character status summary",
+    "    v                View mini-map of your location",
+    "    i                Info — explain stats and how things work",
     "",
     "  Interactive Events",
     "    When events occur, 1/2/3 keys make choices",
@@ -189,6 +231,37 @@ EMBODY_HELP = [
     "    Travel takes 1-2 months (simulated in days).",
     "    Age affects health — the old grow frail.",
     "    Your character auto-saves after each time advance.",
+]
+
+EMBODY_WELCOME = [
+    "═══════  Welcome to the Wyrd  ═══════",
+    "",
+    "You have been born into a living, breathing world.",
+    "Time flows, empires rise and fall, and your choices echo",
+    "across generations.",
+    "",
+    "Your Character",
+    "  ❤ Health   — Your life force. Danger, famine, and age",
+    "                reduce it. Rest and safety restore it.",
+    "  ✦ Gold     — The coin of the realm. Buy gear, pay for",
+    "                passage, bribe officials.",
+    "  ⚔ Skills   — Combat, Trade, Persuasion, Survival, Crafting.",
+    "                Use them to grow them. Higher levels unlock",
+    "                better outcomes in events.",
+    "  🎂 Age     — Youth is vitality. Elders grow frail but wise.",
+    "",
+    "Your First Steps",
+    "  n → Advance a year   1m → Advance a month",
+    "  t → Travel to new lands",
+    "  m → Browse the market and buy/sell goods",
+    "  v → See a map of your surroundings",
+    "  ? → View all controls",
+    "",
+    "The world ticks on without you. Wars are declared, cities",
+    "grow, plagues sweep through. Your role is to survive,",
+    "thrive, and leave a mark on the wyrd.",
+    "",
+    "  Press any key to begin.",
 ]
 
 _EMBODY_LOG_ICONS = {
@@ -242,6 +315,239 @@ def _draw_help_overlay(stdscr):
             _draw(stdscr, yy, start_x + 2, line, _CP["normal"])
         else:
             _draw(stdscr, yy, start_x + 2, line, _CP["title"], bold=True)
+
+
+def _draw_info_overlay(stdscr):
+    """Draw centered info/explanation panel explaining stats and systems."""
+    h, w = stdscr.getmaxyx()
+    lines = [
+        "═══  Understanding Your Life  ═══",
+        "",
+        "❤ Health (0-100)",
+        "  Health is your lifeline. It falls when you are wounded",
+        "  in combat, caught in disasters, or grow very old. It",
+        "  recovers slowly with time and wise choices. Once it",
+        "  reaches 0, your character dies and the story passes",
+        "  to their heir.",
+        "",
+        "✦ Gold",
+        "  Gold is wealth and influence. Earn it through trade,",
+        "  quests, and events. Spend it at markets on gear,",
+        "  supplies, and information. Your heir inherits half.",
+        "",
+        "⚔ Skills (Combat, Trade, Persuasion, Survival, Crafting)",
+        "  Skills grow through use — making choices that test",
+        "  them earns XP. Each level improves outcomes in",
+        "  interactive events. A level 10 combatant fights",
+        "  differently than a level 1 farmer.",
+        "",
+        "📜 Deeds & Legacy",
+        "  Deeds are permanent records of your achievements.",
+        "  Legacy events are the major moments you witnessed.",
+        "  Both pass to your heir, building a family saga.",
+        "",
+        "👪 Heir System",
+        "  When you die, your heir inherits half your gold,",
+        "  some inventory, and partial skill XP. The world",
+        "  continues — your wyrd spins on through generations.",
+        "",
+        "  Press any key to close.",
+    ]
+    box_h = min(len(lines) + 2, h - 2)
+    box_w = min(max(len(l) for l in lines) + 4, w - 2)
+    start_y = max(0, (h - box_h) // 2)
+    start_x = max(0, (w - box_w) // 2)
+
+    # Dim background
+    for dy in range(h):
+        for dx in range(w):
+            try:
+                stdscr.addch(dy, dx, " ", curses.A_DIM)
+            except curses.error:
+                pass
+
+    # Box border
+    for yy in range(box_h):
+        for xx in range(box_w):
+            try:
+                if yy == 0 or yy == box_h - 1 or xx == 0 or xx == box_w - 1:
+                    stdscr.addch(start_y + yy, start_x + xx, " ",
+                                 curses.color_pair(_CP["border"]))
+                else:
+                    stdscr.addch(start_y + yy, start_x + xx, " ",
+                                 curses.color_pair(_CP["normal"]))
+            except curses.error:
+                pass
+
+    for i, line in enumerate(lines):
+        yy = start_y + 1 + i
+        if yy >= h:
+            break
+        if not line:
+            continue
+        if line.startswith("═══"):
+            _draw(stdscr, yy, start_x + 2, line, _CP["title"], bold=True)
+        elif line.startswith("  ") and not line.startswith("    ") and "─" not in line:
+            _draw(stdscr, yy, start_x + 2, line, _CP["accent"], bold=True)
+        elif line.startswith("    "):
+            _draw(stdscr, yy, start_x + 2, line, _CP["normal"])
+        else:
+            _draw(stdscr, yy, start_x + 2, line, _CP["dim"])
+
+
+def _draw_welcome_overlay(stdscr, char: PlayerCharacter):
+    """Draw the welcome/onboarding overlay with character intro."""
+    h, w = stdscr.getmaxyx()
+    lines = []
+    for line in EMBODY_WELCOME:
+        if line.startswith("Your Character") or line.startswith("Your First Steps"):
+            lines.append(line)
+        elif line.startswith("═══════"):
+            lines.append(f"═══════  Welcome, {char.name}  ═══════")
+        else:
+            lines.append(line)
+
+    box_h = min(len(lines) + 2, h - 2)
+    box_w = min(max(len(l) for l in lines) + 4, w - 2)
+    start_y = max(0, (h - box_h) // 2)
+    start_x = max(0, (w - box_w) // 2)
+
+    # Dim background
+    for dy in range(h):
+        for dx in range(w):
+            try:
+                stdscr.addch(dy, dx, " ", curses.A_DIM)
+            except curses.error:
+                pass
+
+    # Box border
+    for yy in range(box_h):
+        for xx in range(box_w):
+            try:
+                if yy == 0 or yy == box_h - 1 or xx == 0 or xx == box_w - 1:
+                    stdscr.addch(start_y + yy, start_x + xx, " ",
+                                 curses.color_pair(_CP["border"]))
+                else:
+                    stdscr.addch(start_y + yy, start_x + xx, " ",
+                                 curses.color_pair(_CP["normal"]))
+            except curses.error:
+                pass
+
+    for i, line in enumerate(lines):
+        yy = start_y + 1 + i
+        if yy >= h:
+            break
+        if not line:
+            continue
+        if line.startswith("═══════"):
+            _draw(stdscr, yy, start_x + 2, line, _CP["title"], bold=True)
+        elif line.startswith("Your "):
+            _draw(stdscr, yy, start_x + 2, line, _CP["accent"], bold=True)
+        elif line.startswith("  "):
+            if "→" in line or "Health" in line or "Gold" in line or "Skills" in line or "Age" in line:
+                _draw(stdscr, yy, start_x + 2, line, _CP["normal"])
+            elif line.lstrip().startswith("n ") or line.lstrip().startswith("t "):
+                _draw(stdscr, yy, start_x + 2, line, _CP["skill"], bold=True)
+            elif line.lstrip().startswith("m ") or line.lstrip().startswith("v "):
+                _draw(stdscr, yy, start_x + 2, line, _CP["skill"], bold=True)
+            else:
+                _draw(stdscr, yy, start_x + 2, line, _CP["normal"])
+        else:
+            _draw(stdscr, yy, start_x + 2, line, _CP["normal"])
+
+
+_MM_TERRAIN_NAMES = ["deep_water", "shallow", "sand", "grass", "forest",
+                     "hills", "mountains", "snow", "river", "swamp", "desert"]
+_MM_PLAYER_CHAR = "☺"
+
+
+def _draw_minimap_overlay(stdscr, world: "World", char: PlayerCharacter):
+    """Draw a mini-map overlay centered on the player's settlement."""
+    h, w = stdscr.getmaxyx()
+    from .world import TERRAIN as _T
+
+    # Find player's settlement position
+    px, py = -1, -1
+    for region in world.regions:
+        for s in region.settlements:
+            if s.name.lower() == char.settlement.lower():
+                px, py = s.x, s.y
+                break
+        if px >= 0:
+            break
+
+    map_h = min(11, h - 4)
+    map_w = min(21, w - 4)
+    radius_y = map_h // 2
+    radius_x = map_w // 2
+
+    start_y = max(1, (h - map_h) // 2)
+    start_x = max(1, (w - map_w) // 2)
+
+    # Dim background
+    for dy in range(h):
+        for dx in range(w):
+            try:
+                stdscr.addch(dy, dx, " ", curses.A_DIM)
+            except curses.error:
+                pass
+
+    # Draw terrain tiles
+    for dy in range(map_h):
+        for dx in range(map_w):
+            wx = px + dx - radius_x
+            wy = py + dy - radius_y
+            yy = start_y + dy
+            xx = start_x + dx
+            if yy >= h or xx >= w:
+                continue
+            if wx < 0 or wx >= world.width or wy < 0 or wy >= world.height:
+                try:
+                    stdscr.addch(yy, xx, " ", curses.A_DIM)
+                except curses.error:
+                    pass
+                continue
+
+            t_key = world.terrain[wy][wx]
+            t_info = _T.get(t_key, {"char": "?", "color": 240})
+            pair = _MM_PAIR.get(t_key, 21)
+
+            # Check for player position
+            if wx == px and wy == py:
+                try:
+                    stdscr.addch(yy, xx, _MM_PLAYER_CHAR,
+                                 curses.color_pair(_CP["accent"]) | curses.A_BOLD)
+                except curses.error:
+                    pass
+            # Check for other settlements
+            elif any(s.x == wx and s.y == wy for region in world.regions
+                     for s in region.settlements):
+                try:
+                    stdscr.addch(yy, xx, "●",
+                                 curses.color_pair(_CP["gold"]))
+                except curses.error:
+                    pass
+            else:
+                try:
+                    stdscr.addch(yy, xx, t_info["char"],
+                                 curses.color_pair(pair))
+                except curses.error:
+                    pass
+
+    # Border
+    _draw_border_box(stdscr, start_y - 1, start_x - 1, map_h + 2, map_w + 2, _CP["border"])
+
+    # Title
+    title = f" {char.settlement} — {char.region} "
+    _draw(stdscr, start_y - 1, start_x + 2, title, _CP["title"], bold=True)
+
+    # Legend row
+    legend = f" {_MM_PLAYER_CHAR}=You  ●=Settlement  [v] close "
+    _draw(stdscr, start_y + map_h + 1, start_x, legend, _CP["dim"])
+
+    # Compass
+    _draw(stdscr, start_y, start_x + map_w + 2, "N", _CP["dim"])
+    _draw(stdscr, start_y, start_x + map_w + 2, "↑", _CP["dim"])
 
 
 def _draw_choice_overlay(stdscr, choices):
@@ -476,22 +782,25 @@ def _render_event_log(stdscr, events: list, log_lines: list,
     _draw(stdscr, y, x + width - len(count_info) - 1, count_info, _CP["dim"])
     y += 1
 
-    # Render visible portion
-    visible = log_lines[scroll_offset:scroll_offset + h_avail]
-    for i, line in enumerate(visible):
-        yy = y + i
-        if yy >= y + h_avail:
-            break
-        # Color the line based on content
+    # Render visible portion with word-wrapping
+    wrapped_lines: list[tuple[str, int]] = []
+    for line in log_lines:
         cp = _CP["normal"]
         if line.startswith("☠") or line.startswith("⚔") or line.startswith("🗡"):
             cp = _CP["event_bad"]
         elif line.startswith("▲") or line.startswith("💰"):
             cp = _CP["event_good"]
-        elif line.startswith("✦") or line.startswith("📜"):
+        elif line.startswith("✦") or line.startswith("📜") or line.startswith("📌"):
             cp = _CP["event_info"]
-        truncated = line[:width - 2]
-        _draw(stdscr, yy, x + 1, truncated, cp)
+        for wrapped in _wrap_text(line, width - 3):
+            wrapped_lines.append((wrapped, cp))
+
+    visible = wrapped_lines[scroll_offset:scroll_offset + h_avail]
+    for i, (line, cp) in enumerate(visible):
+        yy = y + i
+        if yy >= y + h_avail:
+            break
+        _draw(stdscr, yy, x + 1, line, cp)
 
     # Scroll indicator
     if scroll_offset > 0:
@@ -506,8 +815,8 @@ def _render_status_bar(stdscr, char: PlayerCharacter, h: int, w: int):
     """Render the bottom status/action bar."""
     _fill_line(stdscr, h - 1, _CP["status_bar"])
     actions = (
-        "[n] Year  [1m] Month  [t] Travel  "
-        "[m] Market  [s] Status  [?] Help  [q] Quit"
+        "[n] Year  [1] Month  [t] Travel  "
+        "[m] Market  [v] Map  [i] Info  [?] Help  [q] Quit"
     )
     season = _season_for_month(char.month)
     right = f" {season}, Yr {char.year}  "
@@ -583,6 +892,9 @@ def _tui_main(stdscr, world: World,
     current_choices: list = []
     choice_selected = False
     choice_result = ""
+    show_welcome = not loaded  # Show welcome for new characters
+    show_info = False
+    show_minimap = False
 
     # Add welcome message to log
     welcome = f"✦ You are {char.name}, a {char.profession} in {char.settlement}."
@@ -650,8 +962,12 @@ def _tui_main(stdscr, world: World,
 
         # ── Handle overlays ─────────────────────────────────────────────
 
-        # 1. Choice overlay (highest priority)
-        if in_choice and current_choices:
+        # 0. Welcome overlay (first-time onboarding, highest priority)
+        if show_welcome:
+            _draw_welcome_overlay(stdscr, char)
+
+        # 1. Choice overlay
+        elif in_choice and current_choices:
             _draw_choice_overlay(stdscr, current_choices)
 
         # 2. Travel overlay
@@ -662,7 +978,15 @@ def _tui_main(stdscr, world: World,
         elif show_help:
             _draw_help_overlay(stdscr)
 
-        # 3b. Epilogue overlay (covers full screen)
+        # 3a. Info overlay
+        elif show_info:
+            _draw_info_overlay(stdscr)
+
+        # 3b. Mini-map overlay
+        elif show_minimap:
+            _draw_minimap_overlay(stdscr, world, char)
+
+        # 3c. Epilogue overlay (covers full screen)
         if show_epilogue:
             if epilogue_mode == 'heir_confirm' and pending_heir:
                 _draw_heir_confirm_overlay(stdscr, pending_heir)
@@ -697,7 +1021,7 @@ def _tui_main(stdscr, world: World,
                         epilogue_mode = 'heir_confirm'
                     else:
                         epilogue_mode = 'heir_born'
-                elif key in ('n', 'N', 'q', 'Q', '\\x1b'):
+                elif key in ('n', 'N', 'q', 'Q', '\x1b'):
                     running = False
             elif epilogue_mode == 'heir_confirm':
                 if key in ('y', 'Y'):
@@ -717,6 +1041,21 @@ def _tui_main(stdscr, world: World,
                 else:
                     running = False
                 continue
+
+        # Welcome overlay — any key dismisses
+        if show_welcome:
+            show_welcome = False
+            continue
+
+        # Info overlay — any key dismisses
+        if show_info:
+            show_info = False
+            continue
+
+        # Mini-map overlay — any key dismisses
+        if show_minimap:
+            show_minimap = False
+            continue
 
         if in_choice:
             if key in ("1", "2", "3"):
@@ -971,6 +1310,12 @@ def _tui_main(stdscr, world: World,
 
             elif key in ("m", "M"):
                 show_market = True
+
+            elif key in ("v", "V"):
+                show_minimap = True
+
+            elif key in ("i", "I"):
+                show_info = True
 
             elif key in ("s", "S"):
                 status_msg = (f"{char.name} | HP {char.health}/100 | "

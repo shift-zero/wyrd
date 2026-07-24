@@ -1427,7 +1427,7 @@ def _gateway_loop(stdscr):
             world_in_session = world
             from .viewer import view_simulation
             stdscr = _launch_curses_view(stdscr, "Simulation Viewer",
-                                         view_simulation, world, 100, 0.3)
+                                         view_simulation, world, None, 0.3)
 
         elif key == ord("d"):
             world, err = _resolve_world(world_in_session, sorted_worlds, selected_idx)

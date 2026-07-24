@@ -65,4 +65,61 @@ Reviewed viewer.py and explore.py for rendering issues:
 - No rendering artifacts at edge cases found
 
 ### What to tackle next
-- Latest: fixed CP["info"] KeyError + README overhaul (2026-07-27)
+
+**🚨 PRIORITY SHIFT: Embody is now the primary experience.** The gateway, viewer, and generation CLI support it — embody is the main mode users interact with.
+
+**User feedback on embody (critical — fix before adding anything new):**
+
+1. ✅ **No onboarding** — dropped in with skills, gold, health, no idea what anything means. Need a welcome screen explaining your character, location, and first steps. *(Fixed: welcome overlay on character creation)*
+2. ✅ **Text gets truncated** — long event descriptions cut off mid-sentence in the event log. *(Fixed: word-wrapped event log)*
+3. ✅ **No map** — can't see where you are in the world. Need mini-map overlay showing player position, nearby terrain, and known settlements. *(Fixed: `v` key minimap)*
+4. ✅ **Health/gold/family opaque** — what damages health? What's gold for? Heir system exists but no family visible while alive. *(Fixed: `i` key info panel)*
+5. ~~**No NPC interaction**~~ — narrative engine generates characters but you can't talk to anyone. Need `t` key to talk to nearby NPCs (leaders, merchants, strangers).
+6. ~~**No clear goals**~~ — skills exist but why level them? What's the progression? Need visible milestones, a quest system, or reputation unlocks.
+7. ~~**Time doesn't flow ambiently**~~ — pressing keys to pass time feels mechanical. Need idle time flow (hours/days pass slowly), `Space` to speed up, auto-pause on events.
+
+**Remaining embody targets:**
+
+- **No NPC interaction** — narrative engine generates characters but you can't talk. Need `t` to talk to nearby characters.
+- **No clear goals** — skills exist but why level them? Need visible milestones, quest system, or reputation unlocks.
+- **Time doesn't flow ambiently** — pressing keys feels mechanical. Need idle time flow, `Space` to speed up.
+
+### Completed this session (2026-07-29)
+
+#### Word-wrapped event log
+Event descriptions were truncated at 70-80 characters (lines 1266, 107, 493),
+cutting off mid-sentence. Added `_wrap_text()` function that splits text at word
+boundaries, and rewired `_render_event_log()` and `_add_events_to_log()` to use it.
+Lines now flow naturally across multiple visual lines. Scroll indicator and
+scrolling logic preserved.
+
+#### Welcome/onboarding overlay
+New characters (not loaded from save) now see a full-screen welcome overlay
+explaining their character, what health/gold/skills mean, first steps (n, 1, t, m, v),
+and the philosophy of the wyrd. Dismissed with any keypress. Skipped for loaded saves.
+
+#### Info panel (`i` key)
+Press `i` to see an explanation of health (0-100, how it depletes/recovers),
+gold (earning, spending, inheritance), skills (5 types, XP system),
+deeds & legacy (permanent achievements, passed to heirs),
+and heir system (inherits half gold, partial skills, some inventory).
+
+#### Mini-map overlay (`v` key)
+Press `v` to see an 11×21 terrain minimap centered on the player's settlement.
+Shows terrain characters/colors matching the explorer/viewer scheme, other
+settlements as gold ● markers, and player position as a green ☺. Includes
+compass (N↑) and legend. Uses dedicated color pairs 21-31 to avoid conflicts
+with the UI color palette.
+
+#### Documentation
+Created `docs/embody.md` documenting embody mode, TUI layout, keybindings,
+character systems, the new overlays, and minimap. Added to AGENTS.md doc map.
+
+Tests: 799 passed, no regressions.
+
+#### Viewer infinite mode fix
+Viewer was hardcoded to 100 years (`view_simulation(world, 100, 0.3)` in gateway,
+`num_years: int = 100` default in viewer.py). Changed default to `None` (infinite)
+and gateway passes `None`. Loop condition, header display, status bar, and step-forward
+logic all handle `None` via `(years is None or cur_year < years)` guard. Displays
+`∞` in the header/status bar year counter for infinite runs.
