@@ -713,6 +713,7 @@ class MudWorld:
         """Convert a WFC city layout into MUD zones and rooms."""
         zones = {}
         zone_name = name_override or settlement["name"]
+        economy = settlement.get("economy", "general")
         
         # Parse WFC grid and buildings
         grid = settlement["grid"]
