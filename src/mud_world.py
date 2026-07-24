@@ -107,8 +107,8 @@ class MudWorld:
         for region in w.regions:
             for s in region.settlements:
                 cx, cy = tile_to_chunk(s.x, s.y)
-                # Generate zones for this settlement using WFC city layout
-                settlement_data = self._generate_chunk_settlement(cx, cy)
+                # Generate zones for this settlement using WFC, seeded by settlement position
+                settlement_data = self._generate_city_for_base_settlement(s.name, s.x, s.y)
                 if settlement_data:
                     zones = self._city_to_zones(settlement_data, cx, cy, name_override=s.name)
                     self.loaded_zones.update(zones)
@@ -188,6 +188,25 @@ class MudWorld:
                 self.loaded_zones.update(zones)
 
         return chunk
+
+    def _generate_city_for_base_settlement(self, name: str, tx: int, ty: int) -> dict | None:
+        """Generate a city layout for a base world settlement using its position as seed."""
+        rng = random.Random(self.seed + tx * 90001 + ty * 70001 + hash(name) % (2**31))
+        pop = int(max(50, rng.gauss(300, 100)))
+        economy = rng.choice(["farming", "mining", "fishing", "logging", "trade", "general"])
+        city_w, city_h = 30, 30
+        city_grid, city_meta = generate_city_layout(city_w, city_h, self.seed + tx * 7 + ty * 13)
+        if city_grid is None:
+            return None
+        return {
+            "name": name,
+            "population": pop,
+            "economy": economy,
+            "grid": city_grid,
+            "buildings": city_meta.get("buildings", []),
+            "chunk_x": tx // 32,
+            "chunk_y": ty // 32,
+        }
 
     def _should_have_settlement(self, cx: int, cy: int) -> bool:
         """Deterministic check — should this chunk have a settlement?"""

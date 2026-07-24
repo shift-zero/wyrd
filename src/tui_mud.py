@@ -105,7 +105,9 @@ class MudScreen(Screen):
     def _init_location(self) -> None:
         """Start player in their settlement."""
         settlement = self.char.settlement
-        zone = self.mud_world.get_zone_for_location(0, 0, settlement)
+        # Get the chunk coords for this settlement
+        cx, cy = tile_to_chunk(self.char.x, self.char.y)
+        zone = self.mud_world.get_zone_for_location(cx, cy, settlement)
         if zone:
             self.current_zone_name = settlement
             self.current_room_id = zone.entry_room
@@ -172,7 +174,9 @@ class MudScreen(Screen):
         # Safety check — zone must be loaded
         zone = self.current_zone
         if zone is None:
-            self._log("[red]You are lost — no zone data loaded for this area.[/]")
+            zone_names = list(self.mud_world.loaded_zones.keys())
+            self._log(f"[red]No zone data for '{self.current_zone_name}'.[/]")
+            self._log(f"[dim]Loaded zones: {zone_names[:5]}...[/]")
             self._log("[dim]Try pressing q to return to the gateway and re-entering.[/]")
             self.query_one("#command-input", Input).focus()
             return
