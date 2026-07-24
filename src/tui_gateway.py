@@ -187,7 +187,7 @@ def render_mini_map(world: World, width: int = 30, height: int = 10) -> str:
             t = world.terrain[y][x]
             char = TERRAIN.get(t, {}).get("char", "·")
             css = TERRAIN_COLORS.get(t, "#888888")
-            row_chars.append(f"{_ansi_color(css)}{char}{_RESET}")
+            row_chars.append(f"[{css}]{char}[/]")
         lines.append("".join(row_chars))
 
     return "\n".join(lines)
