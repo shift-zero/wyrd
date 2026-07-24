@@ -309,6 +309,18 @@ class WorldItem(Static):
 class CharacterManagerScreen(ModalScreen):
     """Overlay for viewing/deleting character saves."""
 
+    DEFAULT_CSS = """
+    CharacterManagerScreen {
+        align: center middle;
+    }
+    #char-manager-box {
+        width: 50;
+        height: auto;
+        border: solid $accent;
+        padding: 1 2;
+    }
+    """
+
     def __init__(self, seed: int) -> None:
         super().__init__()
         self.seed = seed
@@ -356,6 +368,18 @@ class CharacterManagerScreen(ModalScreen):
 class DeleteConfirmScreen(ModalScreen):
     """Confirm permanent world deletion."""
 
+    DEFAULT_CSS = """
+    DeleteConfirmScreen {
+        align: center middle;
+    }
+    #delete-confirm-box {
+        width: 50;
+        height: auto;
+        border: solid $error;
+        padding: 1 2;
+    }
+    """
+
     def __init__(self, world_info: dict) -> None:
         super().__init__()
         self.world_info = world_info
@@ -387,6 +411,18 @@ class DeleteConfirmScreen(ModalScreen):
 
 class GenerateScreen(ModalScreen):
     """Prompt for seed or generate random."""
+
+    DEFAULT_CSS = """
+    GenerateScreen {
+        align: center middle;
+    }
+    #generate-box {
+        width: 50;
+        height: auto;
+        border: solid $primary;
+        padding: 1 2;
+    }
+    """
 
     def compose(self) -> ComposeResult:
         with Vertical(id="generate-box"):
@@ -428,6 +464,12 @@ class GenerateScreen(ModalScreen):
 
 class GatewayHelpScreen(ModalScreen):
     """Help overlay for the gateway."""
+
+    DEFAULT_CSS = """
+    GatewayHelpScreen {
+        align: center middle;
+    }
+    """
 
     def compose(self) -> ComposeResult:
         help_lines = [

@@ -584,8 +584,10 @@ def dict_to_world(data: dict) -> World:
     return world
 
 
-def save_world(world: World, path: str) -> str:
+def save_world(world: World, path: str | None = None) -> str:
     """Save a world to a JSON file. Returns the path."""
+    if path is None:
+        path = f"wyrd-{world.seed}.json"
     data = world_to_dict(world)
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     with open(path, "w") as f:
