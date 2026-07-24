@@ -222,6 +222,12 @@ EMBODY_HELP = [
     "  Interactive Events",
     "    When events occur, 1/2/3 keys make choices",
     "",
+    "  Ambient Mode",
+    "    a                Enter ambient time flow mode",
+    "    [Space]          Toggle slow (1 month) / fast (1 year) tick speed",
+    "    [any key]        Exit ambient mode back to normal control",
+    "    Auto-pauses on   Wars, cataclysms, foundings, discoveries",
+    "",
     "  General",
     "    ? / h            Toggle this help",
     "    q                Quit embody mode",
@@ -452,6 +458,50 @@ def _draw_welcome_overlay(stdscr, char: PlayerCharacter):
                 _draw(stdscr, yy, start_x + 2, line, _CP["skill"], bold=True)
             else:
                 _draw(stdscr, yy, start_x + 2, line, _CP["normal"])
+        else:
+            _draw(stdscr, yy, start_x + 2, line, _CP["normal"])
+
+
+def _draw_ambient_overlay(stdscr, char: PlayerCharacter, speed: str):
+    """Draw ambient mode overlay — shows speed, character status, exit hint."""
+    h, w = stdscr.getmaxyx()
+    lines = [
+        "═══ Ambient Mode ═══",
+        "",
+        f"  Speed: {'🐇 FAST' if speed == 'fast' else '🐢 SLOW'}  "
+        f"(1 {'year' if speed == 'fast' else 'month'}/tick)",
+        f"  {_season_for_month(char.month)}, Y{char.year} M{char.month + 1}",
+        f"  ❤ {char.health}  ✦ {char.gold}g  🎂 {char.age}",
+        "",
+        "  [Space] toggle speed  [any key] exit",
+    ]
+    box_h = min(len(lines) + 2, h - 2)
+    box_w = min(max(len(l) for l in lines) + 4, w - 2)
+    start_y = max(0, (h - box_h) // 2)
+    start_x = max(0, (w - box_w) // 2)
+
+    # Dim background behind overlay
+    for dy in range(h):
+        for dx in range(w):
+            try:
+                stdscr.addch(dy, dx, " ", curses.A_DIM)
+            except curses.error:
+                pass
+
+    # Draw box
+    _draw_border_box(stdscr, start_y, start_x, box_h, box_w, _CP["border"])
+    for i, line in enumerate(lines):
+        yy = start_y + 1 + i
+        if yy >= h:
+            break
+        if not line:
+            continue
+        if line.startswith("═══"):
+            _draw(stdscr, yy, start_x + 2, line, _CP["title"], bold=True)
+        elif line.startswith("  Speed") or line.startswith("  [Space]"):
+            _draw(stdscr, yy, start_x + 2, line, _CP["dim"])
+        elif line.startswith("  ❤") or line.startswith("  🐢") or line.startswith("  🐇"):
+            _draw(stdscr, yy, start_x + 2, line, _CP["normal"])
         else:
             _draw(stdscr, yy, start_x + 2, line, _CP["normal"])
 
@@ -815,13 +865,18 @@ def _render_status_bar(stdscr, char: PlayerCharacter, h: int, w: int):
     """Render the bottom status/action bar."""
     _fill_line(stdscr, h - 1, _CP["status_bar"])
     actions = (
-        "[n] Year  [1] Month  [t] Travel  "
-        "[m] Market  [v] Map  [i] Info  [?] Help  [q] Quit"
+        "[a] Ambient  [n] Year  [1] Month  [t] Travel  "
+        "[m] Market  [v] Map  [?] Help  [q] Quit"
     )
     season = _season_for_month(char.month)
-    right = f" {season}, Yr {char.year}  "
+    season_icons = {"Winter": "❄", "Spring": "🌸", "Summer": "☀", "Autumn": "🍂"}
+    season_icon = season_icons.get(season, "")
+    season_cps = {"Winter": _CP["dim"], "Spring": _CP["accent"],
+                  "Summer": _CP["warning"], "Autumn": _CP["event_info"]}
+    season_cp = season_cps.get(season, _CP["status_bar"])
+    right = f" {season_icon}{season}, Yr {char.year}  "
     _draw(stdscr, h - 1, 1, actions, _CP["status_bar"])
-    _draw(stdscr, h - 1, w - len(right) - 1, right, _CP["status_bar"],
+    _draw(stdscr, h - 1, w - len(right) - 1, right, season_cp,
           bold=True)
 
 
@@ -895,6 +950,8 @@ def _tui_main(stdscr, world: World,
     show_welcome = not loaded  # Show welcome for new characters
     show_info = False
     show_minimap = False
+    ambient_mode = False
+    ambient_speed = "slow"  # "slow" = 1 month/tick, "fast" = 12 months/tick
 
     # Add welcome message to log
     welcome = f"✦ You are {char.name}, a {char.profession} in {char.settlement}."
@@ -986,6 +1043,11 @@ def _tui_main(stdscr, world: World,
         elif show_minimap:
             _draw_minimap_overlay(stdscr, world, char)
 
+        # Ambient mode overlay (draws only when no other overlays are active)
+        if ambient_mode and not show_help and not show_welcome and not show_travel \
+                and not in_choice and not show_info and not show_minimap and not show_epilogue:
+            _draw_ambient_overlay(stdscr, char, ambient_speed)
+
         # 3c. Epilogue overlay (covers full screen)
         if show_epilogue:
             if epilogue_mode == 'heir_confirm' and pending_heir:
@@ -1009,6 +1071,60 @@ def _tui_main(stdscr, world: World,
         except KeyboardInterrupt:
             break
         except Exception:
+            # Timeout in ambient mode — advance time
+            if ambient_mode:
+                months = 1 if ambient_speed == "slow" else 12
+                new_events = _advance_time(char, world, state, rng,
+                                            chaos, months=months)
+                events.extend(new_events)
+                season = _season_for_month(char.month)
+                log_lines.append(
+                    f"📅 {'Year' if months >= 12 else 'Month'} {char.year}"
+                    f"{'' if months >= 12 else f' M{char.month + 1}'} — {season}")
+                _add_events_to_log(log_lines, new_events, char)
+                _auto_save(char, world)
+
+                # Check for auto-pause on major events
+                pause_types = {"war", "founding", "abandonment", "earthquake",
+                               "volcanic_eruption", "great_plague", "tsunami",
+                               "meteor_strike", "great_fire", "magical_cataclysm",
+                               "faction_war", "faction_collapse", "discovery"}
+                pause_events = [e for e in new_events if e.event_type in pause_types]
+                if pause_events:
+                    ambient_mode = False
+                    stdscr.timeout(-1)
+                    for ev in pause_events:
+                        icon = _EMBODY_LOG_ICONS.get(ev.event_type, "⚡")
+                        log_lines.append(f"⏸ PAUSED: {icon} {ev.description[:70]}")
+                    status_msg = f"⏸ Auto-paused on {pause_events[0].event_type}"
+                    status_time = time_module.monotonic()
+
+                # Check death
+                if char.health <= 0:
+                    char.alive = False
+                    log_lines.append(f"☠ {char.name} has died.")
+                    show_epilogue = True
+                    epilogue_mode = 'heir_choice'
+                    ambient_mode = False
+                    stdscr.timeout(-1)
+
+                log_scroll = max(0, len(log_lines) - (h - 4))
+                continue
+            continue
+
+        # Ambient mode key handling (non-timeout keypress while ambient is active)
+        if ambient_mode:
+            if key == ' ':
+                ambient_speed = "fast" if ambient_speed == "slow" else "slow"
+                stdscr.timeout(500 if ambient_speed == "fast" else 1500)
+                status_msg = f"Ambient: {'🐇 FAST' if ambient_speed == 'fast' else '🐢 SLOW'}"
+                status_time = time_module.monotonic()
+            else:
+                # Any other key exits ambient mode
+                ambient_mode = False
+                stdscr.timeout(-1)
+                status_msg = "Ambient mode ended"
+                status_time = time_module.monotonic()
             continue
 
         # Handle key by mode
@@ -1313,6 +1429,13 @@ def _tui_main(stdscr, world: World,
 
             elif key in ("v", "V"):
                 show_minimap = True
+
+            elif key in ("a", "A"):
+                ambient_mode = True
+                ambient_speed = "slow"
+                stdscr.timeout(1500)
+                status_msg = "Ambient mode — time flows... [Space] speed  [any key] exit"
+                status_time = time_module.monotonic()
 
             elif key in ("i", "I"):
                 show_info = True
