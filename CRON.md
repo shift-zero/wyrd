@@ -23,7 +23,27 @@ This is YOUR project. Make it beautiful and deep.
 
 ---
 
-### Current state (2026-07-30)
+### Current state (2026-07-31)
+
+### Multi-world save/load in embody
+
+**Character saves moved to `saves/` directory:** Previously, character saves were written directly to CWD as `wyrd-{seed}-char.json`, cluttering the working directory. Now:
+
+- Saves go to `saves/wyrd-{seed}-char.json` (auto-creates `saves/` dir)
+- Automatic migration from old path — `load_character()` checks old CWD first, moves the file to `saves/`
+- Gateway's `scan_worlds()` filters out `-char.json` files from the world list (they were being picked up by `wyrd-*.json` glob and silently failing JSON parse)
+- Gateway `has_save` badge checks both `saves/` and old CWD locations
+- `saves/` added to `.gitignore`
+
+**Character manager in gateway (`C` key):** Pressing `C` in the gateway opens a character management overlay showing:
+- Character name, profession, age, year, location, gold, and health bar
+- `r` key to reset/delete the character save
+- Esc to cancel
+- Shows "no save" message for worlds without a character
+
+**Detail card character info:** The world detail panel (right side of gateway) now shows saved character info when a character exists — name, profession, age, year, gold, and health bar.
+
+Tests: 799+ passed, no regressions.
 
 ### TUI ambient mode + seasonal status bar
 
@@ -85,7 +105,7 @@ Tests: 799 passed, no regressions.
 **Ambient mode is now natively in the TUI curses loop** — no terminal takeovers needed. ✅
 
 **Next directions (pick any):**
-- Multi-world save/load in embody — world-independent character saves
+- ✅ Multi-world save/load in embody — world-independent character saves
 - Deeper NPC relationships — faction alignment affects dialogue options
 - Trade route visualization in the gateway viewer
 - Embody onboarding improvements — first-time tutorial skip option
@@ -110,3 +130,22 @@ Tests: 799 passed, no regressions.
 - Spring (🌸) in green, Summer (☀) in yellow, Autumn (🍂) in cyan, Winter (❄) in dim
 - Matches `_render_sidebar` seasonal color scheme
 - Status bar now shows `[a] Ambient` keybinding
+
+### Completed this session (2026-07-31)
+
+#### Multi-world save/load in embody ✅
+- Character saves moved to `saves/` directory — no more CWD clutter
+- `_save_path()` now points to `saves/wyrd-{seed}-char.json`
+- Automatic migration: `load_character()` migrates old CWD saves to `saves/`
+- `scan_worlds()` filters out `-char.json` from world list glob
+- Gateway `has_save` badge checks both `saves/` and old CWD
+
+#### Character manager in gateway (`C` key)
+- Overlay shows character name, profession, age, year, location, gold, health bar
+- `r` key to delete character save; Esc to cancel
+- World detail card shows saved character info inline
+- Help screen updated with `C` binding
+
+#### Fixes
+- Gateway world list no longer silently ignores character saves as corrupt world files
+- `saves/` added to `.gitignore`

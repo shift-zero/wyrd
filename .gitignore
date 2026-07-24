@@ -31,6 +31,9 @@ _test_*.json.gz
 .cron-context.md
 wyrd-*.json
 
+# Character saves
+saves/
+
 # Debug / scratch scripts
 check_*.py
 fix_*.py

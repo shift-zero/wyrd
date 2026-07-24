@@ -1992,13 +1992,30 @@ def _advance_year(char: PlayerCharacter, world: World,
 # ── Persistence ────────────────────────────────────────────────────
 
 
+SAVES_DIR = "saves"
+
+
 def _save_path(seed: int) -> str:
     """Get the character save file path for a given world seed."""
-    return f"wyrd-{seed}-char.json"
+    return os.path.join(SAVES_DIR, f"wyrd-{seed}-char.json")
+
+
+def _migrate_save(seed: int) -> str | None:
+    """Migrate a character save from the old CWD path to the new saves/ dir.
+    Returns the new path if migration happened, None if no save exists.
+    """
+    old_path = f"wyrd-{seed}-char.json"
+    new_path = _save_path(seed)
+    if os.path.exists(old_path):
+        os.makedirs(SAVES_DIR, exist_ok=True)
+        os.rename(old_path, new_path)
+        return new_path
+    return None
 
 
 def save_character(char: PlayerCharacter, seed: int) -> None:
     """Save the player character to a JSON file."""
+    os.makedirs(SAVES_DIR, exist_ok=True)
     path = _save_path(seed)
     data = {
         "wyrd_version": "0.1.0",
@@ -2013,6 +2030,8 @@ def load_character(seed: int) -> PlayerCharacter | None:
     """Load a saved player character from a JSON file.
     Returns None if no save exists.
     """
+    # Migrate old save if needed
+    _migrate_save(seed)
     path = _save_path(seed)
     if not os.path.exists(path):
         return None

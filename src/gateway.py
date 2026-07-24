@@ -158,6 +158,7 @@ def scan_worlds(search_dir: str = ".") -> list[dict]:
     world_files = [
         wf for wf in world_files
         if not re.search(r'-sim\.json', wf)
+        and not re.search(r'-char\.json', wf)
         and not re.search(r'-chronicles\.html', wf)
         and not re.search(r'\.ttrpg\.json', wf)
     ]
@@ -186,7 +187,7 @@ def scan_worlds(search_dir: str = ".") -> list[dict]:
             "has_narrative": "narrative" in data and data["narrative"] is not None,
             "has_chronicles": "chronicles" in data and data["chronicles"] is not None,
             "has_magic": "magic" in data and data["magic"] is not None,
-            "has_save": os.path.exists(f"wyrd-{seed}-char.json"),
+            "has_save": os.path.exists(f"saves/wyrd-{seed}-char.json") or os.path.exists(f"wyrd-{seed}-char.json"),
         })
     return results
 
@@ -199,6 +200,122 @@ def _has_sim_file(seed: int) -> bool:
             f"wyrd-{seed}-sim.json.gz",
         ]
     )
+
+
+def _char_save_path(seed: int) -> str:
+    """Get the path to a character save file (checks new saves/ dir then old CWD)."""
+    new = os.path.join("saves", f"wyrd-{seed}-char.json")
+    if os.path.exists(new):
+        return new
+    old = f"wyrd-{seed}-char.json"
+    if os.path.exists(old):
+        return old
+    return new  # Return new path even if doesn't exist (for creation)
+
+
+def _load_char_save_info(seed: int) -> dict | None:
+    """Load character save metadata for a given seed. Returns None if no save."""
+    path = _char_save_path(seed)
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        char = data.get("character", {})
+        if not char:
+            return None
+        # Compute health bars
+        health = char.get("health", 0)
+        bars = max(1, health // 10) if health else 0
+        empty = max(0, 10 - bars)
+        health_bar = "❤" * bars + "♡" * empty
+        return {
+            "name": char.get("name", "Unknown"),
+            "profession": char.get("profession", "?"),
+            "age": char.get("age", 0),
+            "year": char.get("year", 0),
+            "gold": char.get("gold", 0),
+            "health": health,
+            "health_bar": health_bar,
+            "settlement": char.get("settlement", "?"),
+            "region": char.get("region", "?"),
+        }
+    except Exception:
+        return None
+
+
+def _delete_char_save(seed: int) -> bool:
+    """Delete the character save for a given seed. Returns True if deleted."""
+    path = _char_save_path(seed)
+    if os.path.exists(path):
+        os.remove(path)
+        return True
+    return False
+
+
+def _character_manager_overlay(stdscr, seed: int, w: int, h: int):
+    """Show a character manager overlay for the given world seed."""
+    info = _load_char_save_info(seed)
+    lines = [
+        f"  wyrd #{seed} — Character Management",
+        "",
+    ]
+    if info:
+        lines.append(f"  {ANSI_BOLD}{info['name']}{ANSI_RESET}")
+        lines.append(f"  {ANSI_DIM}- profession:{ANSI_RESET} {info['profession']}")
+        lines.append(f"  {ANSI_DIM}- age:{ANSI_RESET} {info['age']}")
+        lines.append(f"  {ANSI_DIM}- year:{ANSI_RESET} {info['year']}")
+        lines.append(f"  {ANSI_DIM}- location:{ANSI_RESET} {info['settlement']}, {info['region']}")
+        lines.append(f"  {ANSI_DIM}- gold:{ANSI_RESET} {info['gold']}")
+        lines.append(f"  {ANSI_DIM}- health:{ANSI_RESET} {info['health']}/100 {info['health_bar']}")
+        lines.append("")
+        lines.append("  [r] Reset save (delete character)  [Esc] Cancel")
+    else:
+        lines.append("  No saved character for this world.")
+        lines.append("  Start one with [p] Play to create a save.")
+        lines.append("")
+
+    # Strip ANSI for box width calculation
+    bare_lines = [_strip_ansi(l) for l in lines]
+    box_w = min(max(len(l) for l in bare_lines) + 4, w - 2)
+    box_h = min(len(lines) + 2, h - 1)
+    start_y = max(0, (h - box_h) // 2)
+    start_x = max(0, (w - box_w) // 2)
+
+    for y in range(box_h):
+        for x in range(box_w):
+            try:
+                if y == 0 or y == box_h - 1 or x == 0 or x == box_w - 1:
+                    stdscr.addch(start_y + y, start_x + x, " ",
+                                 curses.color_pair(CP["border"]))
+                else:
+                    stdscr.addch(start_y + y, start_x + x, " ",
+                                 curses.color_pair(CP["normal"]))
+            except curses.error:
+                pass
+
+    for i, line in enumerate(lines):
+        y = start_y + 1 + i
+        if y >= h:
+            break
+        if not line:
+            continue
+        # Parse simple inline ANSI codes for rendering
+        if ANSI_BOLD in line:
+            clean = line.replace(ANSI_BOLD, "").replace(ANSI_RESET, "")
+            _draw(stdscr, y, start_x + 2, clean,
+                  CP["accent"] if "Character Management" in line else CP["seed"] if "wyrd #" in line and "Character" not in line else CP["normal"],
+                  bold=True)
+        elif ANSI_DIM in line:
+            clean = line.replace(ANSI_DIM, "").replace(ANSI_RESET, "")
+            _draw(stdscr, y, start_x + 2, clean, CP["dim"])
+        else:
+            _draw(stdscr, y, start_x + 2, line, CP["normal"])
+
+
+ANSI_BOLD = "\x1b[1m"
+ANSI_RESET = "\x1b[0m"
+ANSI_DIM = "\x1b[2m"
 
 
 # ── Help panels ─────────────────────────────────────────────────────────
@@ -216,6 +333,7 @@ GATEWAY_HELP = [
     "    e                  Explore selected world (interactive map)",
     "    v                  View sim evolution (watch world grow)",
     "    p                  Play — embodied mode (live as a character)",
+    "    C                  Character manager — view/delete saves",
     "    d                  Describe / show lore for world",
     "    c                  Show chronicles (history)",
     "    s                  Run simulation (year-by-year text)",
@@ -416,6 +534,18 @@ def _draw_world_detail_panel(stdscr, data: dict | None,
     if data.get("features"):
         feat_str = "  " + " ".join(data["features"][:6])
         _draw(stdscr, feat_y, start_x + 2, feat_str, CP["accent"])
+
+    # ── Character save info ──────────────────────────────────────────
+    char_info = _load_char_save_info(data["seed"])
+    if char_info:
+        char_y = feat_y + (1 if data.get("features") else 0)
+        _draw(stdscr, char_y, start_x + 2,
+              f"  \u2726 {char_info['name']}",
+              CP["badge_p"], bold=True)
+        _draw(stdscr, char_y + 1, start_x + 2,
+              f"    {char_info['profession']}  age {char_info['age']}  Y{char_info['year']}  "
+              f"\u2726{char_info['gold']}  {char_info['health_bar']}",
+              CP["dim"])
 
 
 
@@ -1520,6 +1650,24 @@ def _gateway_loop(stdscr):
             world_in_session = world
             _gazetteer_mode(stdscr, world)
             stdscr.erase()
+
+        elif key == ord("C"):
+            """Character manager — view/delete saved characters."""
+            if sorted_worlds and 0 <= selected_idx < len(sorted_worlds):
+                w_info = sorted_worlds[selected_idx]
+                _character_manager_overlay(stdscr, w_info["seed"], w, h)
+                curses.doupdate()
+                cm_key = stdscr.getch()
+                if cm_key == ord("r"):
+                    if _delete_char_save(w_info["seed"]):
+                        status_msg = f"🗑 Character save deleted for wyrd #{w_info['seed']}"
+                    else:
+                        status_msg = f"❌ No save found for wyrd #{w_info['seed']}"
+                    status_time = time_module.monotonic()
+                    # Refresh world list to update badges
+                    worlds = scan_worlds(".")
+                    update_sort = True
+                stdscr.erase()
 
         elif key == ord("p"):
             world, err = _resolve_world(world_in_session, sorted_worlds, selected_idx)
