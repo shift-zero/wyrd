@@ -417,10 +417,18 @@ class GenerateScreen(ModalScreen):
         align: center middle;
     }
     #generate-box {
-        width: 50;
+        width: 40;
         height: auto;
         border: solid $primary;
         padding: 1 2;
+    }
+    #gen-buttons {
+        layout: vertical;
+        height: auto;
+    }
+    #gen-buttons Button {
+        width: 100%;
+        margin: 0 0 1 0;
     }
     """
 
