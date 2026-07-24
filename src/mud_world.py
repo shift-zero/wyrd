@@ -579,7 +579,28 @@ class MudWorld:
         
         return zones
 
-    def _generate_npcs_for_room(self, room_type: str, zone_name: str, economy: str) -> list[dict]:
+    def _generate_room_name(self, room_type: str, x: int, y: int) -> str:
+        """Generate a human-readable name for a room based on its type and coordinates."""
+        # Map room types to human-readable names
+        type_names = {
+            "plaza": "Town Square",
+            "street": "Street",
+            "alley": "Alleyway",
+            "house": "House",
+            "shop": "Shop",
+            "tavern": "Tavern",
+            "inn": "Inn",
+            "gate": "City Gate",
+            "tower": "Watchtower",
+            "wall": "City Wall",
+            "dungeon_hall": "Dungeon Hall",
+            "dungeon_room": "Dungeon Chamber",
+            "basement": "Basement",
+            "attic": "Attic",
+        }
+        
+        base_name = type_names.get(room_type, room_type.capitalize())
+        return base_name
         """Generate NPCs for a room based on its type and zone."""
         from .room import _generate_npcs as generate_npcs_for_room
         rng = random.Random(hash(room_type) + hash(zone_name) + hash(economy))
