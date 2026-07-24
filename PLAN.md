@@ -160,13 +160,12 @@ The simulation engine (`sim.py`) currently ticks in whole years. This is a deep 
 
 ## Phase 26 — wyrd is a Single-User MUD (current 🔥)
 
-**Thesis:** Like Minecraft — `wyrd` drops you into a procedurally generated world. You're in a room. You have skills, health, inventory. The world has deep history from the sim engine, but you discover it by *walking around*. Every seed is a completely different experience.
+**Thesis:** Like Minecraft — `wyrd` opens a world picker (gateway), pick a seed, drop into a procedural room. You have skills, health, inventory. The world has deep history from the sim engine, but you discover it by walking around. Every seed is a completely different experience.
 
-No menu, no world picker, no gateway. `wyrd` → drop in. `wyrd --seed 42` → specific seed. That's the entire surface.
-
-**What dies:**
-- `gateway.py`, `viewer.py`, `explore.py`, `tui.py`, `embody_tui.py`, `tui_gateway.py` — all curses + Textual gateway dead
-- `__main__.py` stripped — no subcommands
+**What dies (CLI/curses/export noise):**
+- `gateway.py`, `viewer.py`, `explore.py`, `tui.py`, `embody_tui.py` — curses dead
+- `tui_gateway.py` rewritten as the final Textual gateway
+- `__main__.py` stripped — `wyrd` → Textual gateway. No other subcommands.
 - `serve.py`, `export_*.py`, `query.py`, `ask.py`, `branch.py` — all dead
 
 **What lives:**

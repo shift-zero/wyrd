@@ -102,16 +102,14 @@ Tests: 799 passed, no regressions.
 
 ### What to tackle next — wyrd is a single-user MUD
 
-**👑 `wyrd` → drop in. No menu, no picker, no gateway. You're in a room.**
+**👑 `wyrd` → world picker → drop into a procedural room. Like Minecraft.**
 
-Like Minecraft. You run `wyrd`, it generates a world from a seed (or resumes your last one), and you're standing in a room. A character with skills, health, inventory. The world has deep history — civilizations, ruins, wars, trade routes — but you have to *walk around and discover it*. Every seed is a completely different experience.
+The gateway stays as the world picker / settings menu — like Minecraft's title screen. You pick or generate a world, then you're in a room with skills, health, inventory. The world has deep history — civilizations, ruins, wars, trade routes — but you discover it by walking around. Every seed is a different experience.
 
-**No more world picker.** The Textual WorldPicker gateway was a good first step but even that's too much UI. `wyrd` with no args should drop you straight into the game. If you want a new world, you type `wyrd --seed 42` or it auto-generates one fresh.
-
-**What dies (all of it):**
+**What dies (all the CLI/curses/export noise):**
 - `gateway.py`, `viewer.py`, `explore.py`, `tui.py`, `embody_tui.py` — curses dead
-- `tui_gateway.py` — even the Textual world picker dies. No gateway.
-- `__main__.py` stripped — `wyrd` → MUD, `wyrd --seed N` → specific seed. That's it.
+- `tui_gateway.py` — replace with final Textual gateway. No more curses fallback.
+- `__main__.py` stripped — `wyrd` → Textual gateway. `wyrd --seed 42` → generate and drop in. No other subcommands.
 - `serve.py`, `export_*.py`, `query.py`, `ask.py`, `branch.py` — all dead
 
 **What lives:**
