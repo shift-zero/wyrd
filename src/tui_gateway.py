@@ -665,14 +665,14 @@ class WorldPickerScreen(Screen):
             from .lore import generate_lore
             from .narrative import generate_narrative
             from .religion import generate_pantheon
-            from .magic import generate_magic
+            from .magic import generate_magic_system
             from .faction import generate_factions
             from .chronicles import generate_chronicles
             from .bestiary import generate_bestiary
             world.lore = generate_lore(world)
             world.narrative = generate_narrative(world)
             world.pantheon = generate_pantheon(world)
-            world.magic = generate_magic(world)
+            world.magic = generate_magic_system(world)
             world.factions = generate_factions(world)
             world.chronicles = generate_chronicles(world)
             world.bestiary = generate_bestiary(world)
