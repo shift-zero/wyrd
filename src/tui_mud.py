@@ -22,6 +22,7 @@ from .embody import (
 )
 from .room import generate_zones, Zone, Room
 from .mud_parser import parse_command, handle_command, CommandResult
+from .mud_sim import MudSimState
 
 
 # ── Help screen ─────────────────────────────────────────────────────────
@@ -95,6 +96,10 @@ class MudScreen(Screen):
         # Generate zones
         self._init_zones()
 
+        # Background sim
+        self.sim_state = MudSimState(world, self.seed)
+        self._hours_since_sim_update = 0
+
     def _init_zones(self) -> None:
         """Generate the room/zones for the world."""
         self.zones = generate_zones(self.world, self.seed)
@@ -155,8 +160,21 @@ class MudScreen(Screen):
 
         self.query_one("#command-input", Input).value = ""
         self._log(f"[dim]> {cmd_text}[/]")
-
+        # Parse and handle
         parsed = parse_command(cmd_text)
+
+        # Estimate hours for this action (for sim advancement)
+        verb = parsed.get("verb", "")
+        action_hours = {
+            "north": 1, "south": 1, "east": 1, "west": 1,
+            "northeast": 1, "northwest": 1, "southeast": 1, "southwest": 1,
+            "kill": 2, "attack": 2, "fight": 2,
+            "talk": 1, "say": 1, "yell": 1,
+            "use": 1, "get": 0, "take": 0, "drop": 0,
+            "look": 0, "inventory": 0, "score": 0, "status": 0,
+            "help": 0, "quit": 0,
+        }.get(verb, 1)
+
         result = handle_command(
             parsed, self.char, self.current_zone,
             self.current_room_id or "", self.world, self.seed
@@ -178,6 +196,17 @@ class MudScreen(Screen):
         # Log events
         for ev in result.events:
             self._log(f"[dim]{ev}[/]")
+
+        # Advance background sim
+        if action_hours > 0:
+            news = self.sim_state.advance(action_hours)
+            for item in news:
+                self._log(item)
+            self._hours_since_sim_update += action_hours
+            if self._hours_since_sim_update >= 168:  # ~1 week
+                self.sim_state.apply_to_rooms(self.zones)
+                self._hours_since_sim_update = 0
+                self._update_room_view()
 
         self.query_one("#command-input", Input).focus()
 
