@@ -586,17 +586,17 @@ class WorldPickerScreen(Screen):
             world = load_world(w["path"])
             if world:
                 from .tui_mud import MudScreen
-                self.push_screen(MudScreen(world=world))
+                self.app.push_screen(MudScreen(world=world))
 
     def action_generate_world(self) -> None:
-        self.push_screen(GenerateScreen(), self._on_generate_result)
+        self.app.push_screen(GenerateScreen(), self._on_generate_result)
 
     def action_generate_lore(self) -> None:
         def _handler(result):
             if result is not None:
                 seed, with_lore = result if isinstance(result, tuple) else (result, False)
                 self._do_generate(seed, with_lore=True)
-        self.push_screen(GenerateScreen(), _handler)
+        self.app.push_screen(GenerateScreen(), _handler)
 
     def _on_generate_result(self, result) -> None:
         if result is not None:
@@ -640,12 +640,12 @@ class WorldPickerScreen(Screen):
             world = load_world(w["path"])
             if world:
                 from .tui_mud import MudScreen
-                self.push_screen(MudScreen(world=world))
+                self.app.push_screen(MudScreen(world=world))
 
     def action_character_manager(self) -> None:
         w = self._get_selected_world()
         if w:
-            self.push_screen(CharacterManagerScreen(w["seed"]), self._on_char_mgr_done)
+            self.app.push_screen(CharacterManagerScreen(w['seed']), self._on_char_mgr_done)
 
     def _on_char_mgr_done(self, result) -> None:
         if result is not None:
@@ -669,7 +669,7 @@ class WorldPickerScreen(Screen):
     def action_delete_world(self) -> None:
         w = self._get_selected_world()
         if w:
-            self.push_screen(DeleteConfirmScreen(w), self._on_delete_result)
+            self.app.push_screen(DeleteConfirmScreen(w), self._on_delete_result)
 
     def _on_delete_result(self, confirmed) -> None:
         if confirmed:
@@ -688,7 +688,7 @@ class WorldPickerScreen(Screen):
         self._scan_and_populate()
 
     def action_show_help(self) -> None:
-        self.push_screen(GatewayHelpScreen())
+        self.app.push_screen(GatewayHelpScreen())
 
 
 # ── App ──────────────────────────────────────────────────────────────────
