@@ -551,7 +551,7 @@ class MudWorld:
                 # Create room
                 rooms[room_id] = Room(
                     room_id=room_id,
-                    name=self._generate_room_name(room_type, x, y, z),
+                    name=self._generate_room_name(room_type, x, y),
                     description=self._generate_room_description(room_type, zone_name, economy),
                     exits=exits,
                     contents=contents,
@@ -884,7 +884,7 @@ class MudWorld:
                 # Create room
                 rooms[room_id] = Room(
                     room_id=room_id,
-                    name=self._generate_room_name(room_type, x, y, z),
+                    name=self._generate_room_name(room_type, x, y),
                     description=self._generate_room_description(room_type, zone_name, economy),
                     exits=exits,
                     contents=contents,
