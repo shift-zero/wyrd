@@ -179,8 +179,8 @@ The simulation engine (`sim.py`) currently ticks in whole years. This is a deep 
 | 2 ✅ | Textual MUD screen — room view, event log, command input, stats sidebar | See the room you're in — description, exits, contents, NPCs | 2026-07-24 |
 | 3 ✅ | Room system — WFC generates room layouts per-settlement | Move n/s/e/w between rooms; room descriptions, exits, contents | 2026-07-24 |
 | 4 ✅ | Command parser — `look`, `get`, `use`, `talk`, `n/s/e/w`, `inv` | Verbs work with nouns; `get sword` picks it up; `use bandage` heals | 2026-07-24 |
-| 5 🔲 | World map as explorable space — walk between settlements | Walk north from town → forest path → another settlement days away |
-| 6 🔲 | Discovery — ruins, dungeons, lairs exist as discoverable locations | Walk into a ruin hex → enter its procedural dungeon rooms |
+| 5 ✅ | World map as explorable space — walk between settlements via chunks | Walk north from town → new chunk generates with WFC terrain + settlements | 2026-07-24 |
+| 6 ✅ | Discovery — ruins, dungeons, lairs WFC-generated in wilderness chunks | Walk into a chunk with a dungeon → enter its WFC-generated rooms | 2026-07-24 |
 | 7 ✅ | Background sim ticks while you play | Leave town for a week, come back to changes; news arrives | 2026-07-24 |
 | 8 ✅ | Gameplay loop — combat, trading, hunting, exploring, skills | Kill enemies for loot, buy/sell at markets, hunt for food, level skills | 2026-07-24 |
 
