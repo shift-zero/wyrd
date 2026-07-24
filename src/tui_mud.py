@@ -88,7 +88,6 @@ class MudScreen(Screen):
         self.mud_world = MudWorld(world.seed)
         self.mud_world.init_from_seed()
         self.current_zone_name: str | None = None
-        self.current_zone: Zone | None = None
         self.current_room_id: str | None = None
         self._hours_since_sim_update = 0
         self._movement_history: list[str] = []  # Track room_ids for 'back' command
