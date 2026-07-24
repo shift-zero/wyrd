@@ -102,24 +102,17 @@ Tests: 799 passed, no regressions.
 
 ### What to tackle next
 
-**🐛 `p` (play mode) crashes when launching** — gateway.py:1672 calls `curses.endwin()` then imports `embody_tui_play` and starts a new curses session. Likely culprits: (1) the `endwin()`/`initscr()` terminal state dance, or (2) `_init_colors()` in `_tui_main` failing after a prior curses session. No traceback provided — needs reproduction.
+**🆕 Feature request: add variable speed slider to TUI ambient mode** — like viewer's Crawl→Zoom, add more fine-grained speed control in ambient mode (the Space toggle is only slow/fast).
 
-**🆕 Feature request: delete worlds from gateway** — no way to delete a generated world file from within the TUI. User must `rm` the JSON file manually. Add a `d` (delete) key in the world list that prompts for confirmation before deleting the world file and its associated saves.
+**🆕 Feature request: event count/flash indicator during fast ambient ticks** — when running fast (12 months/tick), flash an indicator showing how many events occurred so you know to pause and check.
 
-**🐛 View mode map renders as only 1 row** — viewer.py:1309-1310 layout math is broken. `events_h = max(3, h - 7 - 2)` eats the whole terminal height, leaving `map_h = max(1, h - 7 - events_h - 1)` always = 1 regardless of terminal size. Fix: cap events_h to reserve room for the map, e.g. `events_h = min(max(3, h // 3), h - 10)`.
+**Deeper NPC relationships** — faction alignment affects dialogue options in embody mode.
 
-**🐛 View mode burns 100% CPU when paused** — viewer.py:1445-1446 puts `time.sleep(0.008)` only in the `not paused` branch. When paused (the entry state), the main loop spins with zero throttle, rendering the same static frame at full CPU speed. Fix: add `time.sleep(0.03)` (~30fps) in the paused branch too, or replace `nodelay(True)` with `stdscr.timeout(16)`. MacBook fans kicked on immediately.
+**Trade route visualization** in the gateway viewer's map overlay.
 
-**Ambient mode is now natively in the TUI curses loop** — no terminal takeovers needed. ✅
+**Dungeon generation** for point-of-interest exploration from embody mode.
 
-**Next directions (pick any):**
-- ✅ Multi-world save/load in embody — world-independent character saves
-- Deeper NPC relationships — faction alignment affects dialogue options
-- Trade route visualization in the gateway viewer
-- Embody onboarding improvements — first-time tutorial skip option
-- New system: dungeon generation for point-of-interest exploration
-- TUI ambient mode: add variable speed slider (like viewer's Crawl→Zoom)
-- TUI ambient mode: add event count/flash indicator during fast ticks
+**Embody onboarding improvements** — first-time tutorial skip option (currently shows every time).
 
 ### Completed this session (2026-07-30)
 
@@ -139,7 +132,18 @@ Tests: 799 passed, no regressions.
 - Matches `_render_sidebar` seasonal color scheme
 - Status bar now shows `[a] Ambient` keybinding
 
-### Completed this session (2026-07-31)
+### Completed this session (2026-08-01)
+
+#### Bug fixes
+- **Viewer map height fixed.** Layout math was `events_h = max(3, h - 7 - 2)` which ate nearly the full terminal height, leaving `map_h` stuck at 1 row. Now events_h is capped at 1/3 of available height, giving the map at least 4+ rows on any terminal ≥ 10 tall.
+- **Viewer CPU burn fixed.** When paused, the main loop had `time.sleep(0.008)` only in the `not paused` branch — the paused branch spin-looped at 100% CPU. Added `time.sleep(0.033)` (~30fps) in the paused branch.
+- **Play mode crash protected.** Gateway's `p` (embodied play) and `s` (simulation) handlers do `curses.endwin()` / `initscr()` dance. Wrapped `embody_tui_play` call and `_init_colors()` restart in try/except to survive terminal state issues on rapid endwin/initscr cycles.
+
+#### Delete worlds from gateway
+- Press `Del` on a selected world → confirmation popup → second `Del` confirms and deletes the world file, its character save, and sim file. Rescans world list and clears session/detail caches.
+- `Del` key registered in status bar hints and help overlay.
+
+#### Tests: 799 passed, no regressions.
 
 #### Multi-world save/load in embody ✅
 - Character saves moved to `saves/` directory — no more CWD clutter
