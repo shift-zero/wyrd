@@ -183,7 +183,7 @@ The simulation engine (`sim.py`) currently ticks in whole years. This is a deep 
 
 **Thesis:** The embody mode had three remaining UX gaps: no NPC interaction, no clear goals, and mechanical time passage. All three are now closed, making embody a complete first-class experience.
 
-### Items
+...
 
 | # | What | Verifiable |
 |---|------|------------|
@@ -192,10 +192,28 @@ The simulation engine (`sim.py`) currently ticks in whole years. This is a deep 
 | 3 ✅ | Ambient time flow (`a` key) — automatic time passage with Space speed toggle, auto-pause on events | Press `a` and watch time flow; Space toggles slow/fast; auto-pauses on wars and cataclysms |
 
 ### What to tackle next
-- Multi-world save/load in embody
-- Deeper NPC relationships (faction-aware dialogue)
-- Trade route viz in gateway viewer
-- Dungeon generation for POI exploration
+- Textual migration (Phase 25) — curses → Textual for all TUI surfaces
+
+## Phase 25 — Textual Migration (in progress 🔲)
+
+**Thesis:** Raw curses has been a constant source of bugs — screen refreshes, layout math, color pairs, key handling, terminal state corruption. Textual gives us reactive widgets, CSS layout, mouse support, async event loop, and built-in scrollable containers.
+
+### Items
+
+| # | What | Verifiable |
+|---|------|------------|
+| 1 🔲 | Textual WorldPicker gateway — world list, detail card, mini-map, sorting, dispatch | `wyrd` launches Textual gateway by default with feature parity to curses gateway |
+| 2 🔲 | Textual EmbodyScreen — sidebar, event log, action bar, overlays, NPC interaction | `wyrd embody` uses Textual instead of curses for the TUI |
+| 3 🔲 | Textual ViewerScreen — animated map, speed controls, auto-pause | `wyrd tui` replaces curses viewer with reactive Textual simulation viewer |
+| 4 🔲 | Room system — map world into explorable locations | Navigate rooms with n/s/e/w, each room has description + exits |
+| 5 🔲 | Command parser — verb+noun MUD interactions | `look`, `get item`, `use item`, `talk to npc` work |
+| 6 🔲 | Items + active skills — inventory, usable loot, skill actions | Bandages heal, weapons improve combat, `hunt` uses survival skill |
+| 7 🔲 | Gameplay loop — clear progression, goals, feedback | Explore → find items → survive → gain skills → tackle harder areas |
+
+### Completed this session (2026-08-03)
+- **Textual WorldPicker gateway** — `src/tui_gateway.py` with world list, sorting, mini-map detail card, overlays, dispatch to curses/textual modes
+- **CLI integration** — `wyrd` (no args) launches Textual gateway by default; `wyrd tui --gateway` / `-G` for explicit launch
+- **8 new tests**, 799 tests pass, no regressions
 
 ### Completed this session (2026-07-24)
 - **Deeper seasonal palette.** Temperature factor computed from latitude + elevation + month. Snow accumulation on cold winter tiles (temp < 0.2). Autumn warm forests turn deep crimson (color 124). Spring warm grasslands get brilliant lime (color 46). 8 new color pairs.
