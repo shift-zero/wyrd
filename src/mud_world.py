@@ -19,7 +19,7 @@ from .generate import generate_world
 from .lore import generate_lore
 from .narrative import generate_narrative
 from .religion import generate_pantheon
-from .magic import generate_magic
+from .magic import generate_magic_system
 from .faction import generate_factions
 from .chronicles import generate_chronicles
 from .bestiary import generate_bestiary
@@ -97,7 +97,7 @@ class MudWorld:
         w.lore = generate_lore(w)
         w.narrative = generate_narrative(w)
         w.pantheon = generate_pantheon(w)
-        w.magic = generate_magic(w)
+        w.magic = generate_magic_system(w)
         w.factions = generate_factions(w)
         w.chronicles = generate_chronicles(w)
         w.bestiary = generate_bestiary(w)
