@@ -181,8 +181,8 @@ The simulation engine (`sim.py`) currently ticks in whole years. This is a deep 
 | 4 ✅ | Command parser — `look`, `get`, `use`, `talk`, `n/s/e/w`, `inv` | Verbs work with nouns; `get sword` picks it up; `use bandage` heals | 2026-07-24 |
 | 5 🔲 | World map as explorable space — walk between settlements | Walk north from town → forest path → another settlement days away |
 | 6 🔲 | Discovery — ruins, dungeons, lairs exist as discoverable locations | Walk into a ruin hex → enter its procedural dungeon rooms |
-| 7 🔲 | Background sim ticks while you play | Leave town for a week, come back to changes; news arrives |
-| 8 🔲 | Gameplay loop — survive, explore, trade, fight, level up | Starter gear → explore → trade/fight → skill up → harder areas |
+| 7 ✅ | Background sim ticks while you play | Leave town for a week, come back to changes; news arrives | 2026-07-24 |
+| 8 ✅ | Gameplay loop — combat, trading, hunting, exploring, skills | Kill enemies for loot, buy/sell at markets, hunt for food, level skills | 2026-07-24 |
 
 **In progress (2026-07-24 live session):**
 - Item 7 (background sim): `src/mud_sim.py` created, wired into MudScreen. Sim ticks monthly, delivers news, updates room states. ✅
