@@ -649,12 +649,12 @@ class MudWorld:
         
         # Handle special cases
         if room_type == "plaza":
-            return f"{base_name} of {self.base_world.name}"
+            return f"{base_name}"
         elif room_type == "gate":
-            return f"{base_name} of {self.base_world.name}"
+            return f"{base_name}"
         
-        # Default: add coordinates for uniqueness
-        return f"{base_name}"
+        # Default: just the base name
+        return base_name
         """Generate a description for a room based on its type and zone."""
         rng = random.Random(hash(room_type) + hash(zone_name) + hash(economy))
         
