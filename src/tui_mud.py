@@ -260,7 +260,7 @@ class MudScreen(Screen):
                 # Show direction name
                 dir_name = full_names.get(d, d)
                 # Show target room name if available
-                target_room = zone.rooms.get(n)
+                target_room = self.current_zone.rooms.get(n) if self.current_zone else None
                 target_name = target_room.name if target_room else n
                 display_exits.append(f"[cyan]{dir_name}[/] → [dim]{target_name}[/]")
             exits_str = ", ".join(display_exits)
