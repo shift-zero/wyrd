@@ -175,14 +175,19 @@ The simulation engine (`sim.py`) currently ticks in whole years. This is a deep 
 
 | # | What | Verifiable |
 |---|------|------------|
-| 1 ✅ | Strip everything — CLI, curses, exporters, web, gateway | `wyrd` drops into Textual MUD. No subcommands exist. | 2026-08-03 |
-| 2 🔲 | Textual MUD screen — room view, event log, command input, stats sidebar | See the room you're in — description, exits, contents, NPCs |
-| 3 🔲 | Room system — WFC generates room layouts per-settlement | Move n/s/e/w between rooms; room descriptions, exits, contents |
-| 4 🔲 | Command parser — `look`, `get`, `use`, `talk`, `n/s/e/w`, `inv` | Verbs work with nouns; `get sword` picks it up; `use bandage` heals |
+| 1 ✅ | Strip everything — CLI, curses, exporters, web, gateway | `wyrd` drops into Textual MUD. No subcommands exist. | 2026-07-24 |
+| 2 ✅ | Textual MUD screen — room view, event log, command input, stats sidebar | See the room you're in — description, exits, contents, NPCs | 2026-07-24 |
+| 3 ✅ | Room system — WFC generates room layouts per-settlement | Move n/s/e/w between rooms; room descriptions, exits, contents | 2026-07-24 |
+| 4 ✅ | Command parser — `look`, `get`, `use`, `talk`, `n/s/e/w`, `inv` | Verbs work with nouns; `get sword` picks it up; `use bandage` heals | 2026-07-24 |
 | 5 🔲 | World map as explorable space — walk between settlements | Walk north from town → forest path → another settlement days away |
 | 6 🔲 | Discovery — ruins, dungeons, lairs exist as discoverable locations | Walk into a ruin hex → enter its procedural dungeon rooms |
 | 7 🔲 | Background sim ticks while you play | Leave town for a week, come back to changes; news arrives |
 | 8 🔲 | Gameplay loop — survive, explore, trade, fight, level up | Starter gear → explore → trade/fight → skill up → harder areas |
+
+**In progress (2026-07-24 live session):**
+- Item 7 (background sim): `src/mud_sim.py` created, wired into MudScreen. Sim ticks monthly, delivers news, updates room states. ✅
+- Item 8 (gameplay loop): combat, trading, active skills, time passage being built in mud_parser.py. 🟡
+- MudScreen updated with hours-per-action tracking and sim advancement. ✅
 
 ## Design Principles
 - **Lookup false-positive bug fix.** ...already documented above...
