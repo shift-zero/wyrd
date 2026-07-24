@@ -100,19 +100,52 @@ Reviewed viewer.py and explore.py for rendering issues:
 - Terminal resize handling uses `getmaxyx()` correctly in both viewer and explorer
 Tests: 799 passed, no regressions.
 
-### What to tackle next
+### What to tackle next — NEW DIRECTION
 
-**🆕 Feature request: add variable speed slider to TUI ambient mode** — like viewer's Crawl→Zoom, add more fine-grained speed control in ambient mode (the Space toggle is only slow/fast).
+**👑 NCURSES IS DONE. MOVE TO TEXTUAL.**
 
-**🆕 Feature request: event count/flash indicator during fast ambient ticks** — when running fast (12 months/tick), flash an indicator showing how many events occurred so you know to pause and check.
+Raw curses has been a constant source of bugs: screen refreshes, layout math, color pairs, key handling, the `endwin()`/`initscr()` dance, terminal state corruption. No more. From now on, the TUI is built on [Textual](https://github.com/textualize/textual) — a Python-native TUI framework by the Rich team.
 
-**Deeper NPC relationships** — faction alignment affects dialogue options in embody mode.
+Textual gives us:
+- Reactive widgets (no manual `erase()`/`addstr()`/`refresh()`)
+- CSS-like layout (no layout math bugs)
+- Mouse support
+- Async event loop
+- Proper screen diffing (no flicker)
+- Built-in scrollable containers, modals, trees, data tables
 
-**Trade route visualization** in the gateway viewer's map overlay.
+**Migration plan:**
+1. Add Textual as a dependency (`uv add textual`)
+2. Rewrite `gateway.py` → Textual `WorldPicker` screen with world list, detail card, mini-map
+3. Rewrite `embody_tui.py` → Textual `EmbodyScreen` with sidebar, event log, action bar, overlays
+4. Rewrite `viewer.py` → Textual `ViewerScreen` with animated map, speed controls
+5. Keep old curses files as fallback until migration is complete
+6. Delete old curses files once everything works
 
-**Dungeon generation** for point-of-interest exploration from embody mode.
+**👑 EMBODY BECOMES A SINGLE-USER MUD.**
 
-**Embody onboarding improvements** — first-time tutorial skip option (currently shows every time).
+Not a passive event-watcher with skills you can't use. A MUD. Rooms, items, commands, progression.
+
+**Everything seeded, nothing hand-authored.** Rooms are procedurally generated per-world from the seed, not designed. Wave function collapse (WFC) is a strong candidate — feed it the world's terrain/biome as constraints and let it generate coherent room layouts, dungeon floor plans, and settlement interiors that feel organic and replayable.
+
+What this means:
+- **Rooms instead of regions** — the world map gets subdivided into rooms/locations. Each settlement has rooms (tavern, market, temple, town square). Wild zones have rooms (forest path, cave entrance, river crossing).
+- **Directional movement** — `n`, `s`, `e`, `w` (or arrow keys) to move between rooms. Each room has a description, NPCs, items, and exits.
+- **Command parser** — type commands like `look`, `get bandage`, `use bandage`, `kill goblin`, `talk to merchant`, `open door`. Not a complex parser — simple verb+noun.
+- **Usable items** — bandages heal, potions restore, weapons improve combat outcomes. Items exist in the world (shops, loot, crafting) and do things when used.
+- **Active skills** — skills aren't passive % bonuses. You *use* them: `hunt` (survival), `bargain` (trade), `persuade` (persuasion). Each has a success/failure outcome.
+- **NPCs you can interact with** — talk, trade, fight. Generated from the narrative engine.
+- **A clear gameplay loop** — explore rooms → find items → use items to survive → gain skills → tackle harder areas → find better items. Visible progression.
+
+**The sim still runs in the background.** The world evolves while you explore rooms. News arrives via messenger. Events from the sim create new room states (ruins, destroyed buildings, new factions).
+
+**Priority order:**
+1. Textual migration — get the foundation right
+2. Room system — map the world into explorable locations
+3. Command parser — simple verb+noun for MUD interactions
+4. Usable items + active skills — make inventory and skills do things
+5. NPC interaction — talk, trade, fight with generated characters
+6. Gameplay loop — clear progression, goals, and feedback
 
 ### Completed this session (2026-07-30)
 
@@ -161,3 +194,18 @@ Tests: 799 passed, no regressions.
 #### Fixes
 - Gateway world list no longer silently ignores character saves as corrupt world files
 - `saves/` added to `.gitignore`
+
+### Completed this session (2026-08-03)
+
+#### Textual gateway (WorldPicker) — first major Textual migration step
+
+The curses gateway (`gateway.py`, 1755 lines) is now complemented by a Textual-based replacement (`tui_gateway.py`):
+
+- **WorldPicker screen** — reactive, mouse-friendly world list with auto-scanning
+- **Sorting** — press Tab to cycle seed→population→name with `↑↓` arrows on sort indicator
+- **Detail card** — right-panel with mini-ASCII map (24×6 terrain preview with ANSI colors), settlement stats, region breakdown, feature badges (lore/narrative/chronicles/magic/save/sim), and character info
+- **Overlay modals** — character manager (`C`), delete confirmation (Del), generate prompt (`n`/`G`), help screen (`?`)
+- **Dispatch actions** — View (Enter → Textual SimScreen), Explore (`e`), Viewer (`v`), Play/embody (`p`) — all launch via `App.exit()` for clean lifecycle management
+- **CLI integration** — `wyrd` (no args) launches Textual gateway by default (falls back to curses if Textual missing); `wyrd tui --gateway` / `-G` for explicit launch
+- **Tests** — 8 new tests in `test_tui.py` covering imports, mini-map rendering, detail text building, sorting, overlay instantiation, and launch entry point
+- **799 tests pass, no regressions.**

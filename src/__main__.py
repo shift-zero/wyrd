@@ -251,6 +251,8 @@ def main():
     tui_cmd = sub.add_parser("tui",
                              help="Explore a world in the Textual-based TUI viewer")
     _add_load_arg(tui_cmd)
+    tui_cmd.add_argument("--gateway", "-G", action="store_true",
+                          help="Launch the Textual world picker gateway")
 
     # ── branch ─────────────────────────────────────────────────────
     branch_cmd = sub.add_parser("branch",
@@ -392,10 +394,14 @@ def main():
 
     args = parser.parse_args()
 
-    # ── No subcommand → launch gateway TUI ─────────────────────────
+    # ── No subcommand → launch gateway TUI (Textual by default) ──
     if args.command is None:
-        from .gateway import gateway_main
-        gateway_main()
+        try:
+            from .tui_gateway import launch as launch_gateway
+            launch_gateway()
+        except ImportError:
+            from .gateway import gateway_main
+            gateway_main()
         return
 
     # ── generate ───────────────────────────────────────────────────
@@ -523,9 +529,13 @@ def main():
 
     # ── tui ──────────────────────────────────────────────────────────
     elif args.command == "tui":
-        world = _get_world(args)
-        from .tui import launch as launch_tui
-        launch_tui(world=world)
+        if getattr(args, 'gateway', False):
+            from .tui_gateway import launch as launch_gateway
+            launch_gateway()
+        else:
+            world = _get_world(args)
+            from .tui import launch as launch_tui
+            launch_tui(world=world)
 
     # ── branch ────────────────────────────────────────────────────────
     elif args.command == "branch":

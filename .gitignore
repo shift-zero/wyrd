@@ -3,6 +3,7 @@
 output/
 *.html
 *.svg
+# Generated world, sim, and character files
 *sim.json*
 *.ttrpg.json
 
