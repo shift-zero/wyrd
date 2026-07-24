@@ -586,7 +586,7 @@ def _handle_look(
             "u": "up", "d": "down",
             "b": "back",
         }
-        display_dirs = [full_names.get(d, d) for d in exit_dirs]
+        display_dirs = [aliases.get(d, d) for d in exit_dirs]
         lines.append("")
         lines.append(f"Exits: {', '.join(display_dirs)}.")
 

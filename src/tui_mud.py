@@ -248,10 +248,22 @@ class MudScreen(Screen):
         lines.append(f"[bold white]{room.description}[/]")
 
         if room.exits:
-            exits_str = ", ".join(
-                f"[cyan]{d}[/] → [dim]{n}[/]"
-                for d, n in room.exits.items()
-            )
+            # Map short dirs to full names
+            full_names = {
+                "n": "north", "s": "south", "e": "east", "w": "west",
+                "ne": "northeast", "nw": "northwest", "se": "southeast", "sw": "southwest",
+                "u": "up", "d": "down", "out": "out", "in": "in",
+                "b": "back",
+            }
+            display_exits = []
+            for d, n in room.exits.items():
+                # Show direction name
+                dir_name = full_names.get(d, d)
+                # Show target room name if available
+                target_room = zone.rooms.get(n)
+                target_name = target_room.name if target_room else n
+                display_exits.append(f"[cyan]{dir_name}[/] → [dim]{target_name}[/]")
+            exits_str = ", ".join(display_exits)
             lines.append("")
             lines.append(f"[bold]Exits:[/] {exits_str}")
 
