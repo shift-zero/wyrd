@@ -5,7 +5,7 @@ Covers pantheon generation, determinism, deity creation, holy site generation,
 CLI integration, rendering, TTRPG export integration, and edge cases.
 """
 
-import sys, os, json
+import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src.generate import generate_world
@@ -24,7 +24,6 @@ from src.religion import (
 )
 from src.world import World
 from src.render import render_pantheon
-from src.export_ttrpg import _build_pantheon_section, export_world_ttrpg
 from src.serialize import world_to_dict, dict_to_world
 
 
@@ -235,60 +234,6 @@ class TestPantheonRendering:
             # (may be truncated, so check first few chars)
             name_part = r.name.split(" ")[0] if " " in r.name else r.name
             assert name_part in output or r.primary_deity in output
-
-
-class TestPantheonExport:
-    """Pantheon integration with TTRPG export."""
-
-    def test_export_includes_pantheon(self):
-        """TTRPG export includes pantheon section."""
-        world = generate_world(42)
-        world.pantheon = generate_pantheon(world)
-        doc = json.loads(export_world_ttrpg(world))
-        assert "pantheon" in doc
-
-    def test_export_pantheon_has_deities(self):
-        """Export pantheon has deity count."""
-        world = generate_world(42)
-        world.pantheon = generate_pantheon(world)
-        p = _build_pantheon_section(world)
-        assert p["total_deities"] > 0
-
-    def test_export_deities_have_ttrpg_stats(self):
-        """Exported deities have TTRPG stat arrays."""
-        world = generate_world(42)
-        world.pantheon = generate_pantheon(world)
-        p = _build_pantheon_section(world)
-        for r in p["religions"]:
-            for d in r["deities"]:
-                assert "ttrpg_stats" in d
-                stats = d["ttrpg_stats"]
-                for s in ["STR", "DEX", "CON", "INT", "WIS", "CHA"]:
-                    assert s in stats
-                    assert 18 <= stats[s] <= 30
-
-    def test_export_without_pantheon(self):
-        """Export without pantheon returns empty section."""
-        world = generate_world(42)
-        p = _build_pantheon_section(world)
-        assert p["religions"] == []
-        assert p["total_deities"] == 0
-
-    def test_export_holy_sites_have_encounter_levels(self):
-        """Holy sites have suggested encounter levels."""
-        world = generate_world(42)
-        world.pantheon = generate_pantheon(world)
-        p = _build_pantheon_section(world)
-        for r in p["religions"]:
-            for s in r["holy_sites"]:
-                assert "suggested_encounter_level" in s
-
-    def test_export_includes_dominant_religion(self):
-        """Export identifies the dominant religion."""
-        world = generate_world(42)
-        world.pantheon = generate_pantheon(world)
-        p = _build_pantheon_section(world)
-        assert p["dominant_religion"] is not None
 
 
 class TestPantheonSerialization:

@@ -175,7 +175,7 @@ The simulation engine (`sim.py`) currently ticks in whole years. This is a deep 
 
 | # | What | Verifiable |
 |---|------|------------|
-| 1 🔲 | Strip everything — CLI, curses, exporters, web, gateway | `wyrd` drops into Textual MUD. No subcommands exist. |
+| 1 ✅ | Strip everything — CLI, curses, exporters, web, gateway | `wyrd` drops into Textual MUD. No subcommands exist. | 2026-08-03 |
 | 2 🔲 | Textual MUD screen — room view, event log, command input, stats sidebar | See the room you're in — description, exits, contents, NPCs |
 | 3 🔲 | Room system — WFC generates room layouts per-settlement | Move n/s/e/w between rooms; room descriptions, exits, contents |
 | 4 🔲 | Command parser — `look`, `get`, `use`, `talk`, `n/s/e/w`, `inv` | Verbs work with nouns; `get sword` picks it up; `use bandage` heals |

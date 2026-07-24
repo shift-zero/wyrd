@@ -11,12 +11,12 @@ Run with:
 
 from __future__ import annotations
 
+import glob
 import json
 import os
 import random
 import re
 import sys
-import subprocess
 
 from pathlib import Path
 from typing import ClassVar
@@ -40,7 +40,108 @@ except ImportError:
 from .world import TERRAIN, World
 from .generate import generate_world
 from .serialize import load_world
-from .gateway import scan_worlds, _has_sim_file, _char_save_path, _load_char_save_info, _delete_char_save
+# ── World scanning & character save helpers (moved from deleted gateway.py) ─
+
+
+def scan_worlds(search_dir: str = ".") -> list[dict]:
+    """Scan for wyrd world files and return metadata list."""
+    pattern = os.path.join(search_dir, "wyrd-*.json")
+    world_files = sorted(glob.glob(pattern))
+    world_files = [
+        wf for wf in world_files
+        if not re.search(r'-sim\.json', wf)
+        and not re.search(r'-char\.json', wf)
+        and not re.search(r'-chronicles\.html', wf)
+        and not re.search(r'\.ttrpg\.json', wf)
+    ]
+
+    results = []
+    for wf in world_files:
+        try:
+            with open(wf) as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        seed = data.get("seed", 0)
+        results.append({
+            "seed": seed,
+            "file": os.path.basename(wf),
+            "path": wf,
+            "dimensions": f'{data.get("width", 0)}x{data.get("height", 0)}',
+            "regions": len(data.get("regions", [])),
+            "population": sum(
+                s.get("population", 0)
+                for r in data.get("regions", [])
+                for s in r.get("settlements", [])
+            ),
+            "has_lore": "lore" in data and data["lore"] is not None,
+            "has_narrative": "narrative" in data and data["narrative"] is not None,
+            "has_chronicles": "chronicles" in data and data["chronicles"] is not None,
+            "has_magic": "magic" in data and data["magic"] is not None,
+            "has_save": os.path.exists(f"saves/wyrd-{seed}-char.json") or os.path.exists(f"wyrd-{seed}-char.json"),
+        })
+    return results
+
+
+def _has_sim_file(seed: int) -> bool:
+    """Check if a sim file exists for the given seed."""
+    return any(
+        os.path.exists(f) for f in [
+            f"wyrd-{seed}-sim.json",
+            f"wyrd-{seed}-sim.json.gz",
+        ]
+    )
+
+
+def _char_save_path(seed: int) -> str:
+    """Get the path to a character save file (checks new saves/ dir then old CWD)."""
+    new = os.path.join("saves", f"wyrd-{seed}-char.json")
+    if os.path.exists(new):
+        return new
+    old = f"wyrd-{seed}-char.json"
+    if os.path.exists(old):
+        return old
+    return new  # Return new path even if doesn't exist (for creation)
+
+
+def _load_char_save_info(seed: int) -> dict | None:
+    """Load character save metadata for a given seed. Returns None if no save."""
+    path = _char_save_path(seed)
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        char = data.get("character", {})
+        if not char:
+            return None
+        health = char.get("health", 0)
+        bars = max(1, health // 10) if health else 0
+        empty = max(0, 10 - bars)
+        health_bar = "❤" * bars + "♡" * empty
+        return {
+            "name": char.get("name", "Unknown"),
+            "profession": char.get("profession", "?"),
+            "age": char.get("age", 0),
+            "year": char.get("year", 0),
+            "gold": char.get("gold", 0),
+            "health": health,
+            "health_bar": health_bar,
+            "settlement": char.get("settlement", "?"),
+            "region": char.get("region", "?"),
+        }
+    except Exception:
+        return None
+
+
+def _delete_char_save(seed: int) -> bool:
+    """Delete the character save for a given seed. Returns True if deleted."""
+    path = _char_save_path(seed)
+    if os.path.exists(path):
+        os.remove(path)
+        return True
+    return False
 
 # ── Color helpers (shared) ───────────────────────────────────────────────
 
@@ -339,9 +440,7 @@ class GatewayHelpScreen(ModalScreen):
             "[bold]Actions[/]",
             "  [yellow]n[/]             Generate a new world",
             "  [yellow]G[/]             Generate with lore",
-            "  [yellow]e[/]             Explore — interactive map (curses)",
-            "  [yellow]v[/]             View — sim evolution (curses)",
-            "  [yellow]p[/]             Play — embodied mode (curses)",
+            "  [yellow]p[/]             Play — enter the MUD",
             "  [yellow]C[/]             Character manager",
             "  [yellow]Tab[/]           Cycle sort (seed → pop → name)",
             "  [yellow]Del[/]           Delete selected world",
@@ -379,8 +478,6 @@ class WorldPickerScreen(Screen):
         Binding("enter", "select_world", "View"),
         Binding("n", "generate_world", "New"),
         Binding("G", "generate_lore", "Lore"),
-        Binding("e", "explore_world", "Explore"),
-        Binding("v", "view_world", "View"),
         Binding("p", "play_world", "Play"),
         Binding("C", "character_manager", "Char"),
         Binding("tab", "cycle_sort", "Sort"),
@@ -483,10 +580,13 @@ class WorldPickerScreen(Screen):
             self._update_detail()
 
     def action_select_world(self) -> None:
-        """View the selected world in the Textual SimScreen."""
+        """Enter the MUD with the selected world."""
         w = self._get_selected_world()
         if w:
-            self.dismiss({"action": "view", "seed": w["seed"], "path": w["path"]})
+            world = load_world(w["path"])
+            if world:
+                from .tui_mud import MudScreen
+                self.push_screen(MudScreen(world=world))
 
     def action_generate_world(self) -> None:
         self.push_screen(GenerateScreen(), self._on_generate_result)
@@ -533,23 +633,14 @@ class WorldPickerScreen(Screen):
         self.selected_idx = 0
         self._update_detail()
 
-    def action_explore_world(self) -> None:
-        """Launch curses explore mode."""
-        w = self._get_selected_world()
-        if w:
-            self.dismiss({"action": "explore", "seed": w["seed"]})
-
-    def action_view_world(self) -> None:
-        """Launch curses viewer."""
-        w = self._get_selected_world()
-        if w:
-            self.dismiss({"action": "viewer", "seed": w["seed"]})
-
     def action_play_world(self) -> None:
-        """Launch curses embody mode."""
+        """Enter the MUD with the selected world."""
         w = self._get_selected_world()
         if w:
-            self.dismiss({"action": "play", "seed": w["seed"]})
+            world = load_world(w["path"])
+            if world:
+                from .tui_mud import MudScreen
+                self.push_screen(MudScreen(world=world))
 
     def action_character_manager(self) -> None:
         w = self._get_selected_world()
@@ -712,27 +803,11 @@ class WyrdGateway(App):
         self.push_screen(WorldPickerScreen(), self._on_picker_result)
 
     def _on_picker_result(self, result) -> None:
+        """Handle result from picker screen."""
+        # WorldPickerScreen now pushes MudScreen directly for play/view,
+        # so this only needs to handle the None case (quit).
         if result is None:
             self.exit(None)
-            return
-
-        action = result.get("action")
-        seed = result.get("seed")
-
-        if action == "view":
-            # Launch Textual SimScreen
-            from .tui import WyrdTUI
-            # We need to re-enter — this is a nested launch
-            world = load_world(result["path"])
-            if world:
-                sub_app = WyrdTUI(world=world)
-                sub_app.run()
-            self.set_screen(WorldPickerScreen)
-
-        elif action in ("explore", "viewer", "play"):
-            # Launch curses sub-application
-            world = generate_world(seed) if action == "explore" else load_world(result.get("path", f"wyrd-{seed}.json"))
-            self.exit({"action": action, "seed": seed})
         else:
             self.set_screen(WorldPickerScreen)
 
@@ -740,16 +815,4 @@ class WyrdGateway(App):
 def launch() -> None:
     """Launch the Textual gateway."""
     app = WyrdGateway()
-    result = app.run()
-    if result and isinstance(result, dict):
-        action = result.get("action")
-        seed = result.get("seed")
-        if action == "explore":
-            from .explore import explore_curses
-            explore_curses(seed)
-        elif action == "viewer":
-            from .viewer import viewer_curses
-            viewer_curses(seed)
-        elif action == "play":
-            from .embody_tui import embody_tui_play
-            embody_tui_play(seed)
+    app.run()
