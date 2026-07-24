@@ -479,20 +479,41 @@ def _handle_move(
         return CommandResult(f"You cannot go {direction} from here.", None, False, [])
 
     # Handle wilderness exit
-    if target.endswith("_to_wilderness"):
+    if target == "wilderness" or target.endswith("_to_wilderness"):
         # Leaving settlement — would transition to world map
         return CommandResult(
-            f"You leave {char.settlement} behind and venture into the wild lands beyond.",
+            f"You leave {char.settlement} behind and venture into the wilderness.",
             "wilderness", False, [],
         )
 
     # Handle wilderness back to settlement
     if target == "wilderness":
         if zone.name == "Wilderness":
-            return CommandResult(
-                f"You try to find your way, but the wilderness stretches endlessly.",
-                None, False, [],
-            )
+            # Try to find the settlement gate
+            settlement_zone = None
+            for z in world.zones.values():
+                if z.name == char.settlement:
+                    settlement_zone = z
+                    break
+            
+            if settlement_zone:
+                # Find a gate room
+                for room_id, room in settlement_zone.rooms.items():
+                    if "gate" in room.tags:
+                        return CommandResult(
+                            f"You find your way back to {char.settlement}.",
+                            room_id, False, [],
+                        )
+                # Fallback: return to town square
+                return CommandResult(
+                    f"You find your way back to {char.settlement}.",
+                    settlement_zone.entry_room, False, [],
+                )
+            else:
+                return CommandResult(
+                    f"You try to find your way, but the wilderness stretches endlessly.",
+                    None, False, [],
+                )
         return CommandResult(
             f"You venture deeper into the wilderness.",
             target, False, [],

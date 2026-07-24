@@ -127,6 +127,35 @@ class MudWorld:
                     )
                     self.settlements[s.name] = cs
 
+        # Add wilderness zone
+        from .room import Room
+        wilderness_zone = Zone(
+            name="Wilderness",
+            zone_type="wilderness",
+            entry_room="wilderness_center",
+            rooms={
+                "wilderness_center": Room(
+                    room_id="wilderness_center",
+                    name="The Wild Lands",
+                    description="You stand in the untamed wilderness. The land stretches out in all directions, dotted with trees, hills, and the occasional animal track. The air is fresh and cool.",
+                    exits={"north": "wilderness", "south": "wilderness", "east": "wilderness", "west": "wilderness"},
+                    contents=[{"name": "wildflowers", "type": "plant"}, {"name": "rabbit", "type": "animal"}],
+                    npcs=[],
+                    tags=["outdoors", "wilderness"],
+                ),
+                "wilderness": Room(
+                    room_id="wilderness",
+                    name="The Wild Lands",
+                    description="The wilderness stretches on. You see rolling hills, dense forests, and the occasional bird soaring overhead. The path back to civilization is not far.",
+                    exits={},
+                    contents=[{"name": "tall grass", "type": "plant"}, {"name": "deer", "type": "animal"}],
+                    npcs=[],
+                    tags=["outdoors", "wilderness"],
+                ),
+            },
+        )
+        self.loaded_zones["Wilderness"] = wilderness_zone
+
         return w
 
     def _infer_economy(self, world: World, tx: int, ty: int) -> str:
