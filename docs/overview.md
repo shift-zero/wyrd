@@ -22,7 +22,14 @@
 | 14 | Trade & Economy (trade routes, prosperity, disruption) | ✅ |
 | 15 | The Weirding (gateway TUI, unified curses interface) | ✅ |
 | 16 | Trade Route Map Visualization (roads, specialization titles) | ✅ |
-|| 17 | Living Worlds (animated maps, TUI overhaul, embodied play) | ✅ |
+||  17 | Living Worlds (animated maps, TUI overhaul, embodied play) | ✅ |
+|  18 | The Bestiary (creature generation, tier/habitat system) | ✅ |
+|  19 | Human-First UX (TUI overhaul, variable time, seasons) | ✅ |
+|  20 | Living Gazetteer (settlement popups, entity browsers, lookup CLI) | ✅ |
+|  21 | Living Gateway (mini-map previews, sortable world list, compact splash) | ✅ |
+|  22 | Surface Polish (flicker fixes, batched rendering, dedup) | ✅ |
+|  23 | Surface Depth (batch explore, higher speeds, context overlays) | ✅ |
+|  23.5 | Auto-Pause on Viewer Events (significant-event detection, notification banner) | ✅ |
 
 ## Philosophy
 

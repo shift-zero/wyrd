@@ -45,6 +45,7 @@ CP = {
     "badge_s": 13,
     "badge_m": 14,
     "badge_p": 15,  # Player/saved character
+    "info": 16,     # Stats info text
 }
 
 

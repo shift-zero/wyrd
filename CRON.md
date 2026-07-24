@@ -50,7 +50,4 @@ Reviewed viewer.py and explore.py for rendering issues:
 - No rendering artifacts at edge cases found
 
 ### What to tackle next
-- **Explore alternative renderers (SDL, terminal graphic modes)** — Sixel graphics or a GTK/Qt viewer would give real map rendering instead of ASCII characters
-- **Overlay issues in explorer/viewer** — check for any remaining rendering artifacts at edge cases (terminal resize, very large worlds)
-- **Gateway: sort direction indicator in status bar** — consider adding ↑/↓ arrows directly in the column headers rather than only in the status bar hint
-- **Gateway: confirm-on-quit safeguard** — prevent accidental `q` press from dropping the session
+- Latest: fixed CP["info"] KeyError + README overhaul (2026-07-27)
