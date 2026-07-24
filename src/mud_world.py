@@ -461,6 +461,7 @@ class MudWorld:
                 building = building_map.get((x, y))
                 contents = []
                 tags = []
+                npcs = []
                 if building:
                     btype = building["type"]
                     if btype == "house":
@@ -771,6 +772,7 @@ class MudWorld:
                 building = building_map.get((x, y))
                 contents = []
                 tags = []
+                npcs = []
                 if building:
                     btype = building["type"]
                     if btype == "house":
