@@ -893,4 +893,6 @@ class MudWorld:
         }
         
         base_name = type_names.get(room_type, room_type.capitalize())
-        return base_name
+        return base_name    def _generate_room_description(self, room_type: str, zone_name: str, economy: str) -> str:
+        """Generate a description for a room based on its type and zone."""
+        return f"A {room_type} in {zone_name}. The town's economy is based on {economy}."
