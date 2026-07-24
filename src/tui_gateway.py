@@ -488,8 +488,7 @@ class GatewayHelpScreen(ModalScreen):
             "  [yellow]Enter[/]         View selected world (Textual TUI)",
             "",
             "[bold]Actions[/]",
-            "  [yellow]n[/]             Generate a new world",
-            "  [yellow]G[/]             Generate with lore",
+            "  [yellow]n[/]             Generate (with lore)",
             "  [yellow]p[/]             Play — enter the MUD",
             "  [yellow]C[/]             Character manager",
             "  [yellow]Tab[/]           Cycle sort (seed → pop → name)",
@@ -527,7 +526,6 @@ class WorldPickerScreen(Screen):
         Binding("j", "cursor_down", "Down"),
         Binding("enter", "select_world", "View"),
         Binding("n", "generate_world", "New"),
-        Binding("G", "generate_lore", "Lore"),
         Binding("p", "play_world", "Play"),
         Binding("C", "character_manager", "Char"),
         Binding("tab", "cycle_sort", "Sort"),
@@ -641,42 +639,31 @@ class WorldPickerScreen(Screen):
     def action_generate_world(self) -> None:
         self.app.push_screen(GenerateScreen(), self._on_generate_result)
 
-    def action_generate_lore(self) -> None:
-        def _handler(result):
-            if result is not None:
-                seed, with_lore = result if isinstance(result, tuple) else (result, False)
-                self._do_generate(seed, with_lore=True)
-        self.app.push_screen(GenerateScreen(), _handler)
-
     def _on_generate_result(self, result) -> None:
         if result is not None:
-            if isinstance(result, tuple):
-                seed, with_lore = result
-                self._do_generate(seed, with_lore)
-            else:
-                self._do_generate(result, False)
+            seed = result if isinstance(result, int) else result[0]
+            self._do_generate(seed)
 
-    def _do_generate(self, seed: int, with_lore: bool = False) -> None:
-        """Generate a world and add it to the list."""
+    def _do_generate(self, seed: int) -> None:
+        """Generate a world with full lore and add it to the list."""
         world = generate_world(seed)
         from .serialize import save_world
         save_world(world)
-        if with_lore:
-            from .lore import generate_lore
-            from .narrative import generate_narrative
-            from .religion import generate_pantheon
-            from .magic import generate_magic_system
-            from .faction import generate_factions
-            from .chronicles import generate_chronicles
-            from .bestiary import generate_bestiary
-            world.lore = generate_lore(world)
-            world.narrative = generate_narrative(world)
-            world.pantheon = generate_pantheon(world)
-            world.magic = generate_magic_system(world)
-            world.factions = generate_factions(world)
-            world.chronicles = generate_chronicles(world)
-            world.bestiary = generate_bestiary(world)
-            save_world(world)
+        from .lore import generate_lore
+        from .narrative import generate_narrative
+        from .religion import generate_pantheon
+        from .magic import generate_magic_system
+        from .faction import generate_factions
+        from .chronicles import generate_chronicles
+        from .bestiary import generate_bestiary
+        world.lore = generate_lore(world)
+        world.narrative = generate_narrative(world)
+        world.pantheon = generate_pantheon(world)
+        world.magic = generate_magic_system(world)
+        world.factions = generate_factions(world)
+        world.chronicles = generate_chronicles(world)
+        world.bestiary = generate_bestiary(world)
+        save_world(world)
         # Refresh the list
         self._scan_and_populate()
         # Select the new world
