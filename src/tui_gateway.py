@@ -43,6 +43,27 @@ from .serialize import load_world
 # ── World scanning & character save helpers (moved from deleted gateway.py) ─
 
 
+
+def _world_name(data: dict) -> str:
+    """Get the world name from data, or generate one from seed."""
+    name = data.get("world_name") or data.get("name")
+    if name:
+        return name
+    # Generate a name from seed
+    seed = data.get("seed", 0)
+    import random
+    rng = random.Random(seed)
+    prefixes = ["Ae", "An", "Ar", "Bel", "Cal", "Dor", "El", "Ery", "Fel", "Gar",
+                 "Gol", "Hel", "Ith", "Ka", "Lor", "Ly", "Mor", "My", "Ne", "Nor",
+                 "Or", "Os", "Per", "Py", "Rav", "Rhy", "Sar", "Sil", "Tar", "The",
+                 "Tor", "Ul", "Val", "Ver", "Vor", "Wy", "Xan", "Xy", "Zar", "Zeph"]
+    middles = ["ad", "ar", "ath", "dol", "dor", "en", "er", "eth", "il", "in",
+               "is", "ith", "mar", "mor", "na", "nor", "on", "or", "ra", "ran",
+               "rel", "ren", "res", "ria", "ron", "syl", "thil", "thor", "vand", "wyn"]
+    suffixes = ["ia", "is", "on", "or", "os", "um", "us", "a", "en", "ir"]
+    return f"{rng.choice(prefixes)}{rng.choice(middles)}{rng.choice(suffixes)}"
+
+
 def scan_worlds(search_dir: str = ".") -> list[dict]:
     """Scan for wyrd world files and return metadata list."""
     pattern = os.path.join(search_dir, "wyrd-*.json")
@@ -64,8 +85,10 @@ def scan_worlds(search_dir: str = ".") -> list[dict]:
             continue
 
         seed = data.get("seed", 0)
+        name = _world_name(data)
         results.append({
             "seed": seed,
+            "name": name,
             "file": os.path.basename(wf),
             "path": wf,
             "dimensions": f'{data.get("width", 0)}x{data.get("height", 0)}',
@@ -196,8 +219,10 @@ def render_mini_map(world: World, width: int = 30, height: int = 10) -> str:
 def _build_detail_text(world_info: dict) -> str:
     """Build the detail card text for a world."""
     seed = world_info["seed"]
+    name = world_info.get("name", f"#{seed}")
     lines = [
-        f"[bold cyan]wyrd #{seed}[/]",
+        f"[bold cyan]{name}[/]",
+        f"[dim]Seed: {seed}[/]",
         "",
         f"[dim]File:[/] {world_info['file']}",
         f"[dim]Dimensions:[/] {world_info['dimensions']}",
@@ -293,8 +318,10 @@ class WorldItem(Static):
         save_mark = "[green]●[/] " if w["has_save"] else ""
         lore_mark = "[yellow]✦[/] " if w["has_lore"] else ""
         pop_str = f"[green]{w['population']:,}[/]" if w["population"] > 0 else "[dim]0[/]"
+        name_display = w.get("name", f"#{w['seed']}")
+        seed_suffix = f" #[dim]{w['seed']}[/]" if len(name_display) > 0 else f" #{w['seed']}"
         self.update(
-            f"{prefix}[yellow]#{w['seed']}[/]  {save_mark}{lore_mark}{pop_str}  "
+            f"{prefix}[bold]{name_display}[/]{seed_suffix}  {save_mark}{lore_mark}{pop_str}  "
             f"[dim]{w['dimensions']}[/]  {w['regions']:>2} regions"
         )
 
@@ -645,12 +672,13 @@ class WorldPickerScreen(Screen):
 
     def _on_generate_result(self, result) -> None:
         if result is not None:
-            seed = result[0] if isinstance(result, tuple) else result
-            self._do_generate(seed)
+            seed, world_name = result if isinstance(result, tuple) else (result, None)
+            self._do_generate(seed, world_name)
 
-    def _do_generate(self, seed: int) -> None:
+    def _do_generate(self, seed: int, world_name: str | None = None) -> None:
         """Generate a world with full lore and add it to the list."""
         world = generate_world(seed)
+        world.world_name = world_name or None
         from .serialize import save_world
         save_world(world)
         from .lore import generate_lore

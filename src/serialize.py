@@ -31,6 +31,7 @@ def world_to_dict(world: World) -> dict:
     data = {
         "wyrd_version": "0.1.0",
         "seed": world.seed,
+        "world_name": getattr(world, "world_name", None),
         "width": world.width,
         "height": world.height,
         "elevation": world.elevation,
