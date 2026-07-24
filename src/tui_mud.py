@@ -88,8 +88,10 @@ class MudScreen(Screen):
         self.mud_world = MudWorld(world.seed)
         self.mud_world.init_from_seed()
         self.current_zone_name: str | None = None
+        self.current_zone: Zone | None = None
         self.current_room_id: str | None = None
-
+        self._hours_since_sim_update = 0
+        self._movement_history: list[str] = []  # Track room_ids for 'back' command
         # Generate or load character
         if character:
             self.char = character
@@ -196,7 +198,7 @@ class MudScreen(Screen):
 
         result = handle_command(
             parsed, self.char, zone,
-            self.current_room_id or "", self.world, self.seed
+            self.current_room_id or "", self.world, self.seed, self._movement_history
         )
 
         # Output result text
@@ -205,6 +207,9 @@ class MudScreen(Screen):
 
         # Move to new room if changed
         if result.new_room and self.current_zone:
+            # Update movement history for 'back' command
+            if self.current_room_id:
+                self._movement_history.append(self.current_room_id)
             self.current_room_id = result.new_room
             self._update_room_view()
 

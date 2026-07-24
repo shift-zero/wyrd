@@ -221,6 +221,7 @@ def handle_command(
     current_room_id: str,
     world: World,
     seed: int,
+    movement_history: list[str] | None = None,
 ) -> CommandResult:
     """Process a parsed command and return the result.
 
@@ -249,8 +250,8 @@ def handle_command(
 
     # ── Movement Commands ──────────────────────────────────────────
 
-    if verb in ("north", "south", "east", "west", "northeast", "northwest", "southeast", "southwest", "up", "down"):
-        result = _handle_move(verb, char, zone, current_room_id, world, seed, rng)
+    if verb in ("north", "south", "east", "west", "northeast", "northwest", "southeast", "southwest", "up", "down", "back"):
+        result = _handle_move(verb, char, zone, current_room_id, world, seed, rng, movement_history)
         # Movement costs 1 hour
         time_msg = _advance_time(char, 1)
         output = result.output + time_msg
@@ -448,11 +449,20 @@ def _handle_move(
     world: World,
     seed: int,
     rng: random.Random,
+    movement_history: list[str] | None = None,
 ) -> CommandResult:
     """Handle movement commands."""
     current_room = zone.rooms.get(current_room_id)
     if current_room is None:
         return CommandResult("You are lost in the void.", None, False, [])
+
+    # Handle 'back' command
+    if direction == "back":
+        if movement_history and movement_history:
+            previous_room_id = movement_history.pop()
+            return CommandResult(f"You return to the previous location.", previous_room_id, False, [])
+        else:
+            return CommandResult("You have nowhere to go back to.", None, False, [])
 
     # Check exit
     direction_short = direction[0]  # n, s, e, w, etc.
@@ -548,11 +558,12 @@ def _handle_look(
     # Show exits
     if room.exits:
         exit_dirs = sorted(room.exits.keys())
-        # Map short dirs to full names
-        full_names = {
+        # Single-character direction aliases
+        aliases = {
             "n": "north", "s": "south", "e": "east", "w": "west",
             "ne": "northeast", "nw": "northwest", "se": "southeast", "sw": "southwest",
             "u": "up", "d": "down",
+            "b": "back",
         }
         display_dirs = [full_names.get(d, d) for d in exit_dirs]
         lines.append("")
