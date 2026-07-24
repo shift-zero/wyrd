@@ -438,7 +438,7 @@ class GenerateScreen(ModalScreen):
             yield Static("Enter a seed (number) or leave blank for random:")
             yield Input(placeholder="42", id="seed-input")
             yield Static("")
-            with Horizontal(id="gen-buttons"):
+            with Vertical(id="gen-buttons"):
                 yield Button("Generate", variant="primary", id="gen-go-btn")
                 yield Button("Generate + Lore", variant="default", id="gen-lore-btn")
                 yield Button("Cancel", variant="default", id="gen-cancel-btn")
