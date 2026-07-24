@@ -159,6 +159,9 @@ The simulation engine (`sim.py`) currently ticks in whole years. This is a deep 
 - All items complete — this is a maintenance/improvement area going forward.
 - Latest: sort arrows in column headers + confirm-on-quit safeguard (2026-07-27)
 
+### Completed this session (2026-07-28)
+- **Lookup false-positive bug fix.** `wyrd lookup <query>` was returning irrelevant results for unrelated queries because `_score()` accepted any SequenceMatcher ratio >0.4 even when the longest matching block was a short accidental trigram (e.g. "one" matching between "nonexistent" and "Fallen Bones"). Now requires at least 4 contiguous matching characters for the SM path. Removed unused `import re`.
+
 ### Completed this session (2026-07-24)
 - **Deeper seasonal palette.** Temperature factor computed from latitude + elevation + month. Snow accumulation on cold winter tiles (temp < 0.2). Autumn warm forests turn deep crimson (color 124). Spring warm grasslands get brilliant lime (color 46). 8 new color pairs.
 - **Heir confirmation overlay.** Full-screen preview showing heir name, profession, age, gold, inherited skills with skill bars before committing.

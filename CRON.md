@@ -23,9 +23,24 @@ This is YOUR project. Make it beautiful and deep.
 
 ---
 
-## Current state (2026-07-27)
+## Current state (2026-07-28)
 
-### Phase 23.5 — Gateway UX polish + confirm-on-quit safeguard
+### Lookup false-positive bug fix
+
+`wyrd lookup <query>` was returning false positive results for totally unrelated
+queries. For example, `wyrd lookup --seed 42 "nonexistent"` returned "Fallen Bones"
+and "Gwyn Longmere" because `_score()` accepted any SequenceMatcher ratio >0.4 —
+and "nonexistent" shares "one" (3 chars) with "Fallen Bones" and "on" with "Gwyn
+Longmere", producing ratios of 0.43 and 0.42.
+
+**Fix:** The SequenceMatcher path now requires at least **4 contiguous matching
+characters** before accepting the ratio. Short accidental trigrams (3-char matches
+like "one", "ste", "the") no longer trigger false positives. Substring matching
+(q in n → 0.5) and word-overlap matching are unaffected.
+
+Verified: `wyrd lookup --seed 42 "nonexistent"` → "No results found"
+Verified: `wyrd lookup --seed 42 "embervale"` → 5 correct results
+Tests: 799 passed, no regressions.
 
 #### Sort direction arrows in column headers
 The gateway world list header now shows ↑/↓ arrows directly on the active sort column:

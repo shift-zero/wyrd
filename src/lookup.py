@@ -9,7 +9,6 @@ Usage:
     wyrd lookup "Riverwood"
 """
 
-import re
 from difflib import SequenceMatcher as SM
 from .world import World, ADVENTURE_ZONE_TYPES
 
@@ -35,10 +34,14 @@ def _score(query: str, name: str) -> float:
         if overlap:
             return 0.7 + (0.2 * len(overlap) / len(q_words))
 
-    # Sequence similarity
-    ratio = SM(None, q, n).ratio()
+    # Sequence similarity — require at least one >=4 contiguous match
+    # to avoid false positives from short accidental trigrams
+    sm = SM(None, q, n)
+    ratio = sm.ratio()
     if ratio > 0.4:
-        return ratio
+        max_block = max((b.size for b in sm.get_matching_blocks()), default=0)
+        if max_block >= 4:
+            return ratio
 
     # Partial match (query is substring of name)
     if q in n:
