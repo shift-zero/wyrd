@@ -527,6 +527,13 @@ def _handle_move(
         if target_room.exits:
             exit_dirs = sorted(target_room.exits.keys())
             output += f"\n\nExits: {', '.join(exit_dirs)}"
+    else:
+        # Debug: show available rooms and the target
+        available_rooms = list(zone.rooms.keys())
+        return CommandResult(
+            f"DEBUG: Cannot go {direction}. Target '{target}' not found in zone '{zone.name}'. Available rooms: {available_rooms[:10]}...",
+            None, False, [],
+        )
         # Show NPCs in the new room
         if target_room.npcs:
             npc_names = [npc["name"] for npc in target_room.npcs]

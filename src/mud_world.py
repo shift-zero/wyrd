@@ -551,11 +551,11 @@ class MudWorld:
                 # Create room
                 rooms[room_id] = Room(
                     room_id=room_id,
-                    name=room_name,
-                    description=self._generate_room_description(room_type, zone_name, settlement["economy"]),
+                    name=self._generate_room_name(room_type, x, y, z),
+                    description=self._generate_room_description(room_type, zone_name, economy),
                     exits=exits,
                     contents=contents,
-                    npcs=self._generate_npcs_for_room(room_type, zone_name, settlement["economy"]),
+                    npcs=npcs,
                     tags=tags,
                 )
         
@@ -619,7 +619,42 @@ class MudWorld:
         else:
             return generate_npcs_for_room(room_type, biome, 1, rng)
 
-    def _generate_room_description(self, room_type: str, zone_name: str, economy: str) -> str:
+    def _generate_room_name(self, room_type: str, x: int, y: int, z: int | None = None) -> str:
+        """Generate a human-readable name for a room based on its type and coordinates."""
+        # Map room types to human-readable names
+        type_names = {
+            "plaza": "Town Square",
+            "street": "Street",
+            "alley": "Alleyway",
+            "house": "House",
+            "shop": "Shop",
+            "tavern": "Tavern",
+            "inn": "Inn",
+            "gate": "City Gate",
+            "tower": "Watchtower",
+            "wall": "City Wall",
+            "dungeon_hall": "Dungeon Hall",
+            "dungeon_room": "Dungeon Chamber",
+            "basement": "Basement",
+            "attic": "Attic",
+        }
+        
+        base_name = type_names.get(room_type, room_type.capitalize())
+        
+        # Handle multi-floor buildings
+        if z is not None and z > 0:
+            return f"{base_name} (Upper Floor)"
+        elif z is not None and z < 0:
+            return f"{base_name} (Basement)"
+        
+        # Handle special cases
+        if room_type == "plaza":
+            return f"{base_name} of {self.base_world.name}"
+        elif room_type == "gate":
+            return f"{base_name} of {self.base_world.name}"
+        
+        # Default: add coordinates for uniqueness
+        return f"{base_name}"
         """Generate a description for a room based on its type and zone."""
         rng = random.Random(hash(room_type) + hash(zone_name) + hash(economy))
         
@@ -849,11 +884,11 @@ class MudWorld:
                 # Create room
                 rooms[room_id] = Room(
                     room_id=room_id,
-                    name=room_name,
-                    description=self._generate_room_description(room_type, zone_name, settlement["economy"]),
+                    name=self._generate_room_name(room_type, x, y, z),
+                    description=self._generate_room_description(room_type, zone_name, economy),
                     exits=exits,
                     contents=contents,
-                    npcs=self._generate_npcs_for_room(room_type, zone_name, settlement["economy"]),
+                    npcs=npcs,
                     tags=tags,
                 )
         
