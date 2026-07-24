@@ -23,7 +23,8 @@ from .embody import (
 from .room import Zone, Room
 from .mud_parser import parse_command, handle_command, CommandResult
 from .mud_sim import MudSimState
-from .mud_world import MudWorld
+from .mud_world import MudWorld, tile_to_chunk
+
 
 
 # ── Help screen ─────────────────────────────────────────────────────────
