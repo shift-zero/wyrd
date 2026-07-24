@@ -100,31 +100,35 @@ Reviewed viewer.py and explore.py for rendering issues:
 - Terminal resize handling uses `getmaxyx()` correctly in both viewer and explorer
 Tests: 799 passed, no regressions.
 
-### What to tackle next — TOTAL SHIFT
+### What to tackle next — wyrd is a single-user MUD
 
-**👑 STRIP THE CLI. DROP THE CURSES. WYRD IS A TEXTUAL MUD.**
+**👑 `wyrd` → drop in. No menu, no picker, no gateway. You're in a room.**
 
-No more `wyrd generate`, `wyrd explore`, `wyrd run`, `wyrd chronicles`, `wyrd export`, `wyrd lookup`, `wyrd serve`, `wyrd embody`, `wyrd worlds`. No curses gateway, curses viewer, curses explorer. None of it.
+Like Minecraft. You run `wyrd`, it generates a world from a seed (or resumes your last one), and you're standing in a room. A character with skills, health, inventory. The world has deep history — civilizations, ruins, wars, trade routes — but you have to *walk around and discover it*. Every seed is a completely different experience.
 
-The only entry point: **`wyrd`** → Textual MUD. Pick or generate a world → drop into a single-user MUD. That's it.
+**No more world picker.** The Textual WorldPicker gateway was a good first step but even that's too much UI. `wyrd` with no args should drop you straight into the game. If you want a new world, you type `wyrd --seed 42` or it auto-generates one fresh.
 
-Keep every internal (world gen, sim, economy, faction sim, cataclysm, embody engine, bestiary, shop, serialization). Strip every surface.
+**What dies (all of it):**
+- `gateway.py`, `viewer.py`, `explore.py`, `tui.py`, `embody_tui.py` — curses dead
+- `tui_gateway.py` — even the Textual world picker dies. No gateway.
+- `__main__.py` stripped — `wyrd` → MUD, `wyrd --seed N` → specific seed. That's it.
+- `serve.py`, `export_*.py`, `query.py`, `ask.py`, `branch.py` — all dead
 
-**Migration plan (aggressive):**
-1. ✅ Textual WorldPicker — done
-2. 🔲 **Delete** `gateway.py`, `viewer.py`, `explore.py`, `tui.py`, `embody_tui.py` — all curses dead
-3. 🔲 Strip `__main__.py` — no more 25 subcommands. `wyrd` with no args launches Textual, that's all
-4. 🔲 Strip `serve.py` (web dashboard), HTML/SVG/TTRPG exporters, `query.py`, `ask.py`, `branch.py` — all dead
-5. 🔲 Build Textual EmbodyScreen — the MUD interface
-6. 🔲 Room system — WFC dungeon gen, room descriptions, exits
-7. 🔲 Command parser — `look`, `get`, `use`, `talk`, `n/s/e/w`
-8. 🔲 Usable items + active skills
-9. 🔲 NPC interaction
-10. 🔲 Gameplay loop
+**What lives:**
+- All engine modules: `world.py`, `generate.py`, `sim.py`, `economy.py`, `faction*.py`, `cataclysm.py`, `embody.py`, `shop.py`, `bestiary.py`, `magic.py`, `religion.py`, `narrative.py`, `lore.py`, `chronicles.py`, `serialize.py`, `render.py`, `adventure.py`
 
-**What stays:** `world.py`, `generate.py`, `sim.py`, `economy.py`, `faction.py`, `faction_sim.py`, `cataclysm.py`, `embody.py`, `shop.py`, `bestiary.py`, `magic.py`, `religion.py`, `narrative.py`, `lore.py`, `chronicles.py`, `serialize.py`, `render.py`, `adventure.py`.
+**What gets built:**
 
-**What's tested:** All existing tests for the engines. Delete tests for deleted surfaces. 799 tests → expect ~600-700 after trim.
+| # | What | Verifiable |
+|---|------|------------|
+| 1 🔲 | Strip everything — CLI, curses, exporters, web, gateway | `wyrd` drops into Textual MUD. No subcommands exist. |
+| 2 🔲 | Textual MUD screen — room view, event log, command input, stats sidebar | See the room you're in, its description, exits, contents |
+| 3 🔲 | Room system — WFC generates room layouts per-settlement. Each room has exits, description, contents, NPCs | Move n/s/e/w between rooms in a settlement. Walk outside to world map. |
+| 4 🔲 | Command parser — `look`, `get`, `use`, `talk`, `n/s/e/w`, `inventory` | `look` shows room; `get sword` picks it up; `use bandage` heals |
+| 5 🔲 | World map as explorable space — walk between settlements through wilderness tiles | Walk north from town → forest path → another settlement days away |
+| 6 🔲 | Discovery — ruins, dungeons, lairs exist on the map; you find them by exploring | Walk into a ruin hex and enter its procedurally generated dungeon rooms |
+| 7 🔲 | Background sim ticks while you play | Leave town for a week and come back to find it changed; news arrives |
+| 8 🔲 | Gameplay loop — survive, explore, trade, fight, level | Clear progression from starter gear to exploring dangerous ruins |
 
 ### Completed this session (2026-07-30)
 
