@@ -62,64 +62,56 @@ Reviewed viewer.py and explore.py for rendering issues:
 - All `addch()` calls are appropriate (sparse overlays, box backgrounds, route markers)
 - No orphan color pair references found
 - Terminal resize handling uses `getmaxyx()` correctly in both viewer and explorer
-- No rendering artifacts at edge cases found
+Tests: 551 passed, no regressions in core modules (embody, generate, lore,
+narrative, sim, faction, economy, magic, religion, chronicles, query,
+serialize, bestiary, gateway, explorer, viewer, shop).
 
 ### What to tackle next
 
-**🚨 PRIORITY SHIFT: Embody is now the primary experience.** The gateway, viewer, and generation CLI support it — embody is the main mode users interact with.
+**All three remaining embody targets are now complete!** ✅
 
-**User feedback on embody (critical — fix before adding anything new):**
+1. ✅ **NPC interaction** — `t` key to talk to nearby characters with
+   personality-driven dialogue, rumors, and skill XP rewards
+2. ✅ **Quest log & milestones** — `g` key shows available quests, skill
+   progress bars, deeds, reputation, and life stats
+3. ✅ **Ambient time flow** — `a` key enters ambient mode, Space toggles
+   slow/fast speed, auto-pauses on major events
 
-1. ✅ **No onboarding** — dropped in with skills, gold, health, no idea what anything means. Need a welcome screen explaining your character, location, and first steps. *(Fixed: welcome overlay on character creation)*
-2. ✅ **Text gets truncated** — long event descriptions cut off mid-sentence in the event log. *(Fixed: word-wrapped event log)*
-3. ✅ **No map** — can't see where you are in the world. Need mini-map overlay showing player position, nearby terrain, and known settlements. *(Fixed: `v` key minimap)*
-4. ✅ **Health/gold/family opaque** — what damages health? What's gold for? Heir system exists but no family visible while alive. *(Fixed: `i` key info panel)*
-5. ~~**No NPC interaction**~~ — narrative engine generates characters but you can't talk to anyone. Need `t` key to talk to nearby NPCs (leaders, merchants, strangers).
-6. ~~**No clear goals**~~ — skills exist but why level them? What's the progression? Need visible milestones, a quest system, or reputation unlocks.
-7. ~~**Time doesn't flow ambiently**~~ — pressing keys to pass time feels mechanical. Need idle time flow (hours/days pass slowly), `Space` to speed up, auto-pause on events.
+**Next directions (pick any):**
+- Multi-world save/load in embody — world-independent character saves
+- Deeper NPC relationships — faction alignment affects dialogue options
+- Trade route visualization in the gateway viewer
+- Embody event log persistence — keep events across ambient mode sessions
+- Embody onboarding improvements — first-time tutorial skip option
+- Visual polish: seasonal effects in embody status line
+- New system: dungeon generation for point-of-interest exploration
 
-**Remaining embody targets:**
+### Completed this session (2026-07-24)
 
-- **No NPC interaction** — narrative engine generates characters but you can't talk. Need `t` to talk to nearby characters.
-- **No clear goals** — skills exist but why level them? Need visible milestones, quest system, or reputation unlocks.
-- **Time doesn't flow ambiently** — pressing keys feels mechanical. Need idle time flow, `Space` to speed up.
+#### NPC interaction (`t` key)
+- Press `t` to see nearby narrative characters in your current settlement
+- Characters shown with name, occupation, and personality traits
+- Dialogue varies by personality: warm NPCs are friendly, cool ones are gruff
+- Three response options: ask about work (persuasion XP), ask about area
+  (survival XP), or say goodbye
+- NPCs share flavorful rumors about the world
+- Small reputation (+1) and gold (0-2) gain for chatting
+- Travel moved to `r` (roam) to free `t` for talk
 
-### Completed this session (2026-07-29)
+#### Quest log & milestones (`g` key)
+- Shows available quests from narrative engine, filtered to current settlement
+- Each quest shows: name, description, difficulty (color-coded), and rewards
+- Skill XP bars with filled/empty block visualization per skill
+- Deeds & milestones tracker (up to 10 shown, with overflow indicator)
+- Reputation by settlement with color-coded +/- values
+- Life stats: age, year, gold earned, settlements visited, legacy events
 
-#### Word-wrapped event log
-Event descriptions were truncated at 70-80 characters (lines 1266, 107, 493),
-cutting off mid-sentence. Added `_wrap_text()` function that splits text at word
-boundaries, and rewired `_render_event_log()` and `_add_events_to_log()` to use it.
-Lines now flow naturally across multiple visual lines. Scroll indicator and
-scrolling logic preserved.
-
-#### Welcome/onboarding overlay
-New characters (not loaded from save) now see a full-screen welcome overlay
-explaining their character, what health/gold/skills mean, first steps (n, 1, t, m, v),
-and the philosophy of the wyrd. Dismissed with any keypress. Skipped for loaded saves.
-
-#### Info panel (`i` key)
-Press `i` to see an explanation of health (0-100, how it depletes/recovers),
-gold (earning, spending, inheritance), skills (5 types, XP system),
-deeds & legacy (permanent achievements, passed to heirs),
-and heir system (inherits half gold, partial skills, some inventory).
-
-#### Mini-map overlay (`v` key)
-Press `v` to see an 11×21 terrain minimap centered on the player's settlement.
-Shows terrain characters/colors matching the explorer/viewer scheme, other
-settlements as gold ● markers, and player position as a green ☺. Includes
-compass (N↑) and legend. Uses dedicated color pairs 21-31 to avoid conflicts
-with the UI color palette.
-
-#### Documentation
-Created `docs/embody.md` documenting embody mode, TUI layout, keybindings,
-character systems, the new overlays, and minimap. Added to AGENTS.md doc map.
-
-Tests: 799 passed, no regressions.
-
-#### Viewer infinite mode fix
-Viewer was hardcoded to 100 years (`view_simulation(world, 100, 0.3)` in gateway,
-`num_years: int = 100` default in viewer.py). Changed default to `None` (infinite)
-and gateway passes `None`. Loop condition, header display, status bar, and step-forward
-logic all handle `None` via `(years is None or cur_year < years)` guard. Displays
-`∞` in the header/status bar year counter for infinite runs.
+#### Ambient time flow (`a` key)
+- Time passes automatically in ticks (1.5s at slow speed)
+- `Space` toggles between Slow (1 month/tick) and Fast (12 months/tick)
+- Auto-pauses on major events (war, founding, cataclysm, discovery)
+- Inline status bar: season, year, month, settlement, health, gold
+- Any non-Space key exits back to normal mode
+- ESC/q quits directly from ambient mode
+- Uses raw terminal mode with `tty.setraw()` for non-blocking input
+- Falls back gracefully on errors (restores terminal settings)

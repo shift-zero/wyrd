@@ -172,10 +172,23 @@ The simulation engine (`sim.py`) currently ticks in whole years. This is a deep 
 - **Created `docs/embody.md`** documenting embody TUI, keybindings, overlays, character systems.
 - **Tests:** 799 passed, no regressions.
 
+## Phase 24 — Complete Embody ✨✅
+
+**Thesis:** The embody mode had three remaining UX gaps: no NPC interaction, no clear goals, and mechanical time passage. All three are now closed, making embody a complete first-class experience.
+
+### Items
+
+| # | What | Verifiable |
+|---|------|------------|
+| 1 ✅ | NPC interaction (`t` key) — talk to nearby characters with personality-driven dialogue, rumors, and skill rewards | Press `t` in embody to see NPCs in your settlement, chat with them, gain rep and XP |
+| 2 ✅ | Quest log & milestones (`g` key) — skill progress bars, deeds, reputation, available quests | Press `g` to see skill XP bars, quest listings, deeds, and life stats |
+| 3 ✅ | Ambient time flow (`a` key) — automatic time passage with Space speed toggle, auto-pause on events | Press `a` and watch time flow; Space toggles slow/fast; auto-pauses on wars and cataclysms |
+
 ### What to tackle next
-- NPC interaction (`t` to talk to nearby characters)
-- Ambient time flow / idle passage
-- Quest system / milestone visibility
+- Multi-world save/load in embody
+- Deeper NPC relationships (faction-aware dialogue)
+- Trade route viz in gateway viewer
+- Dungeon generation for POI exploration
 
 ### Completed this session (2026-07-24)
 - **Deeper seasonal palette.** Temperature factor computed from latitude + elevation + month. Snow accumulation on cold winter tiles (temp < 0.2). Autumn warm forests turn deep crimson (color 124). Spring warm grasslands get brilliant lime (color 46). 8 new color pairs.
