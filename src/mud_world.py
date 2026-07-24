@@ -888,6 +888,7 @@ class MudWorld:
         )
         zones[zone_name] = zone
         
+        return zones
     def _generate_room_name(self, room_type: str, x: int, y: int) -> str:
         """Generate a human-readable name for a room based on its type and coordinates."""
         # Map room types to human-readable names
