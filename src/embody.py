@@ -243,6 +243,8 @@ def _generate_character(world: World, rng: random.Random,
         health=rng.randint(60, 100),
         age=rng.randint(16, 45),
         year=0,
+        x=settlement.x,
+        y=settlement.y,
     )
 
 
